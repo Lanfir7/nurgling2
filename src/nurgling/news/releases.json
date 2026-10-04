@@ -214,11 +214,96 @@
     "2026-09-30-zone-object-counts",
     "2026-10-01-forest-streaming-stalls",
     "2026-10-01-mining-safe-markers",
+    "2026-10-02-autocraft-flour-water",
     "2026-10-02-carry-flush-gap",
     "2026-10-02-dream-catcher-carry",
-    "2026-10-02-scheduler-world-load"
+    "2026-10-02-empty-partial-waterskins",
+    "2026-10-02-hide-home-overlays",
+    "2026-10-02-scheduler-world-load",
+    "2026-10-03-butcher-knife",
+    "2026-10-03-cave-gallery-safe-marks",
+    "2026-10-03-eater-stay-if-fed",
+    "2026-10-03-road-builder",
+    "2026-10-03-selection-memory-leak",
+    "2026-10-03-visible-zone-skip-corner",
+    "2026-10-04-chunk-nav-gates",
+    "2026-10-04-scenario-settings-fit",
+    "2026-10-04-skip-empty-drying-frames",
+    "2026-10-04-text-field-click-focus"
   ],
   "releases": [
+    {
+      "id": "2.103.224",
+      "date": "2026-10-04",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Долгая добыча после выделения области на карте больше не расходует всё больше памяти.",
+          "На домашней земле можно убрать цвет личного клейма и деревни, а подсветку подпорок оставить только по отдельной галочке.",
+          "После сообщения об открытии естественной пещеры зелёные безопасные метки на ней больше не появляются.",
+          "Бот может строить дорогу из путевых камней по приблизительному маршруту.",
+          "Автокрафт берёт муку из сундука или бочки по весу и сам наполняет бурдюки, когда вода кончается.",
+          "Заполнение бурдюков из зоны воды не идёт к воде, если наполнять нечего, и может сначала опустошить неполные бурдюки и кувшины.",
+          "Разделка берёт секач мясника для туш не выше его качества и осматривает тушу лупой, если секач не самый лучший.",
+          "Если зона целиком уже видна, бот идёт сразу к предмету, а не в угол зоны.",
+          "Чанк-навигация проходит через калитки: открывает их по пути и закрывает за собой.",
+          "Открытое окно больше не перехватывает хоткеи пояса: поле ввода ловит клавиши после клика по нему.",
+          "Бот еды идёт в зону еды только когда энергия ниже 80%.",
+          "В настройках сценариев нижняя кнопка и правая панель больше не обрезаются краем окна.",
+          "Сушка рыбы и шкур не открывает пустые зелёные сушилки, чтобы посмотреть, что на них висит."
+        ],
+        "en": [
+          "Long mining sessions after selecting an area on the map no longer consume ever more memory.",
+          "Home land can drop personal-claim and village colors, and mine-support colors stay only when their own checkbox is on.",
+          "After a natural cave gallery opens, that cave no longer gets green safe marks.",
+          "A bot can build a milestone road along an approximate route.",
+          "Autocraft takes flour from a chest or barrel by weight and refills waterskins when the water runs out.",
+          "Filling waterskins from a water zone stays put when nothing needs water, and can empty partial waterskins and jugs first.",
+          "Butchering uses the butcher's cleaver on carcasses at or below its quality and inspects them when the cleaver is not the best tool.",
+          "When a zone is already fully in view, bots walk straight to the object instead of the zone corner.",
+          "Chunk navigation now goes through gates: it opens them on the way and closes them behind you.",
+          "An open window no longer eats belt hotkeys: a text field takes keys after you click it.",
+          "The eating bot goes to the food area only when energy is below 80%.",
+          "Scenario settings keep the bottom button and the right-hand panel inside the window.",
+          "Fish and hide drying no longer opens empty green drying frames just to see what is hanging there."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Выделяйте область на карте перед добычей или расчисткой: после завершения выделения игра остаётся отзывчивой и не зависает из-за накопления памяти. Уже открытые окна продолжают работать при локальном запуске обновлённого клиента.",
+          "Правый клик по значку личного клейма или деревни у мини-карты открывает «Скрывать оверлей дома». Галочка у клейма убирает цвет личного клейма, галочка у деревни — цвет деревни. Сами кнопки показа остаются включёнными. Правый клик по значку шахты открывает «Показывать на домашней земле»: без этой галочки подсветка подпорок на домашней земле пропадает. Чужие клеймы и мини-карта не меняются.",
+          "Метки шахты: если в чате есть «You opened a natural cave gallery», клетки открывшейся пещеры и порода сразу за ней не помечаются зелёным. Раньше конец туннеля иногда считался безопасным, хотя что за породой в новой пещере, ещё неизвестно. Обычные зелёные метки в уже пройденном туннеле остаются.",
+          "В меню ботов, раздел строительства, откройте «Строитель дорог». Нарисуйте маршрут на карте, поставьте первый камень у его начала и выберите дерево или камень. Материалы берутся из инвентаря, а если их не хватает — из зоны стройматериалов. Бот сам сдвигает камни, если прямая линия не проходит.",
+          "Рецепты с мукой и водой, например тесто на ветке, теперь идут через автокрафт. Бочку с мукой и бочку с водой бот приносит к костру и крафтит из них. Вода из бурдюков на рецепт не тратится: она остаётся, чтобы пить и не уставать. Мука из сундука берётся по весу.",
+          "В сценарии у шага Fill Waterskins (Global Zone) появилась галочка «Опустошать не полные бурдюки». С ней макрос перед наполнением опустошает бурдюки с водой меньше трёх литров и стеклянные кувшины меньше пяти литров, а затем наполняет их. Полный кувшин на 5.00 л не трогает. Если наполнять нечего, персонаж к зоне воды не идёт.",
+          "Если секач мясника есть на поясе или в руках и он хуже другого острого инструмента, бот осматривает каждую тушу лупой. Тушу не выше качества секача разделывает секачом, более качественную — лучшим инструментом. Когда секач самый качественный или он один, осмотра нет. Настройки: Боты, пункт Разделка. Там можно выключить секач или всегда разделывать им, даже если туша качественнее.",
+          "Макросы, которые работают с зоной, больше не заходят в её угол, если все части зоны уже в зоне видимости. Персонаж сразу идёт к нужному предмету. Команда «Идти к зоне» по-прежнему доводит до самой зоны, даже если она уже видна. Если часть зоны ещё не видна, бот подходит ближе, чтобы она прогрузилась.",
+          "Калитки частокола, жердей, сухой кладки и кирпичных стен больше не записываются как глухая стена. Маршрут идёт через проём. Если калитка закрыта, персонаж открывает её, проходит и, отойдя примерно на шаг, закрывает за собой. Уже открытую калитку не трогает. Двери домов, лестницы и спуски в шахту остаются обычными переходами.",
+          "Пока окно просто открыто, например настройки мастерской добычи или окно бота, цифры и буквы с пояса срабатывают как действия. Чтобы ввести значение, нажмите само поле. Окна, которые сразу просят имя, и строка чата по-прежнему готовы к вводу.",
+          "Шаг «Бот еды» в сценарии больше не бежит к области eat, если персонаж уже сыт. Пока энергия 80% или выше, он остаётся на месте и сразу заканчивает шаг. Ниже этого порога он сначала доедает еду из инвентаря и идёт в зону, только если энергии всё ещё не хватает.",
+          "Откройте настройки и раздел сценариев. Список, кнопка внизу и подсказки справа помещаются в окно. Длинные подписи «Редактировать» и «Удалить» видны целиком, а список шагов прокручивается на странице.",
+          "В макросах «Сушка рыбы» и «Сушка шкур» первый обход сушилок пропускает рамки, которые клиент сейчас красит зелёным: они пустые. Рамки с другой окраской по-прежнему открываются, чтобы снять готовое. Пустые рамки остаются в работе и заполняются, когда бот развешивает новое."
+        ],
+        "en": [
+          "Select an area on the map before mining or clearing. Once selection ends, the game stays responsive instead of freezing from growing memory use. Already open windows keep working when you launch an updated local client.",
+          "Right-click the personal-claim or village button by the minimap and choose Hide overlay at home. The claim checkbox removes personal-claim color, and the village checkbox removes village color, while those buttons stay on. Right-click the mining button for Show on home land: without that checkbox, mine-support colors also leave home land. Other people's claims and the minimap are unchanged.",
+          "Mining marks: when chat shows “You opened a natural cave gallery”, tiles of that cave and the rock just beyond it are not marked green. The end of the tunnel was sometimes treated as safe even though the new cave behind the rock is still unknown. Green marks already earned in the dug tunnel stay.",
+          "In the bot menu, under building, open Road builder. Draw a route on the map, place the first milestone at its start, and choose wood or stone. Materials come from the inventory, then from a construction-materials zone. The bot shifts a stone when a straight line will not fit.",
+          "Recipes that need flour and water, such as dough on a branch, now run through autocraft. Flour and water barrels are carried to the fire and the craft uses them there. Waterskins are not spent on the recipe, so they stay for drinking. Flour from a chest is taken by weight.",
+          "The scenario step Fill Waterskins (Global Zone) has a checkbox, Empty partial waterskins. When it is on, waterskins under three liters and glass jugs under five liters are emptied and then filled. A jug at 5.00 l is left alone. If nothing needs water, the character does not walk to the water zone.",
+          "When a butcher's cleaver is on the belt or in a hand and another sharp tool is better, each carcass is inspected with the loupe. A carcass at or below the cleaver quality is cut with the cleaver, and a higher one with the better tool. If the cleaver is the best tool, or the only one, nothing is inspected. The toggles are in Settings, Bots, Butchering: turn the cleaver off, or always cut with it even when the carcass is higher quality.",
+          "Zone macros no longer detour to a corner when every part of the zone is already in view. The character walks straight to the object. Navigate to zone still walks you to the zone itself, even when you can already see it. If part of the zone is still outside view, the bot still steps closer so that part can load.",
+          "Palisade, pole, drystone and brick gates are no longer stored as solid walls. The route goes through the opening. If a gate is shut, the character opens it, walks through, and after about a step closes it. A gate that is already open is left open. House doors, stairs and mine entrances stay ordinary passages.",
+          "While a window is merely open, such as mining mastery settings or a bot window, belt letters and numbers still run their actions. Click the field itself to type. Name prompts and the chat line still accept typing immediately.",
+          "The Eating bot step in a scenario no longer walks to the eat area when the character is already full. At 80% energy or more it stays put and finishes the step. Below that it finishes food from the inventory first and visits the area only if energy is still short.",
+          "Open Settings and choose Scenarios. The list, the button along the bottom, and the hints on the right stay inside the window. The Edit and Delete labels are fully visible, and the step list scrolls within the page.",
+          "In the Dry Fish and Drying hides macros, the first pass over drying frames skips racks the client currently tints green, because those are empty. Racks with any other tint are still opened to take down finished goods. Empty racks stay in the job and are filled when the bot hangs new items."
+        ]
+      }
+    },
     {
       "id": "2.103.222",
       "date": "2026-10-01",
@@ -1448,34 +1533,6 @@
         "en": [
           "The map and minimap show province names, chunk navigation and hints for placing milestones. Portal travel respects the current instance.",
           "Right-click an oven for Fuel and light ovens. The action walks your ovens, adds fuel and lights them without opening each one by hand."
-        ]
-      }
-    },
-    {
-      "id": "2.103.191",
-      "date": "2026-09-10",
-      "title": {
-        "ru": "Новое в клиенте",
-        "en": "Client updates"
-      },
-      "summary": {
-        "ru": [
-          "В календаре одним щелчком включается и выключается дождь.",
-          "Осмотр местности и цели квестов по деревьям стали точнее."
-        ],
-        "en": [
-          "The calendar toggles rain effects with one click.",
-          "Local inspect and quest tree targets are more accurate."
-        ]
-      },
-      "details": {
-        "ru": [
-          "Откройте календарь: подсказка показывает, включены ли эффекты дождя. Щелчок выключает или включает их, не заходя в общие настройки графики.",
-          "Окно осмотра лучше держит местные сведения. Помощник квестов устойчивее отмечает деревья, которые ещё нужны по целям."
-        ],
-        "en": [
-          "Open the calendar: the tooltip says whether rain effects are on. Click to disable or enable them without opening graphics settings.",
-          "The inspect window keeps local information more reliably. Quest Helper is steadier about marking trees still required by objectives."
         ]
       }
     }
