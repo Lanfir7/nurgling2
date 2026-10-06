@@ -318,6 +318,9 @@ public class NConfig
         showStoneIcons,
         showProspectingIcons,
         showQuarryartzIcons,
+        quarryartzVeinView,
+        quarryartzTopoAlpha,
+        quarryartzTopoStep,
         simpleRoutesDiscordNotify,
         simpleRoutesTrackedObjects,
         syncZoneSync,
@@ -618,6 +621,9 @@ public class NConfig
         conf.put(Key.showStoneIcons, true);
         conf.put(Key.showProspectingIcons, true);
         conf.put(Key.showQuarryartzIcons, true);
+        conf.put(Key.quarryartzVeinView, false);
+        conf.put(Key.quarryartzTopoAlpha, 110);
+        conf.put(Key.quarryartzTopoStep, 20);
         conf.put(Key.simpleRoutesDiscordNotify, false);
         conf.put(Key.simpleRoutesTrackedObjects, new ArrayList<HashMap<String, Object>>());
         conf.put(Key.syncZoneSync, false);
@@ -690,7 +696,7 @@ public class NConfig
         arearadprop.add(new NAreaRad("gfx/kritter/eagle/eagle", 200));
         arearadprop.add(new NAreaRad("gfx/kritter/cavelouse/cavelouse", 200));
         arearadprop.add(new NAreaRad("gfx/kritter/boreworm/boreworm", 200));
-        arearadprop.add(new NAreaRad("gfx/kritter/woodscorpion/woodscorpion", 30));
+        arearadprop.add(new NAreaRad(NAreaRad.WOODSCORPION, NAreaRad.WOODSCORPION_RADIUS));
         arearadprop.add(new NAreaRad("gfx/kritter/rat/caverat", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/ooze/greenooze", 100));
         arearadprop.add(new NAreaRad("gfx/kritter/caveangler/caveangler", 100));
@@ -1766,7 +1772,7 @@ public class NConfig
             // New animals to add if missing
             String[][] newAnimals = {
                 {"gfx/kritter/bear/polarbear", "100"},
-                {"gfx/kritter/woodscorpion/woodscorpion", "30"},
+                {NAreaRad.WOODSCORPION, Integer.toString(NAreaRad.WOODSCORPION_RADIUS)},
                 {"gfx/kritter/rat/caverat", "100"},
                 {"gfx/kritter/ooze/greenooze", "100"},
                 {"gfx/kritter/caveangler/caveangler", "100"},

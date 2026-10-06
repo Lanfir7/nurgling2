@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-05-merged-pouches",
+  "priority": 5,
+  "summary": {
+    "ru": "Одинаковые мешочки открываются одним окном, и между ними остаётся видимая граница.",
+    "en": "Pouches of the same kind open as one window, with a visible split between them."
+  },
+  "detail": {
+    "ru": "Клик по мешочку в инвентаре или на поясе открывает все мешочки этого вида вместе: семенные мешки с семенными, кошели с кошелями и так далее. Каждый мешочек остаётся своей сеткой в рамке, перекладывать предметы можно как раньше.",
+    "en": "Click a pouch in your inventory or on your belt to open every pouch of that kind together: seedbags with seedbags, purses with purses, and so on. Each pouch keeps its own framed grid, and items can still be moved as before."
+  }
+}

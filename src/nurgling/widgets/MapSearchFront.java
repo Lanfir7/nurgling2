@@ -19,6 +19,8 @@ public final class MapSearchFront {
     }
 
     static void bringToFront(Widget wnd) {
+        if(wnd.parent == null)
+            return;
         wnd.raise();
         focus(wnd);
     }

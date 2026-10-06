@@ -220,9 +220,16 @@ public class ForagingSearchWindow extends Window {
     }
 
     @Override
+    public void destroy() {
+        if(gui != null && gui.foragingSearchWindow == this)
+            gui.foragingSearchWindow = null;
+        super.destroy();
+    }
+
+    @Override
     public void wdgmsg(Widget sender, String msg, Object... args) {
         if (msg.equals("close")) {
-            destroy();
+            hide();
         } else {
             super.wdgmsg(sender, msg, args);
         }

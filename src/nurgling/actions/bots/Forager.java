@@ -18,6 +18,7 @@ import nurgling.actions.bots.forager.RouteLookahead;
 import nurgling.i18n.L10n;
 import nurgling.tools.AreaStock;
 import nurgling.tools.Finder;
+import nurgling.tools.HarvestState;
 import nurgling.tools.MilestoneRegistry;
 import nurgling.tools.NAlias;
 import nurgling.tasks.GateDetector;
@@ -718,6 +719,9 @@ public class Forager implements Action {
                 // unreachable without dismounting first - skip it rather than waste a detour
                 // attempt PathFinder can never actually complete.
                 if (waterMode && map != null && !isOnOrNearWater(map, gob.rc)) continue;
+                // Leaf pickups only: skip a tree the harvest overlay would not mark with a leaf
+                // icon, instead of walking over and finding the flower menu empty.
+                if (!leafTargetReady(action, gob)) continue;
                 if (leaveForLater != null && leaveForLater.leaveForLaterStop(gob, map, sessloc, waterMode)) continue;
                 candidates.add(new Pair<>(gob, action));
                 distByGobId.put(gob.id, from.dist(gob.rc));
@@ -738,6 +742,23 @@ public class Forager implements Action {
             return candidate;
         }
         return null;
+    }
+
+    /**
+     * A leaf pickup on a tree or bush is worth approaching only when that gob currently has the
+     * live leaf layer. Bark and herbs are unchanged. A tree whose sprite has not loaded yet is
+     * skipped until that layer can be read.
+     */
+    static boolean leafTargetReady(ForagerAction action, Gob gob) {
+        if (action == null || !HarvestState.tracksLiveLeaves(action.sourceItemName, action.sourceItemResource, action.actionName))
+            return true;
+        if (gob == null || gob.ngob == null || !HarvestState.isTreeOrBushRes(gob.ngob.name))
+            return true;
+        try {
+            return HarvestState.hasHarvestableLeaf(gob);
+        } catch (Loading l) {
+            return false;
+        }
     }
 
     /** Whether target's own tile is water a coracle could actually reach - same tileset check NPFMap's water-mode grid and CoracleBot use; an unstreamed tile is treated as reachable rather than guessed at. */

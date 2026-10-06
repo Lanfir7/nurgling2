@@ -49,6 +49,17 @@ class MapSearchFrontTest {
     }
 
     @Test
+    void detachedWindowIsNotRaised() {
+        Widget search = new Widget();
+        search.hide();
+
+        MapSearchFront.showInFront(search);
+
+        assertTrue(search.visible());
+        assertEquals(null, search.parent);
+    }
+
+    @Test
     void hiddenWindowIsNotRaisedOnDeferredTick() {
         Widget parent = new Widget();
         Widget map = parent.add(new Widget());

@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-05-quarryartz-search-l10n",
+  "priority": 4,
+  "summary": {
+    "ru": "Подсказка кнопки квариарца на карте и окно поиска показываются на языке клиента.",
+    "en": "The Quarryartz map button tip and search window follow the client language."
+  },
+  "detail": {
+    "ru": "Наведите курсор на кнопку меток квариарца на карте: подсказка на русском. Правый клик открывает «Поиск квариарца» с порогом качества и списком результатов на том же языке.",
+    "en": "Hover the Quarryartz markers button on the map for a tip in your language. Right-click opens Quarryartz Search, with the quality threshold and result list in that language too."
+  }
+}

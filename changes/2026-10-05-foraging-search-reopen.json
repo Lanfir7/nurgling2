@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-05-foraging-search-reopen",
+  "priority": 6,
+  "summary": {
+    "ru": "Поиск собирательства на карте снова открывается правым кликом после закрытия окна.",
+    "en": "Foraging search on the map opens again from a right-click after the window is closed."
+  },
+  "detail": {
+    "ru": "Правый клик по кнопке меток собирательства на карте открывает поиск. Закройте окно крестиком и нажмите правой кнопкой ещё раз: поиск появляется снова, клиент не вылетает.",
+    "en": "Right-click the foraging markers button on the map to open search. Close that window and right-click again: search comes back, and the client stays open."
+  }
+}

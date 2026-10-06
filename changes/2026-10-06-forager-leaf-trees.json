@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-06-forager-leaf-trees",
+  "priority": 6,
+  "summary": {
+    "ru": "Сборщик больше не подходит к деревьям, на которых уже нет листвы.",
+    "en": "Forager no longer walks up to trees that have already lost their leaves."
+  },
+  "detail": {
+    "ru": "При сборе листьев он смотрит на ту же отметку, что и значки урожая над деревом, и идёт только туда, где листва ещё есть. Пустое дерево остаётся на месте, без лишнего подхода.",
+    "en": "When collecting leaves, Forager uses the same mark as the harvest icons above a tree and walks only to trees that still have foliage. An empty tree is left alone."
+  }
+}

@@ -235,6 +235,36 @@ public class HarvestState {
         return hasSeedBit(Sprite.decnum(d.sdt.clone()));
     }
 
+    /**
+     * Whether this specific gob currently shows a harvestable leaf layer, the same live bit the
+     * harvest overlay uses to draw a leaf icon. Ignores the treeHarvestLeaves display toggle.
+     * Throws Loading if the sprite hasn't loaded yet.
+     */
+    public static boolean hasHarvestableLeaf(Gob gob) {
+        if (gob == null) return false;
+        Drawable dr = gob.getattr(Drawable.class);
+        if (!(dr instanceof ResDrawable)) return false;
+        ResDrawable d = (ResDrawable) dr;
+        if (!isMatureTreeOrBush(gob, d)) return false;
+
+        return hasLeafBit(Sprite.decnum(d.sdt.clone()));
+    }
+
+    /**
+     * True when a forager pickup is for foliage (a known leaf icon, or a name/action that says
+     * leaf). Display-only: callers still have to check the gob is a tree or bush.
+     */
+    public static boolean tracksLiveLeaves(String itemName, String itemResource, String actionName) {
+        if (itemResource != null && LEAVES_MAP.containsValue(itemResource)) return true;
+        return mentionsLeaf(itemName) || mentionsLeaf(actionName);
+    }
+
+    private static boolean mentionsLeaf(String text) {
+        if (text == null) return false;
+        String lower = text.toLowerCase(java.util.Locale.ROOT);
+        return lower.contains("leaf") || lower.contains("leaves");
+    }
+
     // Named accessors for the live per-instance state bitmask's two known bits, so callers that
     // already have the decoded sdt in hand (TreeHarvestSpec/BushHarvestSpec, which decode it once
     // to check both) don't need to re-derive the bit meanings themselves.

@@ -25,6 +25,8 @@ public class NMapWnd extends MapWnd {
     MapToggleButton oreBtn;
     MapToggleButton gemBtn;
     MapToggleButton quarryartzBtn;
+    MapToggleButton quarryartzVeinBtn;
+    QuarryartzTopoLegend quarryTopoLegend;
     MapToggleButton animalsBtn;  // Кнопка для переключения видимости маркеров животных (ObjectTracker + БД)
     MapToggleButton foragingBtn;
     MapToggleButton vectorClearBtn;
@@ -90,9 +92,13 @@ public class NMapWnd extends MapWnd {
         gemBtn.state(() -> NMiniMap.showProspectKind(ProspectKind.GEM));
         gemBtn.set(val -> NMiniMap.showProspectKind(ProspectKind.GEM, val));
 
-        quarryartzBtn = add(new MapToggleButton("stone", "Toggle Quarryartz markers (Right-click: Quarryartz Search)", this::openQuarryartzSearch));
+        quarryartzBtn = add(new MapToggleButton("stone", L10n.get("maptools.quarryartz_icons_tip"), this::openQuarryartzSearch));
         quarryartzBtn.a = getQuarryartzIconsState();
         quarryartzBtn.changed(val -> setQuarryartzIconsState(val));
+
+        quarryartzVeinBtn = add(new MapToggleButton("vector", L10n.get("maptools.quarryartz_vein_tip"), null));
+        quarryartzVeinBtn.state(() -> NMiniMap.quarryartzVeinView());
+        quarryartzVeinBtn.set(val -> NMiniMap.quarryartzVeinView(val));
 
         // Animals button (маркеры животных: ObjectTracker при обнаружении + синхронизация из БД)
         animalsBtn = add(new MapToggleButton("tree", "Toggle Animal markers (from Discord notification list)", null));
@@ -151,6 +157,9 @@ public class NMapWnd extends MapWnd {
          * reads as one column rather than three things that happen to be near each other. */
         add(peerRoster = new PeerRoster((dbbtnw * 2) + UI.scale(5)));
         placeDbButtons();
+        quarryTopoLegend = add(new QuarryartzTopoLegend());
+        quarryTopoLegend.show(NMiniMap.quarryartzVeinView());
+        placeQuarryTopoLegend();
     }
 
     /**
@@ -404,6 +413,11 @@ public class NMapWnd extends MapWnd {
                 }
             }
         }
+        if(quarryTopoLegend != null) {
+            boolean vein = NMiniMap.quarryartzVeinView();
+            if(quarryTopoLegend.visible() != vein)
+                quarryTopoLegend.show(vein);
+        }
     }
 
     private boolean getAnimalIconsState() {
@@ -476,6 +490,10 @@ public class NMapWnd extends MapWnd {
     private void openForagingSearch() {
         NGameUI gui = (NGameUI) NUtils.getGameUI();
         if(gui != null) {
+            /* Closing used to destroy the window and leave this field pointing at it.
+               Raising that detached widget crashes the UI thread. */
+            if(gui.foragingSearchWindow != null && gui.foragingSearchWindow.parent == null)
+                gui.foragingSearchWindow = null;
             if(gui.foragingSearchWindow != null) {
                 if(gui.foragingSearchWindow.visible()) {
                     gui.foragingSearchWindow.hide();
@@ -565,7 +583,7 @@ public class NMapWnd extends MapWnd {
     private void layoutMapButtons() {
         Widget[] btns = {
             mapToolsBtn, fishBtn, treeBtn, oreBtn, gemBtn, quarryartzBtn,
-            animalsBtn, foragingBtn, vectorClearBtn
+            quarryartzVeinBtn, animalsBtn, foragingBtn, vectorClearBtn
         };
         int xpad = UI.scale(5);
         int ypad = UI.scale(5);
@@ -598,6 +616,13 @@ public class NMapWnd extends MapWnd {
             markerSearchField.c = view.c.add(view.sz.x - UI.scale(205), view.sz.y - UI.scale(25));
 
         placeDbButtons();
+        placeQuarryTopoLegend();
+    }
+
+    private void placeQuarryTopoLegend() {
+        if(quarryTopoLegend == null || view == null || view.c == null)
+            return;
+        quarryTopoLegend.c = view.c.add(UI.scale(8), UI.scale(8));
     }
     
     @Override

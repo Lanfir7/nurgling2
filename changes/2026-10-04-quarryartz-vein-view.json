@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-04-quarryartz-vein-view",
+  "priority": 6,
+  "summary": {
+    "ru": "Для Quarryartz на карте можно включить слой качества: заливка, изолинии и отметка лучшего замера.",
+    "en": "Quarryartz on the map can show a quality layer: a tint, contour lines, and a mark on the best reading."
+  },
+  "detail": {
+    "ru": "Кнопка кристалла по-прежнему показывает или скрывает метки. Кнопка со стрелкой включает слой только для Quarryartz на этом этаже. Цвет от красного к бирюзовому, изолинии с шагом 10 или 20, звезда на лучшем замере. Заливка только на выкопанном полу рядом с точками. Легенда слева: прозрачность и шаг. Вдали точки скрыты, наведение показывает точное q. Выключите стрелку, чтобы вернуть обычные метки.",
+    "en": "The crystal button still shows or hides marks. The arrow button turns on a Quarryartz layer for this map floor. Color runs from red to cyan, contours step by 10 or 20, and a star marks the best reading. Tint covers only dug floor near samples. The upper-left legend sets opacity and step. Zoomed out, dots hide; hover still shows exact q. Turn the arrow off to restore ordinary marks."
+  }
+}

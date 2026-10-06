@@ -66,9 +66,11 @@ public class ForagerRouteConstraints {
         if (threats.isEmpty()) return;
         synchronized(gui.ui.sess.glob.oc) {
             for(Gob gob : gui.ui.sess.glob.oc) {
-                if(gob.ngob == null || gob.ngob.name == null || NAreaRad.isDownOrDead(gob)) continue;
+                if(NAreaRad.isDownOrDead(gob)) continue;
+                String name = NAreaRad.resourceName(gob);
+                if(name == null) continue;
                 for (int i = 0; i < threats.size(); i++) {
-                    if (NParser.checkName(gob.ngob.name, aliases.get(i))) {
+                    if (NParser.checkName(name, aliases.get(i))) {
                         fn.accept(gob, threats.get(i));
                         break;
                     }
@@ -77,7 +79,7 @@ public class ForagerRouteConstraints {
         }
     }
 
-    private static String label(Gob gob) { String name=gob.ngob.name; return name.substring(name.lastIndexOf('/')+1)+"#"+gob.id; }
+    private static String label(Gob gob) { String name=NAreaRad.resourceName(gob); if(name==null) name="animal"; return name.substring(name.lastIndexOf('/')+1)+"#"+gob.id; }
     private static Coord2d headingPoint(Gob gob) {
         Moving m=gob.getattr(Moving.class);
         if(m instanceof LinMove) return gob.rc.add(((LinMove)m).v.mul(DANGER_LOOKAHEAD_S));

@@ -515,6 +515,8 @@ public abstract class GItem extends AWidget implements ItemInfo.SpriteOwner, GSp
 		    dm.remove();
 		    dm = null;
 		    ContentsWindow wnd = (ContentsWindow)parent;
+		    if(nurgling.widgets.MergedBagWindow.tryOpen(wnd))
+			return;
 		    wnd.drag(doff);
 		    wnd.chstate("wnd");
 		}
@@ -564,7 +566,13 @@ public abstract class GItem extends AWidget implements ItemInfo.SpriteOwner, GSp
 		z(90);
 		if(parent != null)
 		    raise();
+	    } else if(nst == "section") {
+		chdeco(new nurgling.widgets.MergedBagWindow.SectionDeco());
+		show();
+		z(0);
 	    } else if(nst == "wnd") {
+		if(nurgling.widgets.MergedBagWindow.tryOpen(this))
+		    return;
 		chdeco(new nurgling.NWindowDeco());
 		show();
 		z(0);
@@ -573,6 +581,25 @@ public abstract class GItem extends AWidget implements ItemInfo.SpriteOwner, GSp
 		if(id != null)
 		    Utils.setprefb(String.format("cont-wndvis/%s", id), true);
 	    }
+	}
+
+	public void enterMerge() {
+	    chstate("section");
+	    if(inv != null)
+		resize(inv.c.add(psz = inv.sz));
+	}
+
+	public void leaveMerge() {
+	    if(st == "section")
+		chstate("hide");
+	}
+
+	public Coord mergeAnchor() {
+	    if((st == "wnd" || st == "hover") && (c != null))
+		return(c);
+	    if((cont != null) && (ui != null))
+		return(cont.rootxlate(ui.mc).add(overlap));
+	    return((c == null) ? Coord.z : c);
 	}
 
 	private void ckhover() {
@@ -626,12 +653,19 @@ public abstract class GItem extends AWidget implements ItemInfo.SpriteOwner, GSp
 	private Coord lc = null;
 	public void tick(double dt) {
 	    super.tick(dt);
+	    if(st == "section") {
+		if((inv != null) && !Utils.eq(inv.sz, psz))
+		    resize(inv.c.add(psz = inv.sz));
+		return;
+	    }
+	    if((st == "wnd") && nurgling.widgets.MergedBagWindow.tryOpen(this))
+		return;
 	    if(st == "hide") {
 		ckhover();
 	    } else if(st == "hover") {
 		ckunhover();
 	    }
-	    if(!Utils.eq(inv.sz, psz))
+	    if((inv != null) && !Utils.eq(inv.sz, psz))
 		resize(inv.c.add(psz = inv.sz));
 	    if(st == "wnd") {
 		if(!Utils.eq(lc, this.c) && (id != null))
@@ -640,6 +674,10 @@ public abstract class GItem extends AWidget implements ItemInfo.SpriteOwner, GSp
 	}
 
 	public void reqclose() {
+	    if((st == "section") && (parent instanceof nurgling.widgets.MergedBagWindow)) {
+		((nurgling.widgets.MergedBagWindow)parent).reqclose();
+		return;
+	    }
 	    chstate("hide");
 	}
 
@@ -660,7 +698,11 @@ public abstract class GItem extends AWidget implements ItemInfo.SpriteOwner, GSp
 	}
 
 	public void wndshow(boolean show) {
-	    if(show && (st != "wnd")) {
+	    if(show) {
+		if(nurgling.widgets.MergedBagWindow.tryOpen(this))
+		    return;
+		if((st == "wnd") || (st == "section"))
+		    return;
 		Coord wc = null;
 		if(id != null)
 		    wc = Utils.getprefc(String.format("cont-wndc/%s", id), null);
@@ -671,6 +713,8 @@ public abstract class GItem extends AWidget implements ItemInfo.SpriteOwner, GSp
 		chstate("wnd");
 		if(wc != null)
 		    move(wc);
+	    } else if(nurgling.widgets.MergedBagWindow.tryClose(this)) {
+		return;
 	    } else if(!show && (st == "wnd")) {
 		chstate("hide");
 	    }

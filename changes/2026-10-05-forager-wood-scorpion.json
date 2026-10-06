@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-05-forager-wood-scorpion",
+  "priority": 7,
+  "summary": {
+    "ru": "Сборщик заранее обходит древесных скорпионов и уходит, если скорпион уже напал.",
+    "en": "Forager now stays clear of wood scorpions and leaves if one has already attacked."
+  },
+  "detail": {
+    "ru": "Раньше кольцо скорпиона было слишком коротким: сборщик подходил вплотную и получал укусы, не начиная действие охраны. Теперь он держится дальше и сразу уходит, если скорпион уже в бою. Свою дистанцию по-прежнему можно задать в настройках колец.",
+    "en": "The wood scorpion ring used to be short enough that Forager walked into stings before guarding started. It now keeps a wider berth and leaves as soon as a scorpion is in combat. The distance can still be changed in Ring Settings."
+  }
+}

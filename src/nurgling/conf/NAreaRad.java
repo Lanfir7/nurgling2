@@ -1,7 +1,10 @@
 package nurgling.conf;
 
 import nurgling.NConfig;
+import haven.Drawable;
 import haven.Gob;
+import haven.Loading;
+import haven.Resource;
 import nurgling.tools.NParser;
 import org.json.JSONObject;
 
@@ -59,6 +62,23 @@ public class NAreaRad implements JConf
         return pose != null && NParser.checkName(pose, "dead", "knock");
     }
 
+    /** Gob resource path, including the drawable name before NGob has copied it. */
+    public static String resourceName(Gob gob) {
+        if (gob == null)
+            return null;
+        if (gob.ngob != null && gob.ngob.name != null)
+            return gob.ngob.name;
+        try {
+            Drawable drawable = gob.getattr(Drawable.class);
+            if (drawable == null)
+                return null;
+            Resource res = drawable.getres();
+            return res != null ? res.name : null;
+        } catch (Loading e) {
+            return null;
+        }
+    }
+
     public NAreaRad(HashMap<String, Object> values)
     {
         name = (String) values.get("name");
@@ -99,6 +119,11 @@ public class NAreaRad implements JConf
 
     public static final String WILDGOAT_OLD = "gfx/kritter/wildgoat/wildgoat";
     public static final String WILDGOAT = "gfx/kritter/goat/wildgoat";
+    public static final String WOODSCORPION = "gfx/kritter/woodscorpion/woodscorpion";
+    /** Far enough that a forager turns aside before a wood scorpion closes and starts stinging. */
+    public static final int WOODSCORPION_RADIUS = 100;
+    /** Shipped default that sat inside sting range. Only this exact value is upgraded. */
+    private static final int WOODSCORPION_TOO_CLOSE = 30;
 
     /**
      * Fix the mountain-goat resource path and insert it when missing.
@@ -130,6 +155,12 @@ public class NAreaRad implements JConf
         if (oldGoat != null) {
             rads.remove(oldGoat);
             changed = true;
+        }
+        for (NAreaRad r : rads) {
+            if (WOODSCORPION.equals(r.name) && r.radius == WOODSCORPION_TOO_CLOSE) {
+                r.radius = WOODSCORPION_RADIUS;
+                changed = true;
+            }
         }
         return changed;
     }

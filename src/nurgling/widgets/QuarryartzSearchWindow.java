@@ -3,6 +3,7 @@ package nurgling.widgets;
 import haven.*;
 import haven.Locked;
 import nurgling.NGameUI;
+import nurgling.i18n.L10n;
 import nurgling.widgets.LabeledMinimapMark;
 
 import java.util.*;
@@ -20,7 +21,7 @@ public class QuarryartzSearchWindow extends Window {
     private static final int WINDOW_HEIGHT = UI.scale(400);
 
     public QuarryartzSearchWindow(NGameUI gui) {
-        super(new Coord(WINDOW_WIDTH, WINDOW_HEIGHT), "Поиск квариарца", true);
+        super(new Coord(WINDOW_WIDTH, WINDOW_HEIGHT), L10n.get("quarryartz.search_title"), true);
         this.gui = gui;
 
         int y = UI.scale(10);
@@ -29,12 +30,12 @@ public class QuarryartzSearchWindow extends Window {
         int lineHeight = UI.scale(30);
 
         // Порог качества
-        add(new Label("Порог качества:"), labelX, y + UI.scale(5));
+        add(new Label(L10n.get("quarryartz.search_threshold")), labelX, y + UI.scale(5));
         thresholdEntry = add(new TextEntry(UI.scale(150), ""), controlX, y);
         y += lineHeight;
 
         // Кнопка поиска
-        add(new Button(UI.scale(150), "Поиск") {
+        add(new Button(UI.scale(150), L10n.get("quarryartz.search_button")) {
             @Override
             public void click() {
                 performSearch();
@@ -43,7 +44,7 @@ public class QuarryartzSearchWindow extends Window {
         y += lineHeight + UI.scale(10);
 
         // Список результатов
-        add(new Label("Результаты:"), labelX, y);
+        add(new Label(L10n.get("quarryartz.search_results")), labelX, y);
         y += UI.scale(25);
 
         Coord resultsSize = new Coord(WINDOW_WIDTH - UI.scale(20), WINDOW_HEIGHT - y - UI.scale(10));
@@ -148,7 +149,7 @@ public class QuarryartzSearchWindow extends Window {
                         public void click() {
                             if (gui != null && gui.labeledMarkService != null) {
                                 gui.labeledMarkService.removeMark(mark);
-                                gui.msg("Удалена метка " + mark.label, java.awt.Color.YELLOW);
+                                gui.msg(L10n.get("quarryartz.search_deleted", mark.label), java.awt.Color.YELLOW);
                                 performSearch();
                             }
                         }
@@ -180,9 +181,9 @@ public class QuarryartzSearchWindow extends Window {
                     MiniMap.Location targetLoc = new MiniMap.Location(segment, mark.tileCoords);
                     mapWnd.view.center(targetLoc);
                     mapWnd.view.follow(null);
-                    gui.msg("Карта перемещена к " + mark.label, java.awt.Color.GREEN);
+                    gui.msg(L10n.get("quarryartz.search_moved", mark.label), java.awt.Color.GREEN);
                 } else {
-                    gui.msg("Метка находится в другой области", java.awt.Color.YELLOW);
+                    gui.msg(L10n.get("quarryartz.search_other_area"), java.awt.Color.YELLOW);
                 }
             }
         }

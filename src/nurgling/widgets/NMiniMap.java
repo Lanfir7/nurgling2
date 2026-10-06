@@ -118,6 +118,10 @@ NMiniMap extends MiniMap {
     // Visibility flags for tree and fish icons live in NConfig (see showTreeIcons/showFishIcons).
     public boolean showProspectingIcons = true;
     public boolean showQuarryartzIcons = true;
+    private int quarryTopoStamp = Integer.MIN_VALUE;
+    private QuarryartzTopo.Result quarryTopo;
+    private TexI quarryTopoTex;
+    private final java.util.Map<String, Text> quarryTopoLabels = new java.util.HashMap<>();
     public boolean showAnimalIcons = true; // Видимость маркеров животных (ObjectTracker + БД)
     public boolean showForagingIcons = true;
     public boolean showAllZonesAlways = false; // Показывать все зоны всегда, независимо от окна редактирования
@@ -137,6 +141,41 @@ NMiniMap extends MiniMap {
 
     public static void showTreeIcons(boolean val) {
         NConfig.set(NConfig.Key.showTreeIcons, val);
+    }
+
+    /** Vein drawing for Quarryartz. Off keeps the icon and the q label. */
+    public static boolean quarryartzVeinView() {
+        Object val = NConfig.get(NConfig.Key.quarryartzVeinView);
+        return val instanceof Boolean && (Boolean) val;
+    }
+
+    public static void quarryartzVeinView(boolean val) {
+        NConfig.set(NConfig.Key.quarryartzVeinView, val);
+        NConfig.needUpdate();
+    }
+
+    public static int quarryartzTopoAlpha() {
+        Object val = NConfig.get(NConfig.Key.quarryartzTopoAlpha);
+        int alpha = val instanceof Number ? ((Number) val).intValue() : 110;
+        if (alpha < 40) alpha = 40;
+        if (alpha > 200) alpha = 200;
+        return alpha;
+    }
+
+    public static void quarryartzTopoAlpha(int val) {
+        NConfig.set(NConfig.Key.quarryartzTopoAlpha, val);
+        NConfig.needUpdate();
+    }
+
+    public static int quarryartzTopoStep() {
+        Object val = NConfig.get(NConfig.Key.quarryartzTopoStep);
+        int step = val instanceof Number ? ((Number) val).intValue() : 20;
+        return step <= 10 ? 10 : 20;
+    }
+
+    public static void quarryartzTopoStep(int val) {
+        NConfig.set(NConfig.Key.quarryartzTopoStep, val <= 10 ? 10 : 20);
+        NConfig.needUpdate();
     }
 
     public static boolean showFishIcons() {
@@ -2102,6 +2141,10 @@ NMiniMap extends MiniMap {
         }
         float scaleMultiplier = scalePercent / 100.0f;
 
+        boolean vein = quarryartzVeinView();
+        if (vein)
+            drawQuarryTopo(g, marks, hsz, scale);
+
         for(LabeledMinimapMark mark : marks) {
             if (skipHiddenLabeledMark(mark, settings) || !mapIconVisible("local", mark.resourceType))
                 continue;
@@ -2112,6 +2155,15 @@ NMiniMap extends MiniMap {
                 continue;
 
             Coord screenPos = new Coord(px, py);
+
+            if (vein && "Quarryartz".equals(mark.resourceType)) {
+                if (currentScale >= 1.25f) {
+                    g.chcolor(255, 255, 255, 220);
+                    g.fellipse(screenPos, new Coord(UI.scale(2), UI.scale(2)));
+                    g.chcolor();
+                }
+                continue;
+            }
 
             TexI iconTex = mark.getIconTex();
             if (iconTex == null && isAnimalMark(mark)) {
@@ -2149,6 +2201,181 @@ NMiniMap extends MiniMap {
                 g.aimage(labelText.tex(), textPos, 0.5, 0, scaledTextSize);
             }
         }
+    }
+
+    private void drawQuarryTopo(GOut g, java.util.List<LabeledMinimapMark> marks, Coord hsz, float scale) {
+        QuarryartzTopo.Result field = quarryTopo(marks);
+        if (field == null || field.empty() || quarryTopoTex == null)
+            return;
+        Coord ul = tileScreen(field.x0, field.y0, hsz, scale);
+        Coord br = tileScreen(field.x0 + field.width * field.stride, field.y0 + field.height * field.stride, hsz, scale);
+        g.chcolor(255, 255, 255, quarryartzTopoAlpha());
+        g.image(quarryTopoTex, ul, br.sub(ul));
+        g.chcolor(20, 16, 12, 210);
+        for (int i = 0; i < field.lineQ.length; i++) {
+            Coord a = tileScreen(field.lines[i * 4], field.lines[i * 4 + 1], hsz, scale);
+            Coord b = tileScreen(field.lines[i * 4 + 2], field.lines[i * 4 + 3], hsz, scale);
+            g.line(a, b, 1.2);
+        }
+        g.chcolor();
+        boolean labels = currentScale >= 1.0f;
+        if (labels) {
+            for (int i = 0; i < field.labelQ.length; i++)
+                drawTopoText(g, tileScreen(field.labelX[i], field.labelY[i], hsz, scale), "q" + field.labelQ[i]);
+        }
+        for (int i = 0; i < field.peakQ.length; i++) {
+            Coord at = tileScreen(field.peakX[i], field.peakY[i], hsz, scale);
+            drawTopoStar(g, at);
+            drawTopoText(g, at.add(UI.scale(7), 0), "q" + field.peakQ[i]);
+        }
+    }
+
+    private Coord tileScreen(double tx, double ty, Coord hsz, float scale) {
+        int px = (int) Math.round((tx - dloc.tc.x) / (double) scale) + hsz.x;
+        int py = (int) Math.round((ty - dloc.tc.y) / (double) scale) + hsz.y;
+        return new Coord(px, py);
+    }
+
+    private void drawTopoText(GOut g, Coord at, String text) {
+        Text label = quarryTopoLabels.get(text);
+        if (label == null) {
+            label = Text.render(text);
+            quarryTopoLabels.put(text, label);
+        }
+        g.aimage(label.tex(), at, 0, 0.5);
+    }
+
+    private void drawTopoStar(GOut g, Coord at) {
+        int r = UI.scale(5);
+        g.chcolor(230, 250, 255, 240);
+        g.line(at.add(-r, 0), at.add(r, 0), UI.scale(2));
+        g.line(at.add(0, -r), at.add(0, r), UI.scale(2));
+        int d = UI.scale(3);
+        g.line(at.add(-d, -d), at.add(d, d), UI.scale(1));
+        g.line(at.add(-d, d), at.add(d, -d), UI.scale(1));
+        g.chcolor();
+    }
+
+    private QuarryartzTopo.Result quarryTopo(java.util.List<LabeledMinimapMark> marks) {
+        int n = 0;
+        long bits = 0x9E3779B97F4A7C15L;
+        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE;
+        for (LabeledMinimapMark mark : marks) {
+            if (!"Quarryartz".equals(mark.resourceType) || mark.quality <= 0)
+                continue;
+            n++;
+            bits = bits * 31 + mark.tileCoords.x;
+            bits = bits * 31 + mark.tileCoords.y;
+            bits = bits * 31 + Double.doubleToRawLongBits(mark.quality);
+            if (mark.tileCoords.x < minX) minX = mark.tileCoords.x;
+            if (mark.tileCoords.y < minY) minY = mark.tileCoords.y;
+            if (mark.tileCoords.x > maxX) maxX = mark.tileCoords.x;
+            if (mark.tileCoords.y > maxY) maxY = mark.tileCoords.y;
+        }
+        int step = quarryartzTopoStep();
+        long tiles = n == 0 ? 0 : quarryTileStamp(minX, minY, maxX, maxY);
+        int stamp = Long.hashCode(bits) * 31 + n * 17 + step + Long.hashCode(tiles) + 4;
+        if (stamp == quarryTopoStamp && quarryTopo != null)
+            return quarryTopo;
+        int[] xs = new int[n];
+        int[] ys = new int[n];
+        double[] qs = new double[n];
+        int i = 0;
+        for (LabeledMinimapMark mark : marks) {
+            if (!"Quarryartz".equals(mark.resourceType) || mark.quality <= 0)
+                continue;
+            xs[i] = mark.tileCoords.x;
+            ys[i] = mark.tileCoords.y;
+            qs[i] = mark.quality;
+            i++;
+        }
+        QuarryartzTopo.Ground ground = n == 0 ? (x, y) -> 0 : quarryGround(minX, minY, maxX, maxY);
+        QuarryartzTopo.Result next = QuarryartzTopo.build(xs, ys, qs, ground, step, 255);
+        if (quarryTopoTex != null) {
+            quarryTopoTex.dispose();
+            quarryTopoTex = null;
+        }
+        if (!next.empty()) {
+            BufferedImage img = new BufferedImage(next.width, next.height, BufferedImage.TYPE_INT_ARGB);
+            img.setRGB(0, 0, next.width, next.height, next.argb, 0, next.width);
+            quarryTopoTex = new TexI(img);
+        }
+        quarryTopo = next;
+        quarryTopoStamp = stamp;
+        return next;
+    }
+
+    /** Changes when a cave grid in the sample area finishes loading, so the mask is rebuilt once. */
+    private long quarryTileStamp(int minX, int minY, int maxX, int maxY) {
+        if (dloc == null || file == null)
+            return 0;
+        long stamp = dloc.seg.id;
+        Coord g0 = new Coord(minX, minY).sub(QuarryartzTopo.RADIUS, QuarryartzTopo.RADIUS).div(cmaps);
+        Coord g1 = new Coord(maxX, maxY).add(QuarryartzTopo.RADIUS, QuarryartzTopo.RADIUS).div(cmaps);
+        file.lock.readLock().lock();
+        try {
+            for (int gx = g0.x; gx <= g1.x; gx++) {
+                for (int gy = g0.y; gy <= g1.y; gy++) {
+                    MapFile.Grid grid = loadedGrid(dloc.seg, new Coord(gx, gy));
+                    stamp = stamp * 31 + (grid == null ? 0 : grid.mtime);
+                }
+            }
+        } finally {
+            file.lock.readLock().unlock();
+        }
+        return stamp;
+    }
+
+    private QuarryartzTopo.Ground quarryGround(int minX, int minY, int maxX, int maxY) {
+        if (dloc == null || file == null)
+            return (x, y) -> 0;
+        java.util.Map<Long, String[]> tiles = new java.util.HashMap<>();
+        Coord g0 = new Coord(minX, minY).sub(QuarryartzTopo.RADIUS, QuarryartzTopo.RADIUS).div(cmaps);
+        Coord g1 = new Coord(maxX, maxY).add(QuarryartzTopo.RADIUS, QuarryartzTopo.RADIUS).div(cmaps);
+        file.lock.readLock().lock();
+        try {
+            for (int gx = g0.x; gx <= g1.x; gx++) {
+                for (int gy = g0.y; gy <= g1.y; gy++) {
+                    MapFile.Grid grid = loadedGrid(dloc.seg, new Coord(gx, gy));
+                    if (grid == null || grid.tilesets == null)
+                        continue;
+                    String[] names = new String[grid.tiles.length];
+                    for (int t = 0; t < grid.tiles.length; t++) {
+                        int set = grid.tiles[t];
+                        if (set >= 0 && set < grid.tilesets.length && grid.tilesets[set].res != null)
+                            names[t] = grid.tilesets[set].res.name;
+                    }
+                    tiles.put((((long) gx) << 32) ^ (gy & 0xffffffffL), names);
+                }
+            }
+        } finally {
+            file.lock.readLock().unlock();
+        }
+        return (x, y) -> {
+            Coord tc = new Coord(x, y);
+            Coord gc = tc.div(cmaps);
+            Coord lc = tc.sub(gc.mul(cmaps));
+            String[] names = tiles.get((((long) gc.x) << 32) ^ (gc.y & 0xffffffffL));
+            if (names == null || lc.x < 0 || lc.y < 0 || lc.x >= cmaps.x || lc.y >= cmaps.y)
+                return -1;
+            int idx = lc.x + lc.y * cmaps.x;
+            if (idx < 0 || idx >= names.length)
+                return -1;
+            return QuarryartzTopo.excavatedName(names[idx]) ? 1 : 0;
+        };
+    }
+
+    private MapFile.Grid loadedGrid(MapFile.Segment seg, Coord gc) {
+        Long id = seg.map.get(gc);
+        if (id == null)
+            return null;
+        haven.Indir<MapFile.Grid> indir = seg.grid(id);
+        if (indir instanceof MapFile.Segment.Cached) {
+            MapFile.Grid loaded = ((MapFile.Segment.Cached) indir).loaded;
+            if (loaded != null)
+                return loaded;
+        }
+        return null;
     }
 
     private BufferedImage markerIconImage(String path) {

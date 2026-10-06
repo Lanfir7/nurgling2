@@ -24,7 +24,8 @@ class NMapWndMineralButtonsTest {
         assertTrue(index(body, "treeBtn") < index(body, "oreBtn"));
         assertTrue(index(body, "oreBtn") < index(body, "gemBtn"));
         assertTrue(index(body, "gemBtn") < index(body, "quarryartzBtn"));
-        assertTrue(index(body, "quarryartzBtn") < index(body, "animalsBtn"));
+        assertTrue(index(body, "quarryartzBtn") < index(body, "quarryartzVeinBtn"));
+        assertTrue(index(body, "quarryartzVeinBtn") < index(body, "animalsBtn"));
         assertTrue(index(body, "animalsBtn") < index(body, "foragingBtn"));
         assertTrue(index(body, "foragingBtn") < index(body, "vectorClearBtn"));
 
@@ -39,6 +40,8 @@ class NMapWndMineralButtonsTest {
         assertTrue(body.contains("gemBtn.set(val -> NMiniMap.showProspectKind(ProspectKind.GEM, val))"));
         assertTrue(body.contains("quarryartzBtn.a = getQuarryartzIconsState()"));
         assertTrue(body.contains("quarryartzBtn.changed(val -> setQuarryartzIconsState(val))"));
+        assertTrue(body.contains("quarryartzVeinBtn.state(() -> NMiniMap.quarryartzVeinView())"));
+        assertTrue(body.contains("quarryartzVeinBtn.set(val -> NMiniMap.quarryartzVeinView(val))"));
         assertTrue(src.contains("private boolean getQuarryartzIconsState()"));
         assertTrue(src.contains("private void setQuarryartzIconsState(boolean val)"));
         assertTrue(src.contains("showQuarryartzIcons"));

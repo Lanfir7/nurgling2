@@ -68,4 +68,24 @@ class NAreaRadMigrateTest {
         assertTrue(goat.vis);
         assertEquals(2, rads.size());
     }
+
+    @Test
+    void shippedWoodScorpionRadiusMovesOutOfStingRange() {
+        ArrayList<NAreaRad> rads = new ArrayList<>();
+        rads.add(new NAreaRad(NAreaRad.WILDGOAT, 100));
+        rads.add(new NAreaRad(NAreaRad.WOODSCORPION, 30));
+
+        assertTrue(NAreaRad.migrateList(rads));
+        NAreaRad scorpion = null;
+        for (NAreaRad r : rads)
+            if (NAreaRad.WOODSCORPION.equals(r.name)) scorpion = r;
+        assertEquals(NAreaRad.WOODSCORPION_RADIUS, scorpion.radius);
+
+        ArrayList<NAreaRad> kept = new ArrayList<>();
+        kept.add(new NAreaRad(NAreaRad.WILDGOAT, 100));
+        NAreaRad tuned = new NAreaRad(NAreaRad.WOODSCORPION, 80);
+        kept.add(tuned);
+        assertFalse(NAreaRad.migrateList(kept));
+        assertEquals(80, tuned.radius);
+    }
 }
