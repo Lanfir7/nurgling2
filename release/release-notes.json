@@ -227,11 +227,61 @@
     "2026-10-03-selection-memory-leak",
     "2026-10-03-visible-zone-skip-corner",
     "2026-10-04-chunk-nav-gates",
+    "2026-10-04-quarryartz-vein-view",
     "2026-10-04-scenario-settings-fit",
     "2026-10-04-skip-empty-drying-frames",
-    "2026-10-04-text-field-click-focus"
+    "2026-10-04-text-field-click-focus",
+    "2026-10-05-forager-wood-scorpion",
+    "2026-10-05-foraging-search-reopen",
+    "2026-10-05-merged-pouches",
+    "2026-10-05-quarryartz-search-l10n",
+    "2026-10-06-forager-leaf-trees"
   ],
   "releases": [
+    {
+      "id": "2.103.225",
+      "date": "2026-10-06",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Сборщик заранее обходит древесных скорпионов и уходит, если скорпион уже напал.",
+          "Для Quarryartz на карте можно включить слой качества: заливка, изолинии и отметка лучшего замера.",
+          "Поиск собирательства на карте снова открывается правым кликом после закрытия окна.",
+          "Сборщик больше не подходит к деревьям, на которых уже нет листвы.",
+          "Одинаковые мешочки открываются одним окном, и между ними остаётся видимая граница.",
+          "Подсказка кнопки квариарца на карте и окно поиска показываются на языке клиента."
+        ],
+        "en": [
+          "Forager now stays clear of wood scorpions and leaves if one has already attacked.",
+          "Quarryartz on the map can show a quality layer: a tint, contour lines, and a mark on the best reading.",
+          "Foraging search on the map opens again from a right-click after the window is closed.",
+          "Forager no longer walks up to trees that have already lost their leaves.",
+          "Pouches of the same kind open as one window, with a visible split between them.",
+          "The Quarryartz map button tip and search window follow the client language."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Раньше кольцо скорпиона было слишком коротким: сборщик подходил вплотную и получал укусы, не начиная действие охраны. Теперь он держится дальше и сразу уходит, если скорпион уже в бою. Свою дистанцию по-прежнему можно задать в настройках колец.",
+          "Кнопка кристалла по-прежнему показывает или скрывает метки. Кнопка со стрелкой включает слой только для Quarryartz на этом этаже. Цвет от красного к бирюзовому, изолинии с шагом 10 или 20, звезда на лучшем замере. Заливка только на выкопанном полу рядом с точками. Легенда слева: прозрачность и шаг. Вдали точки скрыты, наведение показывает точное q. Выключите стрелку, чтобы вернуть обычные метки.",
+          "Правый клик по кнопке меток собирательства на карте открывает поиск. Закройте окно крестиком и нажмите правой кнопкой ещё раз: поиск появляется снова, клиент не вылетает.",
+          "При сборе листьев он смотрит на ту же отметку, что и значки урожая над деревом, и идёт только туда, где листва ещё есть. Пустое дерево остаётся на месте, без лишнего подхода.",
+          "Клик по мешочку в инвентаре или на поясе открывает все мешочки этого вида вместе: семенные мешки с семенными, кошели с кошелями и так далее. Каждый мешочек остаётся своей сеткой в рамке, перекладывать предметы можно как раньше.",
+          "Наведите курсор на кнопку меток квариарца на карте: подсказка на русском. Правый клик открывает «Поиск квариарца» с порогом качества и списком результатов на том же языке."
+        ],
+        "en": [
+          "The wood scorpion ring used to be short enough that Forager walked into stings before guarding started. It now keeps a wider berth and leaves as soon as a scorpion is in combat. The distance can still be changed in Ring Settings.",
+          "The crystal button still shows or hides marks. The arrow button turns on a Quarryartz layer for this map floor. Color runs from red to cyan, contours step by 10 or 20, and a star marks the best reading. Tint covers only dug floor near samples. The upper-left legend sets opacity and step. Zoomed out, dots hide; hover still shows exact q. Turn the arrow off to restore ordinary marks.",
+          "Right-click the foraging markers button on the map to open search. Close that window and right-click again: search comes back, and the client stays open.",
+          "When collecting leaves, Forager uses the same mark as the harvest icons above a tree and walks only to trees that still have foliage. An empty tree is left alone.",
+          "Click a pouch in your inventory or on your belt to open every pouch of that kind together: seedbags with seedbags, purses with purses, and so on. Each pouch keeps its own framed grid, and items can still be moved as before.",
+          "Hover the Quarryartz markers button on the map for a tip in your language. Right-click opens Quarryartz Search, with the quality threshold and result list in that language too."
+        ]
+      }
+    },
     {
       "id": "2.103.224",
       "date": "2026-10-04",
@@ -1505,34 +1555,6 @@
           "Open Settings → Forager. Set a profile, choose pickups (drag an item, catalogue or name), paint the route and exclusion zones. Dangerous rings can stop Forager independently of map visibility.",
           "The bot menu has radish, watermelon and white onion farmers, each with a quality variant. Mark crop/seed (and cropQ/seedQ) zones, a harvest Put area, and optionally a trough for swill.",
           "Irrlight Farmer is in the bot menu: stand by a lit crucible with a bar, mark an Irrlight Put zone and optional branch fuel. Apply Tansy takes tansy from Take and tops the buff up rather than only at zero."
-        ]
-      }
-    },
-    {
-      "id": "2.103.192",
-      "date": "2026-09-11",
-      "title": {
-        "ru": "Новое в клиенте",
-        "en": "Client updates"
-      },
-      "summary": {
-        "ru": [
-          "На карте проще ориентироваться: провинции, чанки и подсказки вех.",
-          "Печи можно заправить и зажечь из меню объекта."
-        ],
-        "en": [
-          "The map is easier to read: provinces, chunks and milestone hints.",
-          "Ovens can be fueled and lit from the object menu."
-        ]
-      },
-      "details": {
-        "ru": [
-          "На карте и миникарте появляются названия провинций, навигация по чанкам и подсказки, куда ставить веху. Переходы порталов учитывают текущий экземпляр.",
-          "ПКМ по печи — действие «заправить и зажечь». Бот обходит ваши печи, кладёт топливо и поджигает, не открывая каждую вручную."
-        ],
-        "en": [
-          "The map and minimap show province names, chunk navigation and hints for placing milestones. Portal travel respects the current instance.",
-          "Right-click an oven for Fuel and light ovens. The action walks your ovens, adds fuel and lights them without opening each one by hand."
         ]
       }
     }
