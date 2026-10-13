@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-unbox-buffer",
+  "priority": 4,
+  "summary": {
+    "ru": "Зону распаковки можно использовать как склад-буфер без возврата выгружаемых вещей обратно.",
+    "en": "An Unbox zone can serve as a storage buffer without receiving its own unloaded items again."
+  },
+  "detail": {
+    "ru": "При разгрузке зоны со специализацией Unbox бот исключает эту же зону из получателей PUT. Теперь ей можно задать правила хранения для временного буфера: при распаковке вещи уходят в другие подходящие зоны и не возвращаются в исходные контейнеры.",
+    "en": "When unloading an area with the Unbox specialization, the bot excludes that area from PUT destinations. You can configure storage rules for a temporary buffer: unpacked items go to other matching areas and do not return to their original containers."
+  }
+}
