@@ -75,13 +75,21 @@ public class NFightWnd extends FightWnd {
 
 		@Override
 		public void draw(GOut g) {
-		    g.chcolor((selectedCategory == category) ? CATEGORY_SELECTED : NStyle.infoBg);
-		    g.frect(Coord.z, sz);
-		    g.chcolor();
+		    boolean selected = (selectedCategory == category);
+		    if(nurgling.styles.UITheme.on()) {
+			nurgling.styles.GeneratedButtons.plate(g, Coord.z, sz,
+			    selected ? nurgling.styles.GeneratedButtons.State.SELECTED : nurgling.styles.GeneratedButtons.State.NORMAL);
+		    } else {
+			g.chcolor(selected ? CATEGORY_SELECTED : NStyle.infoBg);
+			g.frect(Coord.z, sz);
+			g.chcolor();
+		    }
 		    g.aimage(icon, sz.div(2), 0.5, 0.5);
-		    g.chcolor(NStyle.border);
-		    g.rect(Coord.z, sz);
-		    g.chcolor();
+		    if(!nurgling.styles.UITheme.on()) {
+			g.chcolor(NStyle.border);
+			g.rect(Coord.z, sz);
+			g.chcolor();
+		    }
 		}
 
 		@Override
@@ -579,18 +587,27 @@ public class NFightWnd extends FightWnd {
 	    int sx = i * (SAVE_W + SAVE_GAP);
 	    add(new Widget(new Coord(SAVE_W, SAVE_H)) {
 		public void draw(GOut g) {
-		    g.chcolor(NStyle.infoBg);
-		    g.frect(Coord.z, sz);
-		    g.chcolor();
+		    boolean flat = nurgling.styles.UITheme.on();
+		    boolean selected = savelist.sel != null && savelist.sel == n;
+		    if(flat) {
+			nurgling.styles.GeneratedButtons.plate(g, Coord.z, sz,
+			    selected ? nurgling.styles.GeneratedButtons.State.SELECTED : nurgling.styles.GeneratedButtons.State.NORMAL);
+			if(n == usesave)
+			    nurgling.styles.UITheme.panel(g, Coord.z, sz, null, nurgling.styles.UITheme.ACCENT);
+		    } else {
+			g.chcolor(NStyle.infoBg);
+			g.frect(Coord.z, sz);
+			g.chcolor();
 
-		    int bw = Math.max(2, UI.scale(2));
-		    int alpha = (n == usesave) ? 255 : 128;
-		    g.chcolor(NStyle.border.getRed(), NStyle.border.getGreen(), NStyle.border.getBlue(), alpha);
-		    g.frect(Coord.z, new Coord(sz.x, bw));
-		    g.frect(new Coord(0, sz.y - bw), new Coord(sz.x, bw));
-		    g.frect(Coord.z, new Coord(bw, sz.y));
-		    g.frect(new Coord(sz.x - bw, 0), new Coord(bw, sz.y));
-		    g.chcolor();
+			int bw = Math.max(2, UI.scale(2));
+			int alpha = (n == usesave) ? 255 : 128;
+			g.chcolor(NStyle.border.getRed(), NStyle.border.getGreen(), NStyle.border.getBlue(), alpha);
+			g.frect(Coord.z, new Coord(sz.x, bw));
+			g.frect(new Coord(0, sz.y - bw), new Coord(sz.x, bw));
+			g.frect(Coord.z, new Coord(bw, sz.y));
+			g.frect(new Coord(sz.x - bw, 0), new Coord(bw, sz.y));
+			g.chcolor();
+		    }
 
 		    if(saves[n] != null) {
 			String txt = saves[n].text;
@@ -616,7 +633,7 @@ public class NFightWnd extends FightWnd {
 			}
 		    }
 
-		    if(savelist.sel != null && savelist.sel == n) {
+		    if(!flat && selected) {
 			int bw2 = Math.max(2, UI.scale(2));
 			g.chcolor(255, 255, 0, 64);
 			g.frect(Coord.of(bw2, bw2), sz.sub(bw2 * 2, bw2 * 2));

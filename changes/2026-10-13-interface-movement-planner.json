@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-interface-movement-planner",
+  "priority": 6,
+  "summary": {
+    "ru": "Обновлено оформление интерфейса, улучшена плавность движения и добавлен планировщик крафта по вики.",
+    "en": "Updated interface styling, smoother movement and a wiki crafting planner."
+  },
+  "detail": {
+    "ru": "Оформление окон переключается в настройках. Отдельная кнопка атласа в главном меню открывает рецепты вики и расчёт цепочек производства; прежняя энциклопедия и компас доступны как раньше. График времени кадров открывается Ctrl+F10, запись диагностики движения — Ctrl+F9. Слой исследованной карты обновляется в фоне. Добавлены импорт друзей и улучшения эффектов Vulkan.",
+    "en": "Switch window styling in settings. A separate atlas button in the main menu opens wiki recipes and production chains; the existing encyclopedia and compass remain available. Ctrl+F10 opens frame timing, and Ctrl+F9 records movement diagnostics. Explored map shading updates in the background. Friend import and Vulkan effects have also been improved."
+  }
+}

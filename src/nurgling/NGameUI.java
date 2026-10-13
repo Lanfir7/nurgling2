@@ -65,6 +65,9 @@ public class NGameUI extends GameUI
     public NGUIInfo guiinfo;
     public NSearchItem itemsForSearch = null;
     public NCraftWindow craftwnd;
+    public NCompass compass;
+    public nurgling.craft.CraftAtlas atlas;
+    public NCraftAtlas atlasWindow;
     public NEditAreaName nean;
     public NEditFolderName nefn;
     public NImportStrategyDialog importDialog;
@@ -207,6 +210,9 @@ public class NGameUI extends GameUI
         msg("Макрос: маркеры животных выключен.");
     }
 
+    public FpsPanel fpsPanel;
+    /* New UI: drag-mode slot for the action progress ring. */
+    private NDraggableWidget progressSlot;
     public nurgling.routes.ForagerPath activeBotPath = null;
     // Index into activeBotPath.waypoints Forager is currently heading toward, -1 when idle - lets NWaypointOverlay color current/passed/queued waypoints differently.
     public int activeBotWaypointIndex = -1;
@@ -355,6 +361,7 @@ public class NGameUI extends GameUI
      * Инициализация некритичных тяжелых виджетов (можно загружать асинхронно)
      */
     private void initNonCriticalHeavyWidgets() {
+        atlas = new nurgling.craft.CraftAtlas(this);
         itemsForSearch = new NSearchItem();
         // Replace Cal with NCal to keep calendar customizations in nurgling package
         Widget oldCalendarWidget = null;
@@ -433,6 +440,12 @@ public class NGameUI extends GameUI
         // Database debug overlay - shows in top-right corner
         add(dbStatsOverlay = new DbStatsOverlay(), new Coord(sz.x - 290, 10));
         dbStatsOverlay.hide(); // Hidden by default, toggle with F11 or settings
+        add(fpsPanel = new FpsPanel(), new Coord(Math.max(0, sz.x - UI.scale(450)), UI.scale(150)));
+        boolean progressPlaced = !nurgling.conf.NDragProp.get("progress").c.equals(Coord.z);
+        progressSlot = add(new NDraggableWidget("progress", GameUI.Progress.flatsz.add(NDraggableWidget.delta)));
+        if(!progressPlaced)
+            progressSlot.target_c = sz.sub(progressSlot.sz).mul(0.5, 0.35);
+        fpsPanel.keepOnScreen();
 
         // Start animal marker sync from Postgres (labeledMarkService уже создан здесь; в attached() он ещё null)
         if (animalMarkerSyncService == null && labeledMarkService != null && genus != null) {
@@ -574,6 +587,7 @@ public class NGameUI extends GameUI
     @Override
     public void dispose() {
         sharedMarkerClipboardService.dispose();
+        if(atlas != null) atlas.flush();
         if(todoStore != null)
             todoStore.flushFile();
         if (heavyWidgetsThread != null) {
@@ -974,6 +988,17 @@ public class NGameUI extends GameUI
     {
         super.tick(dt);
         lootNotices.tick(dt);
+        if(atlas != null) atlas.tick(dt);
+        boolean photoActive = nurgling.render.Photo.active(map);
+        if(progressSlot != null) progressSlot.show(nurgling.styles.UITheme.on() && !photoActive);
+        nurgling.diagnostics.MovementTrace.poll(ui);
+        if(fpsPanel != null) {
+            boolean show = FpsPanel.enabled() && !photoActive;
+            if(fpsPanel.visible() != show) {
+                fpsPanel.show(show);
+                if(show) { fpsPanel.keepOnScreen(); fpsPanel.raise(); }
+            }
+        }
         if(todoStore != null)
             todoStore.tick();
         if(timerNotifier != null)
@@ -1091,8 +1116,9 @@ public class NGameUI extends GameUI
     public void resize(Coord sz)
     {
         super.resize(sz);
+        if(fpsPanel != null) fpsPanel.keepOnScreen();
         if(guiinfo != null)
-            guiinfo.move(new Coord(sz.x / 2 - NGUIInfo.xs / 2, sz.y / 5));
+            guiinfo.move(new Coord(Math.max(0, (sz.x - guiinfo.sz.x) / 2), Math.max(0, (sz.y - guiinfo.sz.y) / 2)));
         if(areas != null)
             areas.move(new Coord(sz.x / 2 - NGUIInfo.xs / 2, sz.y / 5));
         if(storageItemsWidget != null)
@@ -1342,6 +1368,11 @@ public class NGameUI extends GameUI
 
         @Override
         public Object tooltip(Coord c, Widget prev) {
+            String path = NToolBeltProp.get(name).custom.get(beltslot(c));
+            if(atlas != null && path != null && path.startsWith("atlas:")) {
+                nurgling.craft.AtlasCatalog.Recipe recipe = atlas.catalog().get(path.substring("atlas:".length()));
+                return recipe == null ? null : recipe.name;
+            }
             int slot = beltslot(c);
             if(slot < 0)
                 return super.tooltip(c, prev);
@@ -1373,7 +1404,7 @@ public class NGameUI extends GameUI
             for (int i = 0; i < size; i++) {
                 Coord c = beltc(i);
                 int slot = slot(i);
-                g.image(invsq, c);
+                g.image(Inventory.slotsq, c);
                 try {
                     Object item = belt(slot);
                     if (item != null) {
@@ -1385,6 +1416,13 @@ public class NGameUI extends GameUI
                             ((NScenarioButton)item).draw(g.reclip(c.add(1, 1), invsq.sz().sub(2, 2)));
                         else if (item instanceof nurgling.widgets.NEquipmentPresetButton)
                             ((nurgling.widgets.NEquipmentPresetButton)item).draw(g.reclip(c.add(1, 1), invsq.sz().sub(2, 2)));
+                        else if (item instanceof nurgling.craft.AtlasCatalog.Recipe) {
+                            nurgling.craft.AtlasCatalog.Recipe recipe = (nurgling.craft.AtlasCatalog.Recipe)item;
+                            nurgling.craft.AtlasCatalog.Material output = recipe.outputs.isEmpty() ? null : recipe.outputs.get(0);
+                            Tex icon = output == null ? nurgling.tools.ItemIcons.get("", recipe.name, false)
+                                : nurgling.tools.ItemIcons.get(output.resource, output.name, output.category);
+                            nurgling.tools.ItemIcons.draw(g, icon, c.add(UI.scale(3, 3)), Math.min(INVSZ.x, INVSZ.y) - UI.scale(6));
+                        }
                     }
                 } catch (Loading ignored) {
                 }
@@ -1401,7 +1439,10 @@ public class NGameUI extends GameUI
                 NToolBeltProp prop = NToolBeltProp.get(name);
                 String path;
                 if((path = prop.custom.get(slot))!=null) {
-                    if(path.startsWith("scenario:")) {
+                    if(path.startsWith("atlas:")) {
+                        useAtlasRecipe(slot, path.substring("atlas:".length()));
+                        return;
+                    } else if(path.startsWith("scenario:")) {
                         // Handle scenario button execution
                         String scenarioName = path.substring("scenario:".length());
                         ui.core.scenarioManager.executeScenarioByName(scenarioName, ui.gui);
@@ -1440,7 +1481,10 @@ public class NGameUI extends GameUI
             {
                 String path;
                 if((path = prop.custom.get(slot))!=null) {
-                    if(path.startsWith("scenario:")) {
+                    if(path.startsWith("atlas:")) {
+                        useAtlasRecipe(slot, path.substring("atlas:".length()));
+                        return true;
+                    } else if(path.startsWith("scenario:")) {
                         // Handle scenario button execution
                         String scenarioName = path.substring("scenario:".length());
                         ui.core.scenarioManager.executeScenarioByName(scenarioName, ui.gui);
@@ -1464,6 +1508,17 @@ public class NGameUI extends GameUI
         }
 
 
+        private void useAtlasRecipe(int slot, String id) {
+            MenuGrid.Pagina page = atlas == null ? null : atlas.shortcut(id);
+            if(page == null) {
+                error(nurgling.i18n.L10n.get("atlas.shortcut_unavailable"));
+                return;
+            }
+            // Upgrade shortcuts written by the previous client to native belt actions.
+            if(dropthing(beltc(slot - start).add(1, 1), page))
+                page.button().use(new MenuGrid.Interaction());
+        }
+
         private Object belt(int slot) {
             if(slot < 0) {return null;}
             String path;
@@ -1477,7 +1532,9 @@ public class NGameUI extends GameUI
             else
             {
                 Object customObj = null;
-                if(path.startsWith("scenario:")) {
+                if(path.startsWith("atlas:") && atlas != null) {
+                    return atlas.catalog().get(path.substring("atlas:".length()));
+                } else if(path.startsWith("scenario:")) {
                     String scenarioName = path.substring("scenario:".length());
                     for(nurgling.scenarios.Scenario scenario : ui.core.scenarioManager.getScenarios().values()) {
                         if(scenario.getName().equals(scenarioName)) {
@@ -1566,6 +1623,10 @@ public class NGameUI extends GameUI
 
         @Override
         public boolean dropthing(Coord c, Object thing) {
+            if(thing instanceof nurgling.craft.AtlasCatalog.Recipe) {
+                thing = atlas.shortcut(((nurgling.craft.AtlasCatalog.Recipe)thing).resource);
+                if(thing == null) return false;
+            }
             boolean res = super.dropthing(c,thing);
             int slot = beltslot(c);
             if(res) {
@@ -1943,6 +2004,21 @@ public class NGameUI extends GameUI
     /* Photo mode (a graphics option, Vulkan only): hides the
      * interface for screenshots; see nurgling.render.Photo. */
     public static final KeyBinding kb_photo = KeyBinding.get(Hotkeys.PHOTO_MODE, KeyMatch.forchar('P', KeyMatch.C | KeyMatch.S));
+    public static final KeyBinding kb_atlas = KeyBinding.get(nurgling.hotkeys.Hotkeys.WIKI_CRAFT_ATLAS, KeyMatch.forchar('K', KeyMatch.C | KeyMatch.S));
+
+    @Override
+    protected Widget progslot() {
+        return((progressSlot != null) && nurgling.styles.UITheme.on()) ? progressSlot : null;
+    }
+
+    public void toggleCraftAtlas() {
+        if(atlas == null) return;
+        if(atlasWindow == null) {
+            atlasWindow = new NCraftAtlas(atlas);
+            add(atlasWindow, atlasWindow.restorepos(UI.scale(120, 100)));
+            fitwdg(atlasWindow);
+        } else togglewnd(atlasWindow);
+    }
     private final java.util.List<Widget> photohidden = new java.util.ArrayList<>();
 
     public void photomode(boolean on) {
@@ -1974,6 +2050,15 @@ public class NGameUI extends GameUI
 
     @Override
     public boolean globtype(GlobKeyEvent ev) {
+        if(Hotkeys.matchesKey(Hotkeys.WIKI_CRAFT_ATLAS, ev.awt)) { toggleCraftAtlas(); return true; }
+        if (Hotkeys.matchesKey(Hotkeys.MOVEMENT_TRACE, ev.awt)) {
+            nurgling.diagnostics.MovementTrace.trigger(ui);
+            return true;
+        }
+        if (Hotkeys.matchesKey(Hotkeys.FPS_GRAPH, ev.awt)) {
+            FpsPanel.enabled(!FpsPanel.enabled());
+            return true;
+        }
         if (Hotkeys.matchesKey(Hotkeys.SESSION_STOP_MACROS, ev.awt)) {
             if (biw != null)
                 biw.interruptAll();

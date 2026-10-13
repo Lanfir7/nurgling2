@@ -70,6 +70,9 @@ nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_ESCAPE;|Fixed w
 nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_ENTER;|Fixed widget navigation and tooltip presentation
 nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_UP;|Fixed widget navigation and tooltip presentation
 nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_DOWN;|Fixed widget navigation and tooltip presentation
+nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_DELETE;|Delete selected nodes in an active editor
+nurgling/hotkeys/InputNavigation.java|return (mods & KeyMatch.C) != 0 && code == KeyEvent.VK_Z;|Undo edits in an active editor
+nurgling/hotkeys/InputNavigation.java|return (mods & KeyMatch.C) != 0 && code == KeyEvent.VK_Y;|Redo edits in an active editor
 nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_SHIFT;|Fixed widget navigation and tooltip presentation
 nurgling/hotkeys/InputNavigation.java|return ui != null && ui.modshift;|Fixed widget navigation and tooltip presentation
 nurgling/hotkeys/InputNavigation.java|return key != null && key != KeyMatch.nil && key.code != KeyEvent.VK_UNDEFINED;|Fixed widget navigation and tooltip presentation

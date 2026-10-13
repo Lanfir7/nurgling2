@@ -13,6 +13,14 @@ import static org.junit.jupiter.api.Assertions.*;
 class ForageStoreTest {
     @TempDir Path temp;
 
+    @org.junit.jupiter.api.AfterEach
+    void finishFileWritesBeforeRemovingFixtures() throws Exception {
+        java.lang.reflect.Field field = ForageStore.class.getDeclaredField("WRITER");
+        field.setAccessible(true);
+        ((java.util.concurrent.ExecutorService) field.get(null)).submit(() -> {}).get(5,
+                java.util.concurrent.TimeUnit.SECONDS);
+    }
+
     private static ForageFind find() {
         return new ForageFind("find-1", 77, 3, 4, "gfx/terobjs/herbs/blueberry",
             "gfx/invobjs/herbs/blueberry", "Blueberries", 42.5, 2, 1000, "Alice", 0);

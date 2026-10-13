@@ -335,15 +335,19 @@ public class NPostFX {
 	private boolean lastsup;
 	private DepthFX dfx;
 	private Bloom bloom;
+	private Clarity clar;
+	private SceneFX.TiltShift tilt;
 	private Grade grade;
 	private FXAA fxaa;
 	private Smaa smaa;
 	private Sharpen sharp;
 	private Cas cas;
-	private Clarity clar;
 	private SceneFX.History hist;
-	private SceneFX.TiltShift tilt;
 	private SceneFX.Heat heat;
+	private VolumeFire volumeFire;
+	private WaterSurface waterSurface;
+	private Lightning lightning;
+	private Grass grass;
 	private SceneFX.Shafts shafts;
 	private Temporal.TAA taa;
 	private Temporal.AutoExposure autoexp;
@@ -364,8 +368,8 @@ public class NPostFX {
 	public void dispose() {
 	    if(dfx != null) {view.remove(dfx); dfx.dispose(); dfx = null;}
 	    if(bloom != null) {view.remove(bloom); bloom.dispose(); bloom = null;}
-	    if(grade != null) {view.tonemap(null); grade.dispose(); grade = null;}
 	    if(clar != null) {view.remove(clar); clar.dispose(); clar = null;}
+	    if(grade != null) {view.tonemap(null); grade.dispose(); grade = null;}
 	    if(hist != null) {view.remove(hist); hist.dispose(); hist = null;}
 	    if(tilt != null) {view.remove(tilt); tilt.dispose(); tilt = null;}
 	    if(heat != null) {view.remove(heat); heat.dispose(); heat = null;}
@@ -377,6 +381,10 @@ public class NPostFX {
 	    if(dof != null) {view.remove(dof); dof.dispose(); dof = null;}
 	    if(sharp != null) {view.remove(sharp); sharp.dispose(); sharp = null;}
 	    if(cas != null) {view.remove(cas); cas.dispose(); cas = null;}
+	    if(volumeFire != null) {view.remove(volumeFire); volumeFire.dispose(); volumeFire = null;}
+	    if(waterSurface != null) {view.remove(waterSurface); waterSurface.dispose(); waterSurface = null;}
+	    if(lightning != null) {view.remove(lightning); lightning.dispose(); lightning = null;}
+	    if(grass != null) {view.remove(grass); grass.dispose(); grass = null;}
 	    cur = null;
 	}
 
@@ -407,6 +415,8 @@ public class NPostFX {
 	    bloom = toggle(bloom, s.bloom, Bloom::new);
 	    if(bloom != null)
 		bloom.strength = s.bloomstrength;
+	    clar = toggle(clar, s.clarity, Clarity::new);
+	    if(clar != null) clar.amount = s.claritystrength;
 	    boolean wantg = s.grade || s.bloom || s.vignette || s.autoexp;
 	    if(wantg && (grade == null)) {
 		grade = new Grade();
@@ -419,29 +429,40 @@ public class NPostFX {
 		rebasic.run();
 	    }
 	    if(grade != null) {
-		grade.grade = s.grade; grade.vignette = s.vignette;
+		grade.grade = s.grade;
+		grade.vignette = s.vignette;
+		grade.tonemap = s.hdr();
 		grade.exposure = s.exposure; grade.contrast = s.contrast;
 		grade.saturation = s.saturation; grade.warmth = s.warmth;
 	    }
-	    clar = toggle(clar, s.clarity, Clarity::new);
-	    if(clar != null)
-		clar.amount = s.claritystrength;
-	    boolean rp = GroundRelief.set(s.relief, s.reliefstrength, s.objrelief, s.objreliefstrength, s.parallax);
-	    boolean wfx = s.waterfx && s.water;
-	    rp |= (wfx != Atmos.waterfx);
-	    Atmos.waterfx = wfx;
+	    boolean rp = GroundRelief.set(s.relief, s.reliefstrength, s.objrelief, s.objreliefstrength,
+					  s.parallax, s.reliefpavingonly);
+	    volumeFire = toggle(volumeFire, s.fire, () -> new VolumeFire(view));
 	    rp |= FireFX.set(s.fire, s.smoke, s.hdr());
 	    rp |= Atmos.set(s.clouds, s.wet, s.glow, s.water, s.sway);
+	    rp |= (Atmos.waterfx != (s.waterfx && s.water));
+	    Atmos.waterfx = s.waterfx && s.water;
+	    waterSurface = toggle(waterSurface, s.water, () -> new WaterSurface(view));
+	    if(waterSurface != null) {
+		waterSurface.reflections = s.waterreflections;
+		waterSurface.wakesEnabled = s.waterfx;
+	    }
+	    if(waterSurface != null) waterSurface.rainRipples = s.rainripples;
+	    lightning = toggle(lightning, s.lightning, () -> new Lightning(view));
+	    grass = toggle(grass, s.grass, () -> new Grass(view));
+	    if(grass != null) grass.configure(s.grassdensity);
 	    rp |= (s.snow != Atmos.snow);
 	    Atmos.snow = s.snow;
-	    hist = toggle(hist, s.water || s.smoke, () -> new SceneFX.History(view));
+	    hist = toggle(hist, s.smoke, () -> new SceneFX.History(view));
 	    rp |= FireFX.setsoft(s.smoke && (hist != null));
-	    tilt = toggle(tilt, s.tilt, SceneFX.TiltShift::new);
-	    if(tilt != null)
-		tilt.strength = s.tiltstrength;
 	    heat = toggle(heat, s.heat, () -> new SceneFX.Heat(view));
+	    tilt = toggle(tilt, s.tilt, SceneFX.TiltShift::new);
+	    if(tilt != null) tilt.strength = s.tiltstrength;
 	    shafts = toggle(shafts, s.shafts, () -> new SceneFX.Shafts(view));
 	    AmbientFX.enabled = s.particles;
+	    AmbientFX.steps = s.steps;
+	    AmbientFX.wildlife = s.wildlife;
+	    AmbientFX.lightning = false; // The newer Lightning effect owns weather flashes.
 	    cur = s;
 	    if(rp)
 		reprog.run();
@@ -449,10 +470,8 @@ public class NPostFX {
 	    taa = toggle(taa, s.taa, () -> new Temporal.TAA(view));
 	    Temporal.taa = s.taa;
 	    Temporal.upscale = s.upscale;
-	    autoexp = toggle(autoexp, s.autoexp, Temporal.AutoExposure::new);
+	    autoexp = toggle(autoexp, s.autoexp, () -> new Temporal.AutoExposure(view));
 	    ShadowMap.softness = s.softshadow ? ((s.shadowq > 0) ? 2 : 1) : 0;
-	    PointShadows.count = s.plights;
-	    PointShadows.res = (s.plightres > 0) ? 1024 : 512;
 	    /* Applies to textures as they get samplers, i.e. newly
 	     * loaded ones. */
 	    Texture.defanisotropy = (s.aniso > 1) ? s.aniso : 0;
@@ -473,51 +492,50 @@ public class NPostFX {
 	private float wetness = 0;
 	private double last = 0;
 
-	/* Per frame: the values that follow the game world (weather,
-	 * time of day, fires, the sun). fires: world positions of the
-	 * fires in view. */
+	/* Per frame: the values that follow the game world (weather and sunlight). */
 	private float snowcover = 0;
-	private Texture2D ringtex = null;
-	private Texture2D.Sampler2D ringsamp = null;
 
-	/* waders: (x, y, strength) in render space, of those in water. */
-	public void tick(MapView mv, Render out, int sunidx, java.util.List<Coord3f> fires, java.util.List<float[]> waders) {
+	public void tick(MapView mv, int sunidx) {
 	    NGfx.Settings s = cur;
 	    if(s == null)
 		return;
 	    dof = toggle(dof, Photo.active(view), () -> new SceneFX.DoF(view));
 	    double now = Utils.rtime();
+	    if(waterSurface != null && waterSurface.wakesEnabled) waterSurface.wakes.tick(mv,now);
+	    if(lightning != null) lightning.tick(mv,now);
+	    if(grass != null) grass.tick(mv,now);
 	    float dt = (float)Math.min(Math.max(now - last, 0), 1.0);
 	    last = now;
-	    Glob glob = mv.glob;
 	    DirLight sun = mv.amblight;
-	    boolean raining = false, sclouds = false, snowing = false;
-	    float rainrate = 0;
-	    for(Glob.Weather w : glob.weather()) {
+	    boolean outdoors = mv.outdoorLighting();
+	    if(autoexp != null) autoexp.outdoors = outdoors;
+	    if(waterSurface != null) {
+		waterSurface.sheltered = !outdoors;
+		float rainTarget = outdoors ? RainLighting.intensity(mv.weather()) : 0;
+		waterSurface.rainIntensity += (rainTarget - waterSurface.rainIntensity) * (1 - (float)Math.exp(-dt / .6f));
+		if(!outdoors) waterSurface.rainIntensity = 0;
+	    }
+	    boolean raining = false, snowing = false, serverClouds = false;
+	    for(Glob.Weather w : mv.weather()) {
 		if((w instanceof haven.res.gfx.fx.rain.Rain) && (((haven.res.gfx.fx.rain.Rain)w).rate > 0)) {
 		    raining = true;
-		    rainrate = ((haven.res.gfx.fx.rain.Rain)w).rate;
 		}
 		if((w instanceof haven.res.gfx.fx.snow.Snow) && (((haven.res.gfx.fx.snow.Snow)w).rate > 0))
 		    snowing = true;
 		if(w.getClass().getName().endsWith(".Clouds"))
-		    sclouds = true;
+		    serverClouds = true;
 	    }
 	    /* Wet in about half a minute of rain, dry over a few. */
 	    float tgt = (s.wet && raining) ? 1 : 0;
 	    wetness += (tgt - wetness) * Math.min(1, dt / ((tgt > wetness) ? 25f : 150f));
-	    if(!s.wet)
+	    if(!s.wet || !outdoors)
 		wetness = 0;
 	    /* Snow settles over about a minute of snowfall and melts
 	     * over several. */
 	    float stgt = (s.snow && snowing) ? 1 : 0;
 	    snowcover += (stgt - snowcover) * Math.min(1, dt / ((stgt > snowcover) ? 50f : 400f));
-	    if(!s.snow)
+	    if(!s.snow || !outdoors)
 		snowcover = 0;
-	    AmbientFX.rainrate = raining ? rainrate : 0;
-	    AmbientFX.lightning = s.lightning;
-	    AmbientFX.steps = s.steps;
-	    AmbientFX.wildlife = s.wildlife;
 	    float[] sdir = {0, 0, 1}, scol = {0, 0, 0}, sky = {0.5f, 0.5f, 0.5f};
 	    if(sun != null) {
 		sdir = sun.dir.clone();
@@ -526,29 +544,10 @@ public class NPostFX {
 		sky = sk;
 	    }
 	    Atmos.History h = (hist == null) ? null : hist.cur;
-	    Atmos.Env ne = new Atmos.Env((s.clouds && !sclouds && (sunidx >= 0)) ? 0.38f : 0, (wetness > 0.01f) ? wetness : 0, s.glow, s.water,
+	    Atmos.Env ne = new Atmos.Env((s.clouds && !serverClouds && sunidx >= 0 && outdoors) ? 0.38f : 0,
+					 (wetness > 0.01f) ? wetness : 0, s.glow, s.water,
 					 sunidx, sdir, scol, sky, h);
 	    ne.snow = (snowcover > 0.01f) ? snowcover : 0;
-	    if(Atmos.waterfx) {
-		if(ringtex == null) {
-		    ringtex = new Texture2D(16, 1, DataBuffer.Usage.STREAM, new VectorFormat(4, NumberFormat.FLOAT32), null);
-		    ringsamp = ringtex.sampler();
-		    ringsamp.minfilter(Texture.Filter.NEAREST).magfilter(Texture.Filter.NEAREST);
-		}
-		java.util.List<float[]> ws = waders;
-		out.update(ringtex.image(0), (DataBuffer.Filler<Texture.Image>)(img, env) -> {
-			FillBuffer fb = env.fillbuf(img);
-			java.nio.ByteBuffer bb = fb.push();
-			/* Two texels a source: (x, y, strength, 0), (vx, vy, 0, 0). */
-			for(int i = 0; i < 8; i++) {
-			    float[] w = (i < ws.size()) ? ws.get(i) : null;
-			    bb.putFloat((w == null) ? 0 : w[0]).putFloat((w == null) ? 0 : w[1]).putFloat((w == null) ? 0 : w[2]).putFloat(0);
-			    bb.putFloat((w == null) ? 0 : w[4]).putFloat((w == null) ? 0 : w[5]).putFloat(0).putFloat(0);
-			}
-			return(fb);
-		    });
-		ne.rings = ringsamp;
-	    }
 	    if(!ne.on() && (h == null)) {
 		if(env != null)
 		    view.basic(Atmos.class, null);
@@ -558,19 +557,13 @@ public class NPostFX {
 		view.basic(Atmos.class, ne);
 	    }
 	    if(grade != null) {
-		float[] tt = s.tod ? todtint(glob, sun, raining) : new float[] {1, 1, 1, 1};
-		/* Lightning lights up the whole scene for a moment. */
-		float fl = AmbientFX.flash;
-		if(fl > 0)
-		    tt = new float[] {tt[0] * (1 + fl * 1.6f), tt[1] * (1 + fl * 1.7f), tt[2] * (1 + fl * 2.0f), tt[3]};
-		grade.tod = tt;
+		grade.tod = s.tod ? todtint(mv.glob, sun, raining) : new float[] {1, 1, 1, 1};
 		grade.expo = (autoexp == null) ? null : autoexp.exposure;
+		grade.nightvision = autoexp != null && !outdoors;
 	    }
-	    if(heat != null)
-		heat.fires = fires;
 	    if(shafts != null) {
 		Camera cam = view.basic.state().get(Homo3D.cam);
-		if((sun == null) || (cam == null)) {
+		if(!outdoors || (sun == null) || (cam == null)) {
 		    shafts.sun = null;
 		} else {
 		    float[] e = cam.fin(Matrix4f.id).mul4(new float[] {sun.dir[0], sun.dir[1], sun.dir[2], 0});
@@ -585,8 +578,7 @@ public class NPostFX {
 	    }
 	}
 
-	/* Warm and golden near sunrise and sunset, cool and a little
-	 * muted at night, grey in rain. */
+	/* Warm dawn and dusk, cool nights, and muted colors in rain. */
 	static float[] todtint(Glob glob, DirLight sun, boolean raining) {
 	    float r = 1, g = 1, b = 1, sat = 1;
 	    Astronomy ast = glob.ast;
@@ -606,18 +598,28 @@ public class NPostFX {
 		r -= 0.03f; b += 0.02f;
 		sat -= 0.15f;
 	    }
-	    return(new float[] {r, g, b, sat});
+	    return new float[] {r, g, b, sat};
 	}
+
+
     }
 
     /* Tone mapping and color grading */
 
-    static final RawFunction gradefn = new RawFunction(VEC4, "hv_grade", 6,
-	"vec4 hv_grade(vec4 col, vec2 tc, vec4 g, vec2 v, vec4 tod, sampler2D expo)\n" +
+    static final RawFunction gradefn = new RawFunction(VEC4, "hv_grade", 7,
+	"vec4 hv_grade(vec4 col, vec2 tc, vec4 g, vec4 v, vec4 tod, sampler2D expo, float vignette)\n" +
 	"{\n" +
-	"    /* g = (exposure, contrast, saturation, warmth); v = (grade on, vignette);\n" +
+	"    /* g = (exposure, contrast, saturation, warmth); v = (grade on, tonemap, indoor exposure, brightness);\n" +
 	"     * tod = time-of-day tint and saturation */\n" +
-	"    vec3 x = col.rgb * tod.rgb * texture(expo, vec2(0.5)).r;\n" +
+	"    vec3 x = col.rgb * tod.rgb;\n" +
+	"    float gain = texture(expo, vec2(0.5)).r;\n" +
+	"    if(v.z > 0.5 && gain > 1.0) {\n" +
+	"        /* Lift darkness without multiplying already bright lamps/floors into white.\n" +
+	"         * One RGB gain preserves hue; the quadratic curve stays monotonic at gain <= 2.2. */\n" +
+	"        float room = max(0.0, 1.0 - max(x.r, max(x.g, x.b)));\n" +
+	"        gain = 1.0 + (gain - 1.0) * room * room;\n" +
+	"    }\n" +
+	"    x *= gain;\n" +
 	"    x = mix(vec3(dot(x, vec3(0.2126, 0.7152, 0.0722))), x, tod.w);\n" +
 	"    if(v.x > 0.5) {\n" +
 	"        x *= g.x;\n" +
@@ -628,20 +630,22 @@ public class NPostFX {
 	"        x = (x - 0.5) * g.y + 0.5;\n" +
 	"    }\n" +
 	"    /* Soft shoulder: values above 0.8 roll off towards 1 instead of clipping. */\n" +
-	"    x = max(x, vec3(0.0));\n" +
-	"    vec3 hi = 0.8 + 0.2 * (1.0 - exp(-(x - 0.8) / 0.2));\n" +
-	"    x = mix(x, hi, step(vec3(0.8), x));\n" +
+	"    x = max(x, vec3(0.0)) * v.w;\n" +
 	"    if(v.y > 0.5) {\n" +
+	"        vec3 hi = 0.8 + 0.2 * (1.0 - exp(-(x - 0.8) / 0.2));\n" +
+	"        x = mix(x, hi, step(vec3(0.8), x));\n" +
+	"    }\n" +
+	"    if(vignette > 0.5) {\n" +
 	"        vec2 d = tc - 0.5;\n" +
 	"        x *= mix(0.72, 1.0, smoothstep(0.85, 0.3, length(d * vec2(1.0, 0.8)) * 1.2));\n" +
 	"    }\n" +
 	"    return(vec4(clamp(x, 0.0, 1.0), col.a));\n" +
 	"}\n");
-    static final Uniform gr_g = u(VEC4, 0), gr_v = u(VEC2, 1), gr_tod = u(VEC4, 2), gr_expo = u(SAMPLER2D, 3);
-    static final ShaderMacro gr_sh = shader(gradefn, gr_g, gr_v, gr_tod, gr_expo);
+    static final Uniform gr_g = u(VEC4, 0), gr_v = u(VEC4, 1), gr_tod = u(VEC4, 2), gr_expo = u(SAMPLER2D, 3), gr_vignette = u(FLOAT, 4);
+    static final ShaderMacro gr_sh = shader(gradefn, gr_g, gr_v, gr_tod, gr_expo, gr_vignette);
 
     public static class Grade extends PostProcessor {
-	boolean grade, vignette;
+	boolean grade, tonemap, nightvision, vignette;
 	float exposure, contrast, saturation, warmth;
 	volatile float[] tod = {1, 1, 1, 1};
 	volatile Texture2D.Sampler2D expo = null;
@@ -656,8 +660,8 @@ public class NPostFX {
 
 	public void run(GOut g, Texture2D.Sampler2D in) {
 	    blit(g, in, new Pass(gr_sh, new float[] {exposure, contrast, saturation, warmth},
-				 new float[] {grade ? 1 : 0, vignette ? 1 : 0}, tod,
-				 (expo == null) ? Temporal.one() : expo));
+				 new float[] {grade ? 1 : 0, tonemap ? 1 : 0, nightvision ? 1 : 0, expo == null ? 1f : 1.15f}, tod,
+				 (expo == null) ? Temporal.one() : expo, vignette ? 1f : 0f));
 	}
     }
 
@@ -699,10 +703,7 @@ public class NPostFX {
 	}
     }
 
-    /* Clarity: local contrast, like a large-radius unsharp mask on
-     * luminance, weighted towards midtones so it doesn't crush
-     * shadows or clip highlights. */
-
+    /* Local contrast is applied before anti-aliasing. */
     static final RawFunction clarfn = new RawFunction(VEC4, "hv_clarity", 4,
 	"vec4 hv_clarity(vec4 col, vec2 tc, sampler2D tex, float amt)\n" +
 	"{\n" +
@@ -727,9 +728,7 @@ public class NPostFX {
 
     public static class Clarity extends PostProcessor {
 	float amount;
-
 	public int order() {return(5);}
-
 	public void run(GOut g, Texture2D.Sampler2D in) {
 	    blit(g, in, new Pass(cl_sh, in, amount));
 	}

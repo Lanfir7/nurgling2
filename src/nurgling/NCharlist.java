@@ -3,6 +3,7 @@ package nurgling;
 import haven.*;
 import nurgling.conf.NCharTags;
 import nurgling.i18n.L10n;
+import nurgling.styles.UITheme;
 import nurgling.widgets.NAvaview;
 import nurgling.widgets.NCharTagsWnd;
 import nurgling.widgets.charsel.NWorldTabs;
@@ -187,7 +188,11 @@ public class NCharlist extends Charlist {
                 Coord bc = Coord.of(x, cy - (NLoginTheme.badgeh() / 2)); int w = NLoginTheme.drawBadge(g, bc, t, col);
                 bareas.add(new int[]{bc.x, bc.y, w, NLoginTheme.badgeh()}); bimgs.add(img); btips.add(tip); x += w + UI.scale(6);
             }
-            g.chcolor(NLoginTheme.accent); g.frect(Coord.of(0, sz.y - UI.scale(2)), Coord.of(UI.scale(40), UI.scale(2))); g.chcolor();
+            if (!UITheme.on()) {
+                g.chcolor(NLoginTheme.accent);
+                g.frect(Coord.of(0, sz.y - UI.scale(2)), Coord.of(UI.scale(40), UI.scale(2)));
+                g.chcolor();
+            }
         }
         private int badgeat(Coord c) { for (int i = 0; i < bareas.size(); i++) { int[] r = bareas.get(i); if ((c.x >= r[0]) && (c.x < r[0] + r[2]) && (c.y >= r[1]) && (c.y < r[1] + r[3])) return (i); } return (-1); }
         public Object tooltip(Coord c, Widget prev) { int i = badgeat(c); return ((i < 0) ? null : tiptext(btips.get(i))); }
@@ -210,14 +215,50 @@ public class NCharlist extends Charlist {
             g.chcolor(NLoginTheme.outline); NLoginTheme.outline(g, ava.c.sub(1, 1), ava.sz.add(2, 2)); g.chcolor();
             String acc = NCharTags.account(ui); int x = ava.c.x + ava.sz.x + UI.scale(12);
             g.image(nm.tex(), Coord.of(x, UI.scale(9)));
-            String m = metaline(acc, chr, multiworld); if (!m.equals(metas)) { metas = m; meta = NLoginTheme.meta.render(m); }
-            int my = UI.scale(34); g.image(meta.tex(), Coord.of(x, my));
-            int ch = NLoginTheme.chiph(), cy = my + ((meta.sz().y - ch) / 2), cx = x + meta.sz().x + UI.scale(8), maxx = sz.x - UI.scale(32);
-            if (NCharTags.hasnote(acc, chr.name)) { NLoginTheme.drawNote(g, Coord.of(cx, my + ((meta.sz().y - UI.scale(11)) / 2)), NLoginTheme.note); cx += UI.scale(14); }
-            List<String> tags = NCharTags.tags(acc, chr.name); int shown = 0;
-            for (String t : tags) { Text tt = chiptext(t); int w = tt.sz().x + UI.scale(8), reserve = ((tags.size() - shown) > 1) ? UI.scale(24) : 0; if (cx + w > maxx - reserve) break; NLoginTheme.drawChip(g, Coord.of(cx, cy), tt, NCharTags.color(t)); cx += w + UI.scale(3); shown++; }
-            if (shown < tags.size()) NLoginTheme.drawChip(g, Coord.of(cx, cy), chiptext("+" + (tags.size() - shown)), NLoginTheme.muted);
-            editx = -1; if (hover) { editx = sz.x - UI.scale(26); NLoginTheme.drawNote(g, Coord.of(editx + UI.scale(6), (sz.y - UI.scale(11)) / 2), NLoginTheme.muted); }
+            String m = metaline(acc, chr, multiworld);
+            if (!m.equals(metas)) {
+                metas = m;
+                meta = NLoginTheme.meta.render(m);
+            }
+            int my = UI.scale(34);
+            g.image(meta.tex(), Coord.of(x, my));
+
+            int ch = NLoginTheme.chiph();
+            int cy = my + ((meta.sz().y - ch) / 2);
+            int cx = x + meta.sz().x + UI.scale(8);
+            boolean flat = UITheme.on();
+            int editInset = (sz.y - UI.scale(16)) / 2;
+            int editIconX = sz.x - editInset - UI.scale(14);
+            int maxx = flat ? editIconX - UI.scale(12) : sz.x - UI.scale(32);
+            if (NCharTags.hasnote(acc, chr.name)) {
+                NLoginTheme.drawNote(g, Coord.of(cx, my + ((meta.sz().y - UI.scale(11)) / 2)), NLoginTheme.note);
+                cx += UI.scale(14);
+            }
+            List<String> tags = NCharTags.tags(acc, chr.name);
+            int shown = 0;
+            for (String t : tags) {
+                Text tt = NLoginTheme.chiptext(t);
+                int w = tt.sz().x + UI.scale(8);
+                int reserve = ((tags.size() - shown) > 1) ? UI.scale(24) : 0;
+                if (cx + w > maxx - reserve)
+                    break;
+                NLoginTheme.drawChip(g, Coord.of(cx, cy), tt, NCharTags.color(t));
+                cx += w + UI.scale(3);
+                shown++;
+            }
+            if (shown < tags.size())
+                NLoginTheme.drawChip(g, Coord.of(cx, cy), NLoginTheme.chiptext("+" + (tags.size() - shown)), NLoginTheme.muted);
+
+            editx = -1;
+            if (hover) {
+                if (flat) {
+                    editx = editIconX - UI.scale(6);
+                    NLoginTheme.drawTagEdit(g, Coord.of(editIconX, editInset));
+                } else {
+                    editx = sz.x - UI.scale(26);
+                    NLoginTheme.drawNote(g, Coord.of(editx + UI.scale(6), (sz.y - UI.scale(11)) / 2), NLoginTheme.muted);
+                }
+            }
         }
         public void mousemove(MouseMoveEvent ev) { hover = ev.c.isect(Coord.z, sz); super.mousemove(ev); }
         public boolean mousedown(MouseDownEvent ev) {

@@ -4,6 +4,7 @@ import haven.*;
 import nurgling.conf.NCharTags;
 import nurgling.i18n.L10n;
 import nurgling.widgets.login.NLoginTheme;
+import nurgling.styles.UITheme;
 
 import java.awt.Color;
 import java.util.ArrayList;
@@ -266,7 +267,7 @@ public class NCharTagsWnd extends Window {
             for (int i = 0; i < NCharTags.tagcol.length; i++) {
                 Coord c = Coord.of(i * CELL, 0);
                 if (i == sel) {
-                    g.chcolor(Color.WHITE);
+                    g.chcolor(UITheme.on() ? UITheme.ACCENT : Color.WHITE);
                     g.frect(c, Coord.of(CELL, CELL));
                 }
                 g.chcolor(NCharTags.tagcol[i]);

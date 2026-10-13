@@ -4,6 +4,8 @@
 /rtk/
 /steam
 steam_appid.txt
+/diagnostics/
+/bin
 /local-config.properties
 /local-boot.properties
 /build.properties

@@ -29,7 +29,7 @@ public class NWindowDeco extends Window.DragDeco implements WindowLayering.Overl
     public NWindowDeco(boolean lg, Coord customMrgn) {
         this.lg = lg;
         this.customMrgn = customMrgn;
-        cbtn = add(new NCloseButton(NStyle.cbtni[0], NStyle.cbtni[1], NStyle.cbtni[2]))
+        cbtn = add(new NCloseButton(NStyle.cbtni[0], NStyle.cbtni[1], NStyle.cbtni[2]).squarehit(true))
                    .action(() -> ((Window)parent).reqclose());
     }
     public NWindowDeco() { this(false); }

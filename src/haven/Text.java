@@ -231,17 +231,23 @@ public class Text implements Disposable {
 	public FontMetrics m;
 	public final Font font;
 	public final Color defcol;
-		public boolean aa = true;
-		private RichText.Foundry wfnd = null;
-		private FontMetrics starMetrics;
+	public boolean aa = true;
+	private RichText.Foundry wfnd = null;
+	private FontMetrics starMetrics;
+	/* The requested font, for text the New UI font has no glyphs for (e.g. arrows). */
+	private final Font orig;
+	private FontMetrics om = null;
 		
 	public Foundry(Font f, Color defcol) {
-	    font = f;
+	    // New UI (decided at client start): Open Sans in place of the requested font.
+	    font = nurgling.styles.UIResources.active() ? nurgling.styles.UIFont.replace(f) : f;
+	    orig = f;
 	    this.defcol = defcol;
 	    BufferedImage junk = TexI.mkbuf(new Coord(10, 10));
 	    java.awt.Graphics tmpl = junk.getGraphics();
-	    tmpl.setFont(f);
+	    tmpl.setFont(font);
 	    m = tmpl.getFontMetrics();
+	    tmpl.dispose();
 	}
 		
 	public Foundry(Font f) {
@@ -291,10 +297,27 @@ public class Text implements Disposable {
 	    return(m.getHeight());
 	}
 
+	/* Open Sans has no fallback for missing glyphs, so such text keeps the requested font. */
+	private Font fontfor(String text) {
+	    return(((font != orig) && (font.canDisplayUpTo(text) >= 0)) ? orig : font);
+	}
+
+	private FontMetrics metrics(Font f) {
+	    if(f == font)
+		return(m);
+	    if(om == null) {
+		java.awt.Graphics tmpl = TexI.mkbuf(new Coord(10, 10)).getGraphics();
+		tmpl.setFont(orig);
+		om = tmpl.getFontMetrics();
+		tmpl.dispose();
+	    }
+	    return(om);
+	}
+
 	public Coord strsize(String text) {
 	    if(containsSymbol(text))
 		return(new Coord(pinnedWidth(text), height()));
-	    return(new Coord(m.stringWidth(text), height()));
+	    return(new Coord(metrics(fontfor(text)).stringWidth(text), height()));
 	}
 
 	private static Font starFace() {
@@ -315,13 +338,14 @@ public class Text implements Disposable {
 
 	private int[] starAdvances(String text) {
 	    FontMetrics sm = starMetrics();
+	    FontMetrics body = metrics(fontfor(text));
 	    int[] adv = new int[text.length() + 1];
 	    int x = 0;
 	    int i = 0;
 	    while(i < text.length()) {
 		int cp = text.codePointAt(i);
 		int n = Character.charCount(cp);
-		x += (isSymbol(cp) ? sm : m).stringWidth(text.substring(i, i + n));
+		x += (isSymbol(cp) ? sm : body).stringWidth(text.substring(i, i + n));
 		for(int k = 1; k <= n; k++)
 		    adv[i + k] = x;
 		i += n;
@@ -362,7 +386,8 @@ public class Text implements Disposable {
 	    if(aa)
 		Utils.AA(g);
 	    g.setColor(c);
-	    g.setFont(font);
+	    Font baseFont = fontfor(text);
+	    g.setFont(baseFont);
 	    FontMetrics body = g.getFontMetrics();
 	    int base = body.getLeading() + body.getAscent();
 	    Font stars = starMetrics().getFont();
@@ -378,14 +403,14 @@ public class Text implements Disposable {
 			break;
 		    j += Character.charCount(next);
 		}
-		g.setFont(star ? stars : font);
+		g.setFont(star ? stars : baseFont);
 		String run = text.substring(i, j);
 		g.drawString(run, x, base);
 		x += g.getFontMetrics().stringWidth(run);
 		i = j;
 	    }
 	    g.dispose();
-	    Line ln = new StarLine(text, img, m, adv);
+	    Line ln = new StarLine(text, img, body, adv);
 	    ln.fnd = this;
 	    ln.col = c;
 	    return(ln);
@@ -415,7 +440,7 @@ public class Text implements Disposable {
 	    Graphics g = img.createGraphics();
 	    if(aa)
 		Utils.AA(g);
-	    g.setFont(font);
+	    g.setFont(fontfor(text));
 	    g.setColor(c);
 	    FontMetrics m = g.getFontMetrics();
 	    /* See height() comment. */
@@ -444,7 +469,7 @@ public class Text implements Disposable {
 	    Graphics g = img.createGraphics();
 	    if(aa)
 		Utils.AA(g);
-	    g.setFont(font);
+	    g.setFont(fontfor(text));
 	    FontMetrics m = g.getFontMetrics();
 	    int base = m.getLeading() + m.getAscent();
 	    g.setColor(stroke);

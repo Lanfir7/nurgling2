@@ -58,6 +58,9 @@ public final class HotkeyPresetCatalog {
         replace(values, "map", key('W', KeyMatch.C));
         replace(values, "ol-claim", code(KeyEvent.VK_F9, KeyMatch.C));
         replace(values, "ol-vil", code(KeyEvent.VK_F10, KeyMatch.C));
+        // This preset reserves Ctrl+F9/F10 for land claims; diagnostics stay available in settings.
+        replace(values, nurgling.hotkeys.Hotkeys.MOVEMENT_TRACE, InputGesture.none());
+        replace(values, nurgling.hotkeys.Hotkeys.FPS_GRAPH, InputGesture.none());
         replace(values, "ol-rlm", code(KeyEvent.VK_F11, KeyMatch.C));
         replace(values, "map-icons", key('I', KeyMatch.C));
         replace(values, "storage", InputGesture.none());

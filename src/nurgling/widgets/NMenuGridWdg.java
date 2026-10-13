@@ -60,7 +60,8 @@ public class NMenuGridWdg extends Widget
     public boolean mousedown(MouseDownEvent ev) {
         if(ui.core.mode!= NCore.Mode.DRAG)
         {
-            menuGrid.mousedown(ev);
+            // Use normal child dispatch so press/move/release share menu-local coordinates.
+            ev.propagate(this);
             return true;
         }
         else
@@ -73,7 +74,8 @@ public class NMenuGridWdg extends Widget
     public boolean mouseup(MouseUpEvent ev) {
         if(ui.core.mode!= NCore.Mode.DRAG)
         {
-            return menuGrid.mouseup(ev);
+            ev.propagate(this);
+            return true;
         }
         else
         {

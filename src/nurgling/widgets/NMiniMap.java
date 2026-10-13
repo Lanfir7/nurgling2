@@ -46,6 +46,7 @@ NMiniMap extends MiniMap {
     private static final String VISITED_THINGWALLS_PREF = "map/visited-thingwalls";
     public final ExploredArea exploredArea = new ExploredArea(this);
     private final java.util.Set<String> visitedThingwalls = MapMarkerVisibility.decode(Utils.getpref(VISITED_THINGWALLS_PREF, ""));
+    private final MinimapExploredAreaRenderer exploredRenderer = new MinimapExploredAreaRenderer();
 
     private String currentTerrainName = null;
     private String currentProvinceName = null;
@@ -571,13 +572,17 @@ NMiniMap extends MiniMap {
     public void drawparts(GOut g) {
         if(ui == null || ui.gui == null)
             return;
-        drawmap(g);
+        try(nurgling.diagnostics.MovementTrace.Stage stage = nurgling.diagnostics.MovementTrace.stage(ui, "minimap-map")) {
+            drawmap(g);
+        }
         
         // Draw tile highlight overlay
         drawTileHighlightOverlay(g);
 
         // Render explored area overlay (yellow semi-transparent)
-        MinimapExploredAreaRenderer.renderExploredArea(this, g);
+        try(nurgling.diagnostics.MovementTrace.Stage stage = nurgling.diagnostics.MovementTrace.stage(ui, "minimap-exploration")) {
+            exploredRenderer.renderExploredArea(this, g);
+        }
         
         // Render claim overlays (personal, village, realm)
         MinimapClaimRenderer.renderClaims(this, g);
@@ -1509,6 +1514,7 @@ NMiniMap extends MiniMap {
 
     @Override
     public void destroy() {
+        exploredRenderer.dispose();
         // Never leave the movement queue paused because the map went away mid-steer.
         if(holdGrab != null)
             endHoldSteer();

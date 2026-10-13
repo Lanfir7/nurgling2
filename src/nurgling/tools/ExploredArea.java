@@ -384,6 +384,17 @@ public class ExploredArea {
         }
     }
 
+    /** Explicit asynchronous save for callers that need completion; routine saves use the coalesced queue. */
+    public java.util.concurrent.CompletableFuture<Void> saveAsync(String path) {
+        return java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                mergeAndSaveToFile(path);
+            } catch(IOException e) {
+                throw new java.util.concurrent.CompletionException(e);
+            }
+        }, executorRef.get());
+    }
+
     /**
      * Queue a disk merge/save on the dedicated save thread. Overlapping requests coalesce.
      * @return false if the executor is unavailable (caller should keep the dirty flag)

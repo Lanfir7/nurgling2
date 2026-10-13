@@ -36,7 +36,7 @@ import static haven.render.sl.Type.*;
  * lists' programs.
  */
 public class GroundRelief {
-    public static volatile boolean enabled = false, objects = false;
+    public static volatile boolean enabled = false, objects = false, pavingOnly = false;
     private static volatile float strength = 1.0f, ostrength = 0.6f;
 
     /* The stone normal, from a smooth height (in world units): the
@@ -671,7 +671,7 @@ public class GroundRelief {
     public static final State.Slot<State> slot = new State.Slot<>(State.Slot.Type.DRAW, State.class);
     public static final State state = new State() {
 	    public ShaderMacro shader() {
-		return(enabled ? macro(strength) : null);
+		return(enabled && !pavingOnly ? macro(strength) : null);
 	    }
 
 	    public void apply(Pipe p) {
@@ -681,13 +681,29 @@ public class GroundRelief {
 	    public String toString() {return("#<ground-relief>");}
 	};
 
+    private static final State pavingState = new State() {
+	public ShaderMacro shader() {return(enabled ? macro(strength) : null);}
+	public void apply(Pipe p) {p.put(slot, this);}
+	public String toString() {return("#<paving-relief>");}
+    };
+
+    public static State state(Atmos.WetSurface surface) {
+	return surface == Atmos.WetSurface.PAVING ? pavingState : state;
+    }
+
     /* Returns whether anything changed (and programs must be rebuilt). */
     public static boolean set(boolean ground, float k, boolean objs, float ok, boolean pom) {
+	return set(ground, k, objs, ok, pom, false);
+    }
+
+    public static boolean set(boolean ground, float k, boolean objs, float ok, boolean pom, boolean onlyPaving) {
 	k = Math.round(k * 20) / 20.0f;
 	ok = Math.round(ok * 20) / 20.0f;
 	boolean ch = (ground != enabled) || (ground && (k != strength)) ||
-	    (objs != objects) || (objs && (ok != ostrength)) || (ground && (pom != parallax));
+	    (objs != objects) || (objs && (ok != ostrength)) || (ground && (pom != parallax)) ||
+	    (ground && (onlyPaving != pavingOnly));
 	parallax = pom;
+	pavingOnly = onlyPaving;
 	enabled = ground;
 	strength = k;
 	objects = objs;

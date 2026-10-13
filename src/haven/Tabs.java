@@ -72,7 +72,10 @@ public class Tabs {
 	public TabButton(int w, String text, Tab tab) {
 	    super(w, text, false);
 	    this.tab = tab;
+	    tab.btn = this;
 	}
+
+	protected boolean selected() { return curtab == tab; }
 
 	public void click() {
 	    showtab(tab);
@@ -90,6 +93,8 @@ public class Tabs {
 		if((cs.x > 0) && (cs.y > 0))
 			tab.resize(cs);
 	}
+	for(Tab t : tabs)
+	    if(t.btn != null) t.btn.redraw();
 	changed(old, tab);
     }
 

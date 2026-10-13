@@ -10,6 +10,7 @@ import nurgling.areas.AreaLabelSync;
 import nurgling.i18n.L10n;
 import nurgling.navigation.MapMarkerBeacon;
 import nurgling.navigation.MapMarkerNavigation;
+import nurgling.render.NGfx;
 import nurgling.tools.ExploredArea;
 import nurgling.hotkeys.Hotkeys;
 import nurgling.contextmenu.GobContextRegistry;
@@ -55,6 +56,31 @@ public class NMiniMapWnd extends Widget{
 
         Tex paintTex() {
             return(state() ? (h ? hoverdownHi : downHi) : (h ? hoverupHi : upHi));
+        }
+    }
+
+    public static class NightVisionButton extends NMenuCheckBox {
+        public NightVisionButton() {
+            super("nurgling/hud/buttons/toggle_panel/daynight", kb_night, L10n.get("minimap.night_vision"));
+            state(() -> usesAutoExposure() ? NGfx.get().autoexp : (Boolean)NConfig.get(NConfig.Key.nightVision));
+            set(value -> {
+                if(usesAutoExposure()) {
+                    NGfx.set(NGfx.get().with("autoexp", value));
+                } else {
+                    NConfig.set(NConfig.Key.nightVision, value);
+                    if(ui != null && ui.sess != null && ui.sess.glob != null)
+                        ui.sess.glob.brighten();
+                }
+            });
+        }
+
+        private boolean usesAutoExposure() {
+            return ui != null && NGfx.supported(ui.getenv());
+        }
+
+        @Override
+        public Object tooltip(Coord c, Widget prev) {
+            return usesAutoExposure() ? L10n.get("gfx.autoexp") : super.tooltip(c, prev);
         }
     }
     
@@ -270,9 +296,7 @@ public class NMiniMapWnd extends Widget{
         natura.a = !nurgling.tools.GobHide.isEnabled();
         buttons.add(natura);
 
-        nightvision = new NMenuCheckBox("nurgling/hud/buttons/toggle_panel/daynight", kb_night, L10n.get("minimap.night_vision"));
-        nightvision.changed(a -> switchStatus("night", a));
-        nightvision.a = (Boolean) NConfig.get(NConfig.Key.nightVision);
+        nightvision = new NightVisionButton();
         buttons.add(nightvision);
 
         fog = new ExploredAreaCheckBox("nurgling/hud/buttons/toggle_panel/fog", kb_fog, L10n.get("minimap.explored_area"));
@@ -428,11 +452,7 @@ public class NMiniMapWnd extends Widget{
             }
             case "night":
             {
-                NConfig.set(NConfig.Key.nightVision, a);
-                if (ui.sess != null && ui.sess.glob != null)
-                {
-                    ui.sess.glob.brighten();
-                }
+                nightvision.set(a);
                 break;
             }
         }
@@ -452,7 +472,9 @@ public class NMiniMapWnd extends Widget{
     public void draw(GOut g, boolean strict)
     {
         drawWidget(g,strict,miniMap);
-        pbox.draw(g, miniMap.c.sub(marg), miniMap.sz.add(marg.mul(2)));
+        boolean flat = nurgling.styles.UITheme.on();
+        pbox.draw(g, flat ? miniMap.c : miniMap.c.sub(marg),
+                  flat ? miniMap.sz : miniMap.sz.add(marg.mul(2)));
         if(!dock.hidden()) {
             /* Smallest first, so whichever icon the cursor has grown sits in front of
              * both of its neighbours instead of the one to its right covering it. */

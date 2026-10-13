@@ -145,6 +145,38 @@ public interface Lighting {
 	private Object[][] lastparams;
 	private float[] lastproj;
 	private int lastmaxlights = -1;
+        private Topology topology;
+        // Immutable CPU light-list grid: colors may change every frame while
+        // light positions/ranges and the camera projection remain identical.
+        private class Topology {
+            final float[] projection;
+            final float[][] shapes;
+            final int limit=maxlights;
+            final Volume3f bbox;
+            final short[] grid, lists;
+            final int listlen;
+            Topology(Object[][] lights, Projection proj, Compiler c) {
+                projection=proj.fin(Matrix4f.id).m.clone();
+                shapes=new float[lights.length][];
+                for(int i=0;i<lights.length;i++) {
+                    float[] pos=(float[])lights[i][3];
+                    shapes[i]=new float[]{pos[0],pos[1],pos[2],pos[3],
+                        (Float)lights[i][4],(Float)lights[i][5],(Float)lights[i][6],(Float)lights[i][7]};
+                }
+                bbox=c.bbox;grid=c.grid;lists=c.listbuf;listlen=c.lboff;
+            }
+            boolean matches(Object[][] lights, Projection proj) {
+                if(limit!=maxlights||shapes.length!=lights.length||!Arrays.equals(projection,proj.fin(Matrix4f.id).m))return false;
+                for(int i=0;i<lights.length;i++) {
+                    float[] pos=(float[])lights[i][3],shape=shapes[i];
+                    // Directional lights occupy every cell, regardless of direction/color.
+                    if(pos[3]==0&&shape[3]==0)continue;
+                    for(int j=0;j<4;j++)if(Float.compare(pos[j],shape[j])!=0)return false;
+                    for(int j=4;j<8;j++)if(Float.compare((Float)lights[i][j],shape[j])!=0)return false;
+                }
+                return true;
+            }
+        }
 
 	public LightGrid(int w, int h, int d) {
 	    if(w != Integer.highestOneBit(w)) throw(new IllegalArgumentException("not a power of two: " + w));
@@ -444,12 +476,15 @@ public interface Lighting {
 	       Arrays.equals(lastproj, projstate) && Arrays.deepEquals(lastparams, lights))
 		return(last);
 	    Object[][] frozen = snapshot(lights);
-	    Compiler c = new Compiler(proj);
-	    int n = Math.min(frozen.length, 65535);
-	    for(int i = 0; i < n; i++)
-		c.addlight(i, frozen[i]);
-	    c.compact();
-	    Debug.statprint(Utils.formatter("C-lights: %d lists, max %d, bounds %s, cell %s", c.nlists, c.maxlist, c.bbox, c.gsz), stats);
+            if(topology == null || !topology.matches(frozen, proj)) {
+                Compiler c = new Compiler(proj);
+                int n = Math.min(frozen.length, 65535);
+                for(int i = 0; i < n; i++)
+                    c.addlight(i, frozen[i]);
+                c.compact();
+                topology=new Topology(frozen,proj,c);
+                Debug.statprint(Utils.formatter("C-lights: %d lists, max %d, bounds %s, cell %s", c.nlists, c.maxlist, c.bbox, c.gsz), stats);
+            }
 	    if(last != null) {
 		last.dispose();
 		last = null;
@@ -457,7 +492,7 @@ public interface Lighting {
 	    lastparams = frozen;
 	    lastproj = projstate;
 	    lastmaxlights = maxlights;
-	    return(last = new GridLights(frozen, c.bbox, c.grid, c.listbuf, c.lboff));
+	    return(last = new GridLights(frozen, topology.bbox, topology.grid, topology.lists, topology.listlen));
 	}
 
 	private static final Uniform u_bboxm = new Uniform(VEC3, "lboxm", p -> ((GridLights)p.get(lights)).bboxm(), lights);

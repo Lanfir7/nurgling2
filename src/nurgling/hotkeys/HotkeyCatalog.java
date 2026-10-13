@@ -65,6 +65,9 @@ public final class HotkeyCatalog {
         core(registry, binding("scm-srch", KeyMatch.forchar('Z', KeyMatch.C)), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
         core(registry, binding("screenshot", KeyMatch.forchar('S', KeyMatch.M)), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
         core(registry, binding("ui-toggle", KeyMatch.nil), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
+        core(registry, binding(Hotkeys.WIKI_CRAFT_ATLAS, KeyMatch.forchar('K', KeyMatch.C | KeyMatch.S)), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
+        core(registry, binding(Hotkeys.MOVEMENT_TRACE, KeyMatch.forcode(KeyEvent.VK_F9, KeyMatch.C)), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
+        core(registry, binding(Hotkeys.FPS_GRAPH, KeyMatch.forcode(KeyEvent.VK_F10, KeyMatch.C)), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
         core(registry, binding(Hotkeys.PHOTO_MODE, KeyMatch.forchar('P', KeyMatch.C | KeyMatch.S)), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
         core(registry, binding(Hotkeys.TIMER_QUICK_ADD, KeyMatch.nil), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
         core(registry, binding("logout", KeyMatch.nil), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);

@@ -230,6 +230,7 @@ public class NConfig
         foragerprop,
         trufflepigprop,
         buttonStyle,
+        newUi,
         showQuestGiverNames,
         showThingwallNames,
         showPartyMemberNames,
@@ -730,6 +731,7 @@ public class NConfig
         conf.put(Key.useSolidBackground, false);  // Default to texture mode
         conf.put(Key.windowBackgroundColor, new java.awt.Color(0x1C, 0x25, 0x26));  // #1C2526
         conf.put(Key.buttonStyle, "tbtn");  // Default button style
+        conf.put(Key.newUi, true);  // New look by default; Options > Interface > New UI turns it off
 
         // Pickling settings
         conf.put(Key.picklingBeetroots, true);
@@ -1026,7 +1028,7 @@ public class NConfig
         return isScenariosUpd;
     }
 
-    public boolean isExploredUpdated() {
+    public synchronized boolean isExploredUpdated() {
         // Only return true if explored area changed AND debounce period has passed
         // This batches multiple rapid changes into a single file update
         if (isExploredUpd && lastExploredChangeTime > 0) {
@@ -1034,6 +1036,11 @@ public class NConfig
             return elapsed >= EXPLORED_DEBOUNCE_MS;
         }
         return false;
+    }
+
+    private synchronized void exploredChanged(long now) {
+        isExploredUpd = true;
+        lastExploredChangeTime = now;
     }
 
     /**
@@ -1239,15 +1246,13 @@ public class NConfig
         long now = System.currentTimeMillis();
         try {
             if (nurgling.NUtils.getGameUI() != null && nurgling.NUtils.getUI() != null && nurgling.NUtils.getUI().core != null) {
-                nurgling.NUtils.getUI().core.config.isExploredUpd = true;
-                nurgling.NUtils.getUI().core.config.lastExploredChangeTime = now;
+                nurgling.NUtils.getUI().core.config.exploredChanged(now);
             }
         } catch (Exception e) {
             // Fallback to global config if profile config not available
             if (current != null)
             {
-                current.isExploredUpd = true;
-                current.lastExploredChangeTime = now;
+                current.exploredChanged(now);
             }
         }
     }
@@ -2224,8 +2229,10 @@ public class NConfig
             {
                 String filePath = customPath == null ? getExploredPath() : customPath;
                 // Drop the debounce flag before queueing so a concurrent explore can re-dirty.
-                this.isExploredUpd = false;
-                this.lastExploredChangeTime = 0;
+                synchronized(this) {
+                    this.isExploredUpd = false;
+                    this.lastExploredChangeTime = 0;
+                }
                 boolean submitted = ((NCornerMiniMap)NUtils.getGameUI().mmap).exploredArea.requestMergeAndSave(
                         filePath,
                         null,
@@ -2242,7 +2249,7 @@ public class NConfig
         }
     }
 
-    private void markExploredDirty() {
+    private synchronized void markExploredDirty() {
         this.isExploredUpd = true;
         this.lastExploredChangeTime = System.currentTimeMillis();
     }

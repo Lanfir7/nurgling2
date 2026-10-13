@@ -562,15 +562,20 @@ public class SessionTabBar extends Widget {
         Coord bsz = new Coord(BUTTON_WIDTH, BUTTON_HEIGHT);
         Color accent = accentOf(ctx, isActive);
 
-        if (isActive) {
+        if (isActive && !nurgling.styles.UITheme.on()) {
             for (int i = 1; i <= 3; i++) {
                 g.chcolor(accent.getRed(), accent.getGreen(), accent.getBlue(), 54 / i);
                 g.rect(ul.sub(i, i), bsz.add(i * 2, i * 2));
             }
         }
 
-        g.chcolor(hovered ? new Color(255, 255, 255, 250) : new Color(214, 214, 214, 234));
-        g.image(tabPanel, ul);
+        if (nurgling.styles.UITheme.on()) {
+            nurgling.styles.UITheme.panel(g, ul, bsz,
+                    hovered ? nurgling.styles.UITheme.HOVER : nurgling.styles.UITheme.PANEL, accent);
+        } else {
+            g.chcolor(hovered ? new Color(255, 255, 255, 250) : new Color(214, 214, 214, 234));
+            g.image(tabPanel, ul);
+        }
 
         g.chcolor(accent.getRed(), accent.getGreen(), accent.getBlue(), isActive ? 255 : 140);
         g.rect(ul, bsz);
@@ -675,12 +680,17 @@ public class SessionTabBar extends Widget {
 
     /** Compact raised charcoal/bronze control; hover switches to a warm stop cue. */
     private void drawMacroBadge(GOut g, Coord ul, int width, String label, boolean hovered, boolean stopAll) {
-        g.chcolor(0, 0, 0, 130);
-        g.frect(ul.add(UI.scale(1), UI.scale(1)), new Coord(width, MACRO_BADGE_HEIGHT));
-        g.chcolor();
-        String panelKey = width + ":" + hovered + ":" + stopAll;
-        g.image(cached(macroPanelCache, panelKey,
-                ignored -> makeMacroPanel(width, hovered, stopAll)), ul);
+        if (nurgling.styles.UITheme.on()) {
+            nurgling.styles.UITheme.panel(g, ul, new Coord(width, MACRO_BADGE_HEIGHT),
+                    hovered ? nurgling.styles.UITheme.HOVER : nurgling.styles.UITheme.PANEL, null);
+        } else {
+            g.chcolor(0, 0, 0, 130);
+            g.frect(ul.add(UI.scale(1), UI.scale(1)), new Coord(width, MACRO_BADGE_HEIGHT));
+            g.chcolor();
+            String panelKey = width + ":" + hovered + ":" + stopAll;
+            g.image(cached(macroPanelCache, panelKey,
+                    ignored -> makeMacroPanel(width, hovered, stopAll)), ul);
+        }
         if (stopAll) {
             int side = UI.scale(8);
             g.chcolor(hovered ? new Color(255, 226, 203) : new Color(192, 145, 119));
@@ -703,12 +713,17 @@ public class SessionTabBar extends Widget {
 
     private void drawMacroPlate(GOut g, Coord ul, int width, String name, String status,
                                 BotDescriptor descriptor, boolean hovered) {
-        g.chcolor(0, 0, 0, 130);
-        g.frect(ul.add(UI.scale(1), UI.scale(1)), new Coord(width, MACRO_BADGE_HEIGHT));
-        g.chcolor();
-        String panelKey = width + ":" + hovered + ":false";
-        g.image(cached(macroPanelCache, panelKey,
-                ignored -> makeMacroPanel(width, hovered, false)), ul);
+        if (nurgling.styles.UITheme.on()) {
+            nurgling.styles.UITheme.panel(g, ul, new Coord(width, MACRO_BADGE_HEIGHT),
+                    hovered ? nurgling.styles.UITheme.HOVER : nurgling.styles.UITheme.PANEL, null);
+        } else {
+            g.chcolor(0, 0, 0, 130);
+            g.frect(ul.add(UI.scale(1), UI.scale(1)), new Coord(width, MACRO_BADGE_HEIGHT));
+            g.chcolor();
+            String panelKey = width + ":" + hovered + ":false";
+            g.image(cached(macroPanelCache, panelKey,
+                    ignored -> makeMacroPanel(width, hovered, false)), ul);
+        }
 
         int textX = UI.scale(8);
         Tex icon = macroIcon(descriptor);
@@ -726,7 +741,6 @@ public class SessionTabBar extends Widget {
         g.aimage(nameTex, ul.add(textX, UI.scale(12)), 0, 0.5);
         g.chcolor(hovered ? new Color(238, 206, 175) : new Color(177, 156, 133));
         g.aimage(statusTex, ul.add(textX, UI.scale(29)), 0, 0.5);
-
         Coord center = ul.add(width - UI.scale(12), MACRO_BADGE_HEIGHT / 2);
         int arm = UI.scale(3);
         g.chcolor(hovered ? new Color(255, 208, 179) : new Color(160, 140, 111));
@@ -858,6 +872,18 @@ public class SessionTabBar extends Widget {
     }
 
     private void drawCloseButton(GOut g, int x, int y, boolean hovered, boolean disabled) {
+        if (nurgling.styles.UITheme.on()) {
+            Coord size = new Coord(CLOSE_BTN_SIZE, CLOSE_BTN_SIZE);
+            if (!disabled && hovered)
+                nurgling.styles.UITheme.iconHighlight(g.reclip(new Coord(x, y), size), size, true, 0);
+            int iconSize = Math.max(1, CLOSE_BTN_SIZE - UI.scale(2));
+            Coord iconPos = new Coord(x, y).add((CLOSE_BTN_SIZE - iconSize) / 2, (CLOSE_BTN_SIZE - iconSize) / 2);
+            if (disabled)
+                nurgling.styles.GeneratedButtons.mutedIcon(g, "close", iconPos, iconSize);
+            else
+                nurgling.styles.GeneratedButtons.icon(g, "close", iconPos, iconSize);
+            return;
+        }
         Tex icon = (!disabled && hovered) ? closeHover : closeNormal;
         if (icon == null)
             return;
@@ -879,17 +905,25 @@ public class SessionTabBar extends Widget {
         Coord ul = new Coord(x, y);
         Coord bsz = new Coord(BUTTON_WIDTH, PLUS_BAR_HEIGHT);
 
-        g.chcolor(hovered ? new Color(255, 255, 255, 250) : new Color(200, 200, 200, 220));
-        g.image(plusPanel, ul);
-        g.chcolor(PLUS_BTN_BORDER.getRed(), PLUS_BTN_BORDER.getGreen(), PLUS_BTN_BORDER.getBlue(),
-                  hovered ? 255 : 150);
-        g.rect(ul, bsz);
-        g.chcolor();
-
+        if (nurgling.styles.UITheme.on()) {
+            nurgling.styles.UITheme.panel(g, ul, bsz,
+                    hovered ? nurgling.styles.UITheme.HOVER : nurgling.styles.UITheme.PANEL, PLUS_BTN_BORDER);
+        } else {
+            g.chcolor(hovered ? new Color(255, 255, 255, 250) : new Color(200, 200, 200, 220));
+            g.image(plusPanel, ul);
+            g.chcolor(PLUS_BTN_BORDER.getRed(), PLUS_BTN_BORDER.getGreen(), PLUS_BTN_BORDER.getBlue(),
+                      hovered ? 255 : 150);
+            g.rect(ul, bsz);
+            g.chcolor();
+        }
         int iconSize = PLUS_BAR_HEIGHT - UI.scale(6);
-        Tex icon = hovered ? addHover : addNormal;
-        if (icon != null)
-            g.image(icon, ul.add(UI.scale(3), UI.scale(3)), new Coord(iconSize, iconSize));
+        if (nurgling.styles.UITheme.on()) {
+            nurgling.styles.GeneratedButtons.icon(g, "plus", ul.add(UI.scale(3), UI.scale(3)), iconSize);
+        } else {
+            Tex icon = hovered ? addHover : addNormal;
+            if (icon != null)
+                g.image(icon, ul.add(UI.scale(3), UI.scale(3)), new Coord(iconSize, iconSize));
+        }
 
         if (plusLabel != null) {
             g.chcolor(hovered ? new Color(0xF0, 0xE2, 0xC0) : SUB_TEXT);

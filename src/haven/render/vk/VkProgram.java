@@ -795,6 +795,10 @@ public class VkProgram extends VkObject {
     };
 
     /* Immediate UI/world/critical draws. No key monitor is held in the driver. */
+    /* Optional immediate draws use the same preparation queue as scene draws. */
+    boolean pipeready(PipeKey key) {
+	return pipelineReady(key);
+    }
     long pipeline(PipeKey key) {
 	if(key.pipe != 0)
 	    return(key.pipe);
@@ -916,6 +920,7 @@ public class VkProgram extends VkObject {
 		.pDynamicState(dyn).layout(layout);
 	    LongBuffer lp = st.mallocLong(1);
 	    VkEnvironment.check(vkCreateGraphicsPipelines(env.dev, env.pipecache, pci, null, lp), "vkCreateGraphicsPipelines");
+	    env.pipecachewriter.changed();
 	    return lp.get(0);
 	}
     }

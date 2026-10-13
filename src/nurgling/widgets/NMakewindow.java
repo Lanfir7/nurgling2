@@ -52,6 +52,10 @@ public class NMakewindow extends Widget implements DTarget {
     public static final Coord boff = UI.scale(new Coord(7, 9));
     public String rcpnm;
     public String recipeResource;
+    public boolean atlasInputsReceived, atlasOutputsReceived;
+    private boolean atlasDirty = true;
+    private double atlasRetry;
+    private int atlasAttempts;
     public List<Spec> inputs = Collections.emptyList();
     public List<Spec> outputs = Collections.emptyList();
     public List<Indir<Resource>> qmod = Collections.emptyList();
@@ -314,6 +318,7 @@ public class NMakewindow extends Widget implements DTarget {
             savePresetBtn.visible = autoMode && allInputsConfigured();
         }
         persistRecipeMappings();
+        maybeObserveWikiCraftAtlas(dt);
         maybePublishCraftAtlasObservation();
         if(craftAtlasProbe && !craftAtlasProbeClosing && System.nanoTime() >= craftAtlasProbeDeadline)
             closeCraftAtlasProbe(false);
@@ -363,6 +368,32 @@ public class NMakewindow extends Widget implements DTarget {
         } catch(Loading ignored) {
             // Retry on a later UI tick; never block the render thread waiting for resources.
         }
+    }
+
+    private void maybeObserveWikiCraftAtlas(double dt) {
+        if(!atlasDirty || !atlasInputsReceived || !atlasOutputsReceived || outputs.isEmpty() || ui == null) return;
+        if(craftAtlasProbe && !CraftAtlasRecipeProbe.readyToPublish(
+                System.nanoTime(), craftAtlasLastServerUpdate)) return;
+        NGameUI gui = getparent(NGameUI.class);
+        if(gui == null || gui.atlas == null) return;
+        atlasRetry -= dt;
+        if(atlasRetry > 0) return;
+        try {
+            if(gui.atlas.observe(this)) {
+                atlasDirty = false;
+                return;
+            }
+        } catch(Loading ignored) {
+            // The menu or recipe metadata may still be loading.
+        }
+        if(++atlasAttempts >= 32) atlasDirty = false;
+        else atlasRetry = 0.25;
+    }
+
+    private void retryWikiCraftAtlasObservation() {
+        atlasDirty = true;
+        atlasRetry = 0;
+        atlasAttempts = 0;
     }
 
     private void closeCraftAtlasProbe(boolean completed) {
@@ -822,6 +853,8 @@ public class NMakewindow extends Widget implements DTarget {
             }
             this.inputs = inputs;
             craftAtlasObservationDirty = true;
+            atlasInputsReceived = true;
+            retryWikiCraftAtlasObservation();
             if (searchMode && searchPanel != null) {
                 searchPanel.syncTabs(this.inputs);
             }
@@ -839,6 +872,8 @@ public class NMakewindow extends Widget implements DTarget {
             }
             this.outputs = outputs;
             craftAtlasObservationDirty = true;
+            atlasOutputsReceived = true;
+            retryWikiCraftAtlasObservation();
         } else if(msg == "qmod") {
             craftAtlasLastServerUpdate = System.nanoTime();
             List<Indir<Resource>> qmod = new ArrayList<Indir<Resource>>();
@@ -846,10 +881,12 @@ public class NMakewindow extends Widget implements DTarget {
                 qmod.add(ui.sess.getresv(arg));
             this.qmod = qmod;
             craftAtlasObservationDirty = true;
+            retryWikiCraftAtlasObservation();
         } else if(msg == "tool") {
             craftAtlasLastServerUpdate = System.nanoTime();
             tools.add(ui.sess.getresv(args[0]));
             craftAtlasObservationDirty = true;
+            retryWikiCraftAtlasObservation();
         } else if(msg == "use") {
             inputs.get(Utils.iv(args[0])).using = Utils.iv(args[1]);
         } else if(msg == "inprcps") {

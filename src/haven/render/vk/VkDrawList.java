@@ -54,11 +54,38 @@ public class VkDrawList implements DrawList {
     private final DeferredRenderSlots<Slot<? extends Rendered>, DrawSlot> slotmap;
     private final Map<Pipe, Object> psettings = new IdentityHashMap<>();
     private final Map<Pipe, Object> orderidx = new IdentityHashMap<>();
+    private final Map<Pipe, ShaderGroup> shaderGroups = new IdentityHashMap<>();
     private final TreeSet<DrawSlot> order;
     private boolean disposed = false;
+    private boolean async = true;
     private static final AtomicLong uniqid = new AtomicLong();
     private static final int REBUILD_PER_FRAME = 32;
     private static final long PREPARATION_BUDGET_NS = 2_000_000L;
+
+    /* Rebuild when a group gains or changes a shader, including a defined-null slot. */
+    private class ShaderGroup {
+	final Set<DrawSlot> users = Collections.newSetFromMap(new IdentityHashMap<>());
+	ShaderMacro[] shaders = new ShaderMacro[0];
+	final BitSet known = new BitSet();
+	void track(int id, State state) {
+	    if(known.get(id)) return;
+	    known.set(id);
+	    if(shaders.length <= id) shaders = Arrays.copyOf(shaders, id + 1);
+	    shaders[id] = state == null ? null : state.shader();
+	}
+	void update(Pipe group, int[] mask) {
+	    boolean changed = false;
+	    for(int id : mask) {
+		if(!known.get(id)) continue;
+		State state = group.get(State.Slot.byid(id));
+		ShaderMacro shader = state == null ? null : state.shader();
+		if(shaders[id] != shader) { shaders[id] = shader; changed = true; }
+	    }
+	    if(changed)
+		for(DrawSlot user : users)
+		    slotmap.update(user.bk, true);
+	}
+    }
 
     VkDrawList(VkEnvironment env) {
 	this.env = env;
@@ -71,6 +98,11 @@ public class VkDrawList implements DrawList {
 	    if(next != null)
 		order.add(next);
 	});
+    }
+
+    public synchronized VkDrawList async(boolean enabled) {
+	async = enabled;
+	return(this);
     }
 
     private int compare(DrawSlot a, DrawSlot b) {
@@ -377,6 +409,8 @@ public class VkDrawList implements DrawList {
     class UniformSetting extends DepSetting {
 	final VkProgram prog;
 	final Uniform var;
+	final State.Slot<?>[] dependencies;
+	final ShaderMacro[] dependencyShaders;
 	Object val;
 	/* std140 bytes of the value, packed once for all slots
 	 * sharing this setting; null for samplers. */
@@ -387,6 +421,13 @@ public class VkDrawList implements DrawList {
 	    super(key);
 	    this.prog = key.prog;
 	    this.var = (Uniform)key.vid;
+	    this.dependencies = var.deps.toArray(new State.Slot<?>[0]);
+	    this.dependencyShaders = new ShaderMacro[dependencies.length];
+	    Pipe initial = compstate();
+	    for(int i = 0; i < dependencies.length; i++) {
+		State state = initial.get(dependencies[i]);
+		dependencyShaders[i] = (state == null) ? null : state.shader();
+	    }
 	    if(VkProgram.samplerp(var.type)) {
 		this.packed = null;
 		this.pbuf = null;
@@ -398,7 +439,22 @@ public class VkDrawList implements DrawList {
 	}
 
 	void compute() {
-	    Object nval = var.value.apply(compstate());
+	    Pipe current = compstate();
+	    // InstanceList forwards group changes before replacing draw slots. An
+	    // old program may also survive while its replacement compiles. Keep its
+	    // last valid uniforms if a dependency has changed shader (e.g. Wet was
+	    // removed); evaluating that old uniform against the new state can crash.
+	    // The replacement program gets its own settings; ordinary value changes
+	    // with the same shader still update immediately.
+	    if(val != null) {
+		for(int i = 0; i < dependencies.length; i++) {
+		    State state = current.get(dependencies[i]);
+		    ShaderMacro shader = (state == null) ? null : state.shader();
+		    if(shader != dependencyShaders[i])
+			return;
+		}
+	    }
+	    Object nval = var.value.apply(current);
 	    if(nval == null)
 		throw(new NullPointerException("tried to set null for uniform " + var));
 	    nval = env.prepuval(nval);
@@ -413,7 +469,7 @@ public class VkDrawList implements DrawList {
 	}
 
 	State.Slot<?>[] depslots() {
-	    return(var.deps.toArray(new State.Slot<?>[0]));
+	    return(dependencies);
 	}
 
 	void release() {
@@ -549,6 +605,7 @@ public class VkDrawList implements DrawList {
 	Object[] tex;
 	final int[] tver;
 	private boolean disposed = false;
+	private final Set<Pipe> shaderSources = Collections.newSetFromMap(new IdentityHashMap<>());
 
 	DrawSlot(Slot<? extends Rendered> bk) {
 	    this.bk = bk;
@@ -598,19 +655,37 @@ public class VkDrawList implements DrawList {
 	    this.ordersrc = ordersrc;
 	    if(ordersrc != null)
 		orderreg();
+	    // Watch defined-null slots too: enabling weather can introduce a shader
+	    // without changing RenderTree's inheritance groups or uniform values.
+	    for(int i = 0; i < bst.nstates(); i++) {
+		int group = bst.gstate(i);
+		if(group >= 0) {
+		    Pipe source = bst.group(group);
+		    shaderSources.add(source);
+		    shaderGroups.computeIfAbsent(source, ignored -> new ShaderGroup()).track(i, st[i]);
+		}
+	    }
+	    for(Pipe source : shaderSources)
+		shaderGroups.get(source).users.add(this);
 	}
 
 	void refresh() {
 	    Targets tv = tgt.val;
 	    if(keyver != tgt.ver) {
-		key = prog.pipekey(vk, topo, tv.cfmt, tv.dfmt, tv.blend, tv.cmask);
+		// Shadow attachments can change every frame without changing the
+		// pipeline format. Avoid allocating a lookup key for every caster.
+		if(key == null || key.vk != vk || key.topo != topo || key.dfmt != tv.dfmt ||
+		   !Arrays.equals(key.cfmt, tv.cfmt) || !Arrays.equals(key.blend, tv.blend) ||
+		   !Arrays.equals(key.cmask, tv.cmask))
+		    key = prog.pipekey(vk, topo, tv.cfmt, tv.dfmt, tv.blend, tv.cmask);
 		keyver = tgt.ver;
 	    }
 	    boolean tch = false;
 	    for(int i = 0; i < prog.samplers.length; i++) {
 		UniformSetting u = unis[prog.samplers[i]];
 		if(tver[i] != u.ver) {
-		    tch = true;
+		    // Equal bindings are immutable and remain valid for queued draws.
+		    if(tex == null || !Objects.deepEquals(tex[i], u.val)) tch = true;
 		    tver[i] = u.ver;
 		}
 	    }
@@ -687,6 +762,11 @@ public class VkDrawList implements DrawList {
 	    if(disposed)
 		throw(new IllegalStateException());
 	    disposed = true;
+	    for(Pipe source : shaderSources) {
+		ShaderGroup group = shaderGroups.get(source);
+		group.users.remove(this);
+		if(group.users.isEmpty()) shaderGroups.remove(source);
+	    }
 	    if(ordersrc != null)
 		orderunreg();
 	    release();
@@ -795,6 +875,8 @@ public class VkDrawList implements DrawList {
 
     public void update(Pipe group, int[] mask) {
 	synchronized(this) {
+	    ShaderGroup shaders = shaderGroups.get(group);
+	    if(shaders != null) shaders.update(group, mask);
 	    Object reg = psettings.get(group);
 	    if(reg == null) {
 	    } else if(reg instanceof DepSetting) {

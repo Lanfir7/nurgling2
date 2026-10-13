@@ -11,22 +11,34 @@ import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.awt.image.WritableRaster;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.*;
+import java.util.concurrent.*;
 
 /**
  * Draws explored-area fog on the same cells as the minimap image.
- * One texture per visible map cell, shared by every window at that zoom,
- * and rebuilt only when that cell's tiles change.
+ * One texture per visible map cell and minimap view, rebuilt when that cell changes.
  */
-public class MinimapExploredAreaRenderer {
+public class MinimapExploredAreaRenderer implements Disposable {
 
     private static final int MAX_CACHE_SIZE = 512;
     private static final long SIG_BASIS = 0xCBF29CE484222325L;
+    private static final ThreadPoolExecutor rasterizer = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS,
+            new ArrayBlockingQueue<>(16), task -> {
+                Thread thread = new Thread(task, "exploration-overlay");
+                thread.setDaemon(true);
+                return thread;
+            });
+    private static final Set<MinimapExploredAreaRenderer> instances = Collections.newSetFromMap(new WeakHashMap<>());
+    private final LinkedHashMap<CacheKey, OverlayCache> overlayCache = new LinkedHashMap<>(64, .75f, true);
+    private ExploredArea source;
+    private int updatesLeft;
+    private int submissionsLeft;
 
-    public static void renderExploredArea(MiniMap map, GOut g) {
+    public MinimapExploredAreaRenderer() {
+        synchronized(instances) {instances.add(this);}
+    }
+
+    public synchronized void renderExploredArea(MiniMap map, GOut g) {
         if (!ExploredAreaPolicy.shouldDraw(NConfig.get(NConfig.Key.exploredAreaEnable))) {
             return;
         }
@@ -63,6 +75,8 @@ public class MinimapExploredAreaRenderer {
             if (exploredArea == null) {
                 return;
             }
+            if(source != exploredArea) {dispose(); source = exploredArea;}
+            beginFrame(); // Bound texture creation/upload work in any one frame.
 
             if (exploredArea.isLoadingInProgress()) {
                 return;
@@ -94,7 +108,7 @@ public class MinimapExploredAreaRenderer {
         }
     }
 
-    private static void drawLayer(GOut g, MiniMap map, ExploredArea exploredArea,
+    private void drawLayer(GOut g, MiniMap map, ExploredArea exploredArea,
             MiniMap.DisplayGrid[] display, Area dgext, Coord hsz, Coord camera,
             float scaleFactor, int dataLevel, long segmentId, boolean session, Color color,
             long worldSeq) {
@@ -115,21 +129,53 @@ public class MinimapExploredAreaRenderer {
                 CacheKey key = new CacheKey(gc, segmentId, dataLevel, session);
                 OverlayCache cache = overlayCache.get(key);
                 if (cache != null && cache.worldSeq == worldSeq) {
-                    cache.lastAccess = accessCounter.incrementAndGet();
                     blit(g, cache.img, ul, br.sub(ul));
                     continue;
                 }
-
                 long sig = cellSignature(exploredArea, gc, segmentId, dataLevel, session);
-                if (cache != null && cache.sig == sig) {
+                if (cache == null) {
+                    cache = new OverlayCache();
+                    overlayCache.put(key, cache);
+                    evictIfNeeded();
+                }
+                if (cache.pending != null && cache.pending.isDone() && updatesLeft > 0) {
+                    try {
+                        BufferedImage ready = cache.pending.get(); // isDone: never waits on the render thread.
+                        long latestSeq = session ? ExploredArea.sessionSeq : ExploredArea.seq;
+                        if (source == exploredArea && latestSeq == worldSeq && cache.pendingSig == sig &&
+                                cellSignature(exploredArea, gc, segmentId, dataLevel, session) == sig) {
+                            replace(cache, ready == null ? null : cellTexture(ready), sig, worldSeq);
+                            updatesLeft--;
+                        }
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                    } catch (ExecutionException | CancellationException failed) {
+                        // Retry the current cell on a later frame.
+                    }
+                    cache.pending = null;
+                }
+                if (cache.valid && cache.sig == sig && cache.pending == null) {
                     cache.worldSeq = worldSeq;
-                    cache.lastAccess = accessCounter.incrementAndGet();
                     blit(g, cache.img, ul, br.sub(ul));
                     continue;
                 }
-                Tex img = buildCell(exploredArea, gc, segmentId, dataLevel, session, color);
-                store(key, cache, img, sig, worldSeq);
-                blit(g, img, ul, br.sub(ul));
+                if (cache.pending != null && cache.pendingSig != sig) {
+                    cache.pending.cancel(false);
+                    cache.pending = null;
+                }
+                if (cache.pending == null && submissionsLeft > 0 &&
+                        rasterizer.getQueue().remainingCapacity() > 0) {
+                    Coord cell = new Coord(gc);
+                    List<MaskPart> snapshot = snapshotCell(exploredArea, cell, segmentId, dataLevel, session);
+                    try {
+                        cache.pending = rasterizer.submit(() -> buildCellImage(snapshot, cell, dataLevel, color));
+                        cache.pendingSig = sig;
+                        submissionsLeft--;
+                    } catch (RejectedExecutionException busy) {
+                        // The bounded queue will accept this visible cell on a later frame.
+                    }
+                }
+                blit(g, cache.img, ul, br.sub(ul));
             }
         } finally {
             g.chcolor();
@@ -183,24 +229,38 @@ public class MinimapExploredAreaRenderer {
         return sig;
     }
 
-    private static Tex buildCell(ExploredArea exploredArea, Coord cell, long segmentId, int dataLevel, boolean session, Color color) {
-        int tiles = MCache.cmaps.x;
-        boolean[] cover = new boolean[tiles * tiles];
+    private static class MaskPart {
+        final int gx, gy;
+        final boolean[] mask;
+        MaskPart(int gx, int gy, boolean[] mask) {this.gx = gx; this.gy = gy; this.mask = mask;}
+    }
+
+    private static List<MaskPart> snapshotCell(ExploredArea exploredArea, Coord cell,
+                                                long segmentId, int dataLevel, boolean session) {
+        List<MaskPart> parts = new ArrayList<>();
         int step = 1 << dataLevel;
-        int originX = cell.x * step;
-        int originY = cell.y * step;
-        boolean any = false;
+        int originX = cell.x * step, originY = cell.y * step;
         for (int by = 0; by < step; by++) {
             for (int bx = 0; bx < step; bx++) {
+                int gx = originX + bx, gy = originY + by;
                 ExploredArea.GridMask grid = session
-                        ? exploredArea.getSessionMaskForGrid(new Coord(originX + bx, originY + by), segmentId)
-                        : exploredArea.getExploredMaskForGrid(new Coord(originX + bx, originY + by), segmentId, 0);
-                if (grid == null || !grid.hasAny || grid.mask == null)
-                    continue;
-                if (paintMask(cover, tiles, dataLevel, cell, originX + bx, originY + by, grid.mask))
-                    any = true;
+                        ? exploredArea.getSessionMaskForGrid(new Coord(gx, gy), segmentId)
+                        : exploredArea.getExploredMaskForGrid(new Coord(gx, gy), segmentId, 0);
+                if (grid != null && grid.hasAny && grid.mask != null)
+                    parts.add(new MaskPart(gx, gy, grid.mask.clone()));
             }
         }
+        return parts;
+    }
+
+    private static BufferedImage buildCellImage(List<MaskPart> parts, Coord cell,
+                                                 int dataLevel, Color color) {
+        int tiles = MCache.cmaps.x;
+        boolean[] cover = new boolean[tiles * tiles];
+        boolean any = false;
+        for (MaskPart part : parts)
+            if (paintMask(cover, tiles, dataLevel, cell, part.gx, part.gy, part.mask))
+                any = true;
         if (!any)
             return null;
         WritableRaster buf = PUtils.imgraster(MCache.cmaps);
@@ -218,7 +278,7 @@ public class MinimapExploredAreaRenderer {
             raw[o + 2] = b;
             raw[o + 3] = a;
         }
-        return cellTexture(PUtils.rasterimg(buf));
+        return PUtils.rasterimg(buf);
     }
 
     static TexI cellTexture(BufferedImage image) {
@@ -275,7 +335,14 @@ public class MinimapExploredAreaRenderer {
         Tex img;
         long sig;
         long worldSeq;
-        long lastAccess;
+        boolean valid;
+        java.util.concurrent.Future<BufferedImage> pending;
+        long pendingSig;
+
+        void dispose() {
+            if (pending != null) pending.cancel(false);
+            if (img != null) img.dispose();
+        }
     }
 
     private static final class CacheKey {
@@ -285,7 +352,7 @@ public class MinimapExploredAreaRenderer {
         final boolean session;
 
         CacheKey(Coord cell, long segmentId, int dataLevel, boolean session) {
-            this.cell = cell;
+            this.cell = new Coord(cell);
             this.segmentId = segmentId;
             this.dataLevel = dataLevel;
             this.session = session;
@@ -308,52 +375,36 @@ public class MinimapExploredAreaRenderer {
         }
     }
 
-    private static final ConcurrentHashMap<CacheKey, OverlayCache> overlayCache = new ConcurrentHashMap<>();
-    private static final AtomicLong accessCounter = new AtomicLong(0);
-
     public static void clearCaches() {
-        for (OverlayCache entry : overlayCache.values()) {
-            if (entry.img != null) {
-                try { entry.img.dispose(); } catch (Exception ignore) {}
-            }
+        synchronized(instances) {
+            for(MinimapExploredAreaRenderer renderer : instances)
+                renderer.dispose();
         }
-        overlayCache.clear();
     }
 
-    private static void store(CacheKey key, OverlayCache cache, Tex img, long sig, long worldSeq) {
-        if (cache != null && cache.img != null && cache.img != img) {
-            try { cache.img.dispose(); } catch (Exception ignore) {}
-        }
-        if (cache == null) {
-            cache = new OverlayCache();
-            overlayCache.put(key, cache);
-        }
+    private void replace(OverlayCache cache, Tex img, long sig, long worldSeq) {
+        if (cache.img != null && cache.img != img)
+            cache.img.dispose();
         cache.img = img;
         cache.sig = sig;
         cache.worldSeq = worldSeq;
-        cache.lastAccess = accessCounter.incrementAndGet();
-        evictIfNeeded();
+        cache.valid = true;
     }
 
-    private static void evictIfNeeded() {
-        if (overlayCache.size() <= MAX_CACHE_SIZE) return;
-        int toRemove = overlayCache.size() - MAX_CACHE_SIZE + MAX_CACHE_SIZE / 4;
-        long minAccess = Long.MAX_VALUE;
-        for (OverlayCache v : overlayCache.values()) {
-            if (v.lastAccess < minAccess) minAccess = v.lastAccess;
+    private void evictIfNeeded() {
+        while(overlayCache.size() > MAX_CACHE_SIZE) {
+            Iterator<OverlayCache> it = overlayCache.values().iterator();
+            OverlayCache eldest = it.next();
+            it.remove();
+            eldest.dispose();
         }
-        long threshold = minAccess + (accessCounter.get() - minAccess) / 2;
-        int removed = 0;
-        Iterator<Map.Entry<CacheKey, OverlayCache>> it = overlayCache.entrySet().iterator();
-        while (it.hasNext() && removed < toRemove) {
-            OverlayCache entry = it.next().getValue();
-            if (entry.lastAccess <= threshold) {
-                if (entry.img != null) {
-                    try { entry.img.dispose(); } catch (Exception ignore) {}
-                }
-                it.remove();
-                removed++;
-            }
-        }
+    }
+
+    private void beginFrame() {updatesLeft = 2; submissionsLeft = 2;}
+
+    public synchronized void dispose() {
+        for(OverlayCache cache : overlayCache.values()) cache.dispose();
+        overlayCache.clear();
+        source = null;
     }
 }

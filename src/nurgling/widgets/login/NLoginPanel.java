@@ -80,8 +80,10 @@ public class NLoginPanel extends Widget {
         obf.a = Boolean.TRUE.equals(NConfig.get(NConfig.Key.alwaysObfuscate));
         obf.settip(L10n.get("login.obfuscate_tip"), true);
         obf.changed = a -> NConfig.set(NConfig.Key.alwaysObfuscate, a);
-        prog = add(new Progress()); keyhint = add(new ILabel(L10n.get("login.keys_hint"), NLoginTheme.hint));
-        forget = add(new Button(UI.scale(80), L10n.get("login.forget_me"), this::forgetcur));
+        prog = add(new Progress());
+        keyhint = add(new ILabel(L10n.get("login.keys_hint"), NLoginTheme.hint));
+        // New UI: a matching pair of action buttons.
+        forget = add(new Button(UI.scale(nurgling.styles.UITheme.on() ? 110 : 80), L10n.get("login.forget_me"), this::forgetcur));
         loginbtn = add(new Button(UI.scale(110), L10n.get("login.button"), this::enter));
         int running = SessionManager.getInstance().getAllSessions().size();
         if (running > 0) info.set(L10n.get("login.adding_session", running));

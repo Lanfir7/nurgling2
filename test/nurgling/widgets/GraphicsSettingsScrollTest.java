@@ -24,6 +24,9 @@ class GraphicsSettingsScrollTest {
             try {
                 for(int height : new int[] {540, 300}) {
                     GraphicsSettings panel = new GraphicsSettings();
+                    for(nurgling.widgets.nsettings.CollapsibleSection section :
+                            panel.children(nurgling.widgets.nsettings.CollapsibleSection.class))
+                        section.setExpanded(true);
                     Scrollport page = new Scrollport(UI.scale(545, height));
                     SettingsPageFrame frame = new SettingsPageFrame(panel, null);
                     page.cont.add(frame, Coord.z);
@@ -36,8 +39,9 @@ class GraphicsSettingsScrollTest {
 
                     assertTrue(positionWithin(lastEffect, panel).y > page.sz.y,
                             "The final option must exercise scrolling at this viewport height");
-                    assertTrue(page.bar.max > 0, "The page must scroll to reveal lower options");
-                    page.bar.ch(page.bar.max);
+                    Scrollport graphicsScroll = panel.children(Scrollport.class).iterator().next();
+                    assertTrue(graphicsScroll.bar.max > 0, "The graphics page must scroll to reveal lower options");
+                    graphicsScroll.bar.ch(graphicsScroll.bar.max);
                     assertTrue(fullyVisibleWithin(lastEffect, page),
                             "The final option must be visible when the page scrollbar reaches its end");
                     for(Widget control : panel.children(Widget.class)) {

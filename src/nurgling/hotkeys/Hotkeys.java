@@ -90,6 +90,9 @@ public final class Hotkeys {
     public static final String WORLD_SURVEY_NEW_SELECTION = "world.survey.new_selection";
     public static final String WINDOW_DB_STATS_TOGGLE = "window.db_stats.toggle";
     public static final String WINDOW_AGENT_TOGGLE = "window.agent.toggle";
+    public static final String WIKI_CRAFT_ATLAS = "craft-wiki-atlas";
+    public static final String MOVEMENT_TRACE = "movement-trace";
+    public static final String FPS_GRAPH = "fps-graph";
     public static final String PHOTO_MODE = "photo-mode";
     public static final String TIMER_QUICK_ADD = "timers_quickadd";
     public static final String WINDOW_RESOURCE_TIMERS_REFRESH = "window.resource_timers.refresh";

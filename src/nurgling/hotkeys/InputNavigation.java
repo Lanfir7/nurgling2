@@ -11,6 +11,9 @@ public final class InputNavigation {
     public static boolean confirm(int code) { return code == KeyEvent.VK_ENTER; }
     public static boolean previousRow(int code) { return code == KeyEvent.VK_UP; }
     public static boolean nextRow(int code) { return code == KeyEvent.VK_DOWN; }
+    public static boolean delete(int code) { return code == KeyEvent.VK_DELETE; }
+    public static boolean undo(int code, int mods) { return (mods & KeyMatch.C) != 0 && code == KeyEvent.VK_Z; }
+    public static boolean redo(int code, int mods) { return (mods & KeyMatch.C) != 0 && code == KeyEvent.VK_Y; }
     public static boolean tooltipModifier(int code) { return code == KeyEvent.VK_SHIFT; }
     public static boolean expandedTooltip(UI ui) { return ui != null && ui.modshift; }
     public static boolean photoApertureModifier(UI ui) { return ui != null && ui.modshift; }
