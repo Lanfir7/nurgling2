@@ -238,6 +238,21 @@ public abstract class PView extends Widget {
 	}
     }
 
+    /* Nurgling: edge-aware upscaling (a graphics option). */
+    private class FsrResampler extends Resampler {
+	private final nurgling.render.Temporal.Upscaler upscaler = new nurgling.render.Temporal.Upscaler();
+	FsrResampler(Coord isz, Coord osz) {super(isz, osz);}
+
+	public void run(GOut g, Texture2D.Sampler2D in) {
+	    upscaler.upscale(g, in);
+	}
+
+	public void dispose() {
+	    upscaler.dispose();
+	    super.dispose();
+	}
+    }
+
     private GOut resolveout(GOut def, FrameFormat fmt, PostProcessor next) {
 	if(next == null)
 	    return(def);
@@ -260,10 +275,13 @@ public abstract class PView extends Widget {
     protected void resolve(GOut g) {
 	List<PostProcessor> copy = new ArrayList<PostProcessor>(ctx.postproc());
 	if(!rsz.equals(this.sz)) {
-	    if((pp_resamp == null) || !pp_resamp.isz.equals(rsz) || !pp_resamp.osz.equals(this.sz)) {
+	    boolean fsr = nurgling.render.Temporal.upscale && (this.sz.x > rsz.x);
+	    if((pp_resamp == null) || !pp_resamp.isz.equals(rsz) || !pp_resamp.osz.equals(this.sz) || ((pp_resamp instanceof FsrResampler) != fsr)) {
 		if(pp_resamp != null)
 		    pp_resamp.dispose();
-		if(this.sz.x > rsz.x) {
+		if(fsr) {
+		    pp_resamp = new FsrResampler(rsz, this.sz);
+		} else if(this.sz.x > rsz.x) {
 		    int iscale = (this.sz.x + (rsz.x >> 1)) / rsz.x;
 		    if((Math.abs((rsz.x * iscale) - this.sz.x) < iscale))
 			pp_resamp = new IntResampler(rsz, this.sz, iscale);
@@ -371,6 +389,10 @@ public abstract class PView extends Widget {
 
     public void dispose() {
 	disposed = true;
+	if(pp_resamp != null) {
+	    pp_resamp.dispose();
+	    pp_resamp = null;
+	}
 	if(audio != null) {
 	    audio.clear();
 	}

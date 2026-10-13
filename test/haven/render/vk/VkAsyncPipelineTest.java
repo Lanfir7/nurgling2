@@ -29,7 +29,7 @@ class VkAsyncPipelineTest {
         boolean immediateDuplicate;
         PipeKey duplicateKey;
 
-        private TestProgram() {super(null, null);}
+        private TestProgram() {super(null, null, null, null);}
 
         @Override long createPipeline(PipeKey key) {
             if(immediateDuplicate && Thread.currentThread() == caller) {

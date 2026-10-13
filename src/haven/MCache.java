@@ -1025,13 +1025,10 @@ public class MCache implements MapSource {
 	    }
 	}
 
-	public RenderTree.Node getnolcut(Integer id, Coord cc) {
-		// Cache getGameUI() result to avoid race conditions during session switching
-		nurgling.NGameUI gui = NUtils.getGameUI();
-		if(gui == null || gui.map == null || !(gui.map instanceof nurgling.NMapView))
+	public RenderTree.Node getnolcut(NOverlay nol, Coord cc) {
+		if (nol == null)
 			return null;
-		nurgling.NMapView mapView = (nurgling.NMapView) gui.map;
-		NOverlay nol = mapView.nols.get(id);
+		Integer id = nol.id;
 		if((areas.get(id)!= null && areas.get(id).grids_id.contains(this.id)) || NMapView.isCustom(id))
 		{
 			Cut cut = geticut(cc);
@@ -1077,11 +1074,11 @@ public class MCache implements MapSource {
 	    }
 	}
 
-	public RenderTree.Node getnedgecut(Integer id, Coord cc) {
-		getnolcut(id, cc);
+	public RenderTree.Node getnedgecut(NOverlay nol, Coord cc) {
+		getnolcut(nol, cc);
 		Cut cut = geticut(cc);
 		synchronized(cut) {
-			return(cut.nedgs.get(id));
+			return(cut.nedgs.get(nol.id));
 		}
 	}
 
@@ -1713,15 +1710,15 @@ public class MCache implements MapSource {
 	}
     }
 
-	public RenderTree.Node getnolcut(Integer id, Coord cc) {
+	public RenderTree.Node getnolcut(NOverlay nol, Coord cc) {
 		synchronized(grids) {
-			return(getgrid(cc.div(cutn)).getnolcut(id, cc.mod(cutn)));
+			return(getgrid(cc.div(cutn)).getnolcut(nol, cc.mod(cutn)));
 		}
 	}
 
-	public RenderTree.Node getnedgecut(Integer id, Coord cc) {
+	public RenderTree.Node getnedgecut(NOverlay nol, Coord cc) {
 		synchronized(grids) {
-			return(getgrid(cc.div(cutn)).getnedgecut(id, cc.mod(cutn)));
+			return(getgrid(cc.div(cutn)).getnedgecut(nol, cc.mod(cutn)));
 		}
 	}
 

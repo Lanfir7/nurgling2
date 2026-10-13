@@ -12,7 +12,7 @@ public class NOverlay extends MapView.MapRaster
 {
     private static final long REFRESH_INTERVAL_NANOS = 200_000_000L;
 
-    final Integer id;
+    public final Integer id;
     private long cacheRevision = 0;
     private final NOverlayRefreshPolicy refreshPolicy =
             new NOverlayRefreshPolicy(REFRESH_INTERVAL_NANOS);
@@ -31,12 +31,12 @@ public class NOverlay extends MapView.MapRaster
     Color bc;
     public final Grid base = new Grid<RenderTree.Node>() {
         public RenderTree.Node getcut(Coord cc) {
-            return(map.getnolcut(id, cc));
+            return(map.getnolcut(NOverlay.this, cc));
         }
     };
     public final Grid outl = new Grid<RenderTree.Node>() {
         public RenderTree.Node getcut(Coord cc) {
-            return(map.getnedgecut(id, cc));
+            return(map.getnedgecut(NOverlay.this, cc));
         }
     };
 
@@ -150,7 +150,9 @@ public class NOverlay extends MapView.MapRaster
                 Coord gc = t.add(mm.ul);
                 if(curArea.contains(gc))
                 {
-                    mm.map.tiler(mm.map.gettile(gc)).lay(mm, t, gc, buf, false);
+                    Tiler tl = mm.map.tiler(mm.map.gettile(gc));
+                    if(tl != null)
+                        tl.lay(mm, t, gc, buf, false);
                 }
             }
         }
@@ -215,8 +217,11 @@ public class NOverlay extends MapView.MapRaster
                     if(!fullarea.contains(t.add(Coord.uecw[d])))
                         buf.mask |= 1 << d;
                 }
-                if(buf.mask != 0)
-                    mm.map.tiler(mm.map.gettile(t)).lay(mm, t.sub(a.ul), t, buf, false);
+                if(buf.mask != 0) {
+                    Tiler tl = mm.map.tiler(mm.map.gettile(t));
+                    if(tl != null)
+                        tl.lay(mm, t.sub(a.ul), t, buf, false);
+                }
             }
         }
         if(buf.fn == 0)

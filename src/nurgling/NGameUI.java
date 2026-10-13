@@ -1031,6 +1031,8 @@ public class NGameUI extends GameUI
 
     @Override
     public void destroy() {
+        if (nurgling.render.Photo.active(map))
+            photomode(false);
         lootNotices.dispose();
         super.destroy();
     }
@@ -1928,11 +1930,47 @@ public class NGameUI extends GameUI
         return false;
     }
 
+    /* Photo mode (a graphics option, Vulkan only): hides the
+     * interface for screenshots; see nurgling.render.Photo. */
+    public static final KeyBinding kb_photo = KeyBinding.get(Hotkeys.PHOTO_MODE, KeyMatch.forchar('P', KeyMatch.C | KeyMatch.S));
+    private final java.util.List<Widget> photohidden = new java.util.ArrayList<>();
+
+    public void photomode(boolean on) {
+        if (on == nurgling.render.Photo.active(map))
+            return;
+        if (on) {
+            if ((ui == null) || !nurgling.render.NGfx.supported(ui.getenv())) {
+                msg(nurgling.i18n.L10n.get("photo.novulkan"));
+                return;
+            }
+            nurgling.render.Photo.stop();
+            photohidden.clear();
+            for (Widget w = child; w != null; w = w.next) {
+                if ((w != map) && w.visible) {
+                    photohidden.add(w);
+                    w.hide();
+                }
+            }
+            nurgling.render.Photo.enter(map, () -> photomode(false));
+            if (map != null)
+                setfocus(map);
+        } else {
+            nurgling.render.Photo.leave(map);
+            for (Widget w : photohidden)
+                w.show();
+            photohidden.clear();
+        }
+    }
+
     @Override
     public boolean globtype(GlobKeyEvent ev) {
         if (Hotkeys.matchesKey(Hotkeys.SESSION_STOP_MACROS, ev.awt)) {
             if (biw != null)
                 biw.interruptAll();
+            return true;
+        }
+        if (Hotkeys.matchesKey(Hotkeys.PHOTO_MODE, ev.awt)) {
+            photomode(!nurgling.render.Photo.active(map));
             return true;
         }
         nurgling.sessions.SessionManager sm = nurgling.sessions.SessionManager.getInstance();

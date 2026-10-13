@@ -561,7 +561,7 @@ public class VkDrawList implements DrawList {
 		shash ^= System.identityHashCode(shaders[i]);
 	    }
 	    this.deferred = RenderPreparation.deferred(bk);
-	    this.prog = deferred ? env.getprogAsync(shash, shaders) : env.getprog(shash, shaders);
+	    VkProgram prog = this.prog = deferred ? env.getprogAsync(shash, shaders) : env.getprog(shash, shaders);
 	    prog.lock();
 	    this.unis = new UniformSetting[prog.uniforms.length];
 	    this.uboa = (prog.ubosize > 0) ? new byte[prog.ubosize] : null;
@@ -679,7 +679,8 @@ public class VkDrawList implements DrawList {
 	    }
 	    if(geo != null)
 		geo.put();
-	    prog.unlock();
+	    if(prog != null)
+		prog.unlock();
 	}
 
 	void dispose() {

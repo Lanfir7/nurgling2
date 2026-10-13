@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-upstream-graphics",
+  "priority": 7,
+  "summary": {
+    "ru": "В настройках графики появились новые эффекты, сглаживание TAA и фоторежим для Vulkan.",
+    "en": "Graphics settings gain new effects, TAA and a photo mode for Vulkan."
+  },
+  "detail": {
+    "ru": "В настройках графики можно включить новые эффекты окружения, сглаживание TAA и улучшенное масштабирование. Фоторежим скрывает интерфейс для снимка: Ctrl+Shift+P включает его, Esc возвращает игру, щелчок задаёт фокус. Исправлена работа оверлеев карты при нескольких открытых сессиях; наши настройки и подсветка опор сохранены.",
+    "en": "Graphics settings offer new environment effects, TAA and improved upscaling. Photo mode hides the interface for screenshots: Ctrl+Shift+P enables it, Esc returns to play, and a click sets focus. Map overlays work correctly across multiple open sessions; existing settings and support highlighting are preserved."
+  }
+}
