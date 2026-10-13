@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-forager-independent-tree-actions",
+  "priority": 4,
+  "summary": {
+    "ru": "Сборщик собирает оливковые ветви и выполняет отдельные действия с деревом даже без плодов.",
+    "en": "Forager collects olive branches and performs independent tree actions even without fruit."
+  },
+  "detail": {
+    "ru": "В сборщике проверка наличия плодов применяется к сбору предметов через меню дерева. Она больше не мешает собирать оливковые ветви, использовать правый клик и выполнять вручную настроенные действия без выбранного предмета. Проверка листвы и плодов для обычного списка сбора сохранена.",
+    "en": "Forager checks fruit availability for item pickups through the tree menu. This no longer prevents collecting olive branches, right-clicking a tree, or running manually configured actions without a selected item. Leaf and fruit availability checks remain active for the normal pickup list."
+  }
+}

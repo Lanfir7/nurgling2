@@ -753,6 +753,8 @@ public class Forager implements Action {
     static boolean leafTargetReady(ForagerAction action, Gob gob) {
         if (action == null || gob == null || gob.ngob == null || !HarvestState.isTreeOrBushRes(gob.ngob.name))
             return true;
+        if (action.actionType != ForagerAction.ActionType.FLOWER_ACTION)
+            return true;
         boolean leaves = HarvestState.tracksLiveLeaves(action.sourceItemName, action.sourceItemResource, action.actionName);
         boolean fruit = HarvestState.tracksLiveFruit(action.sourceItemName, action.sourceItemResource, action.actionName, action.targetObjectPattern);
         if (!leaves && !fruit)

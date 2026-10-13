@@ -57,6 +57,33 @@ class ForagerLeafTargetTest {
     }
 
     @Test
+    void oliveBranchDoesNotRequireOlives() {
+        Gob olive = gob("gfx/terobjs/trees/olivetree");
+        ForagerAction branch = new ForagerAction("gfx/terobjs/trees/olivetree", ForagerAction.ActionType.FLOWER_ACTION, "Pick branch");
+        branch.sourceItemName = "Olive Branch";
+        branch.sourceItemResource = "gfx/invobjs/olivebranch";
+
+        assertTrue(Forager.leafTargetReady(branch, olive));
+    }
+
+    @Test
+    void manualTreeActionsDoNotRequireFruit() {
+        Gob apple = gob("gfx/terobjs/trees/appletree");
+        assertTrue(Forager.leafTargetReady(new ForagerAction("gfx/terobjs/trees/appletree", ForagerAction.ActionType.RIGHT_CLICK), apple));
+        assertTrue(Forager.leafTargetReady(new ForagerAction("gfx/terobjs/trees/appletree", ForagerAction.ActionType.FLOWER_ACTION, "Inspect"), apple));
+    }
+
+    @Test
+    void explicitRightClickDoesNotBecomeAFruitPickup() {
+        Gob apple = gob("gfx/terobjs/trees/appletree");
+        ForagerAction action = new ForagerAction("gfx/terobjs/trees/appletree", ForagerAction.ActionType.RIGHT_CLICK);
+        action.sourceItemName = "Red Apple";
+        action.sourceItemResource = "gfx/invobjs/apple";
+
+        assertTrue(Forager.leafTargetReady(action, apple));
+    }
+
+    @Test
     void knownLeafIconCountsEvenWithoutTheWordInTheAction() {
         Gob maple = gob("gfx/terobjs/trees/maple");
         ForagerAction leaves = new ForagerAction("gfx/terobjs/trees/maple", ForagerAction.ActionType.FLOWER_ACTION, "Pick");

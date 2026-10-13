@@ -264,10 +264,12 @@ public class HarvestState {
      * leaves are not gated by that bit. Display-only: callers still check the gob itself.
      */
     public static boolean tracksLiveFruit(String itemName, String itemResource, String actionName, String targetPattern) {
+        if ((itemName == null || itemName.isEmpty()) && (itemResource == null || itemResource.isEmpty())) return false;
         if (tracksLiveLeaves(itemName, itemResource, actionName)) return false;
         if (isBarkProductName(itemName)) return false;
         if (mentions(itemName, "bark") || mentions(actionName, "bark") || mentions(itemResource, "bark")) return false;
         if (mentions(itemName, "bough") || mentions(actionName, "bough") || mentions(itemResource, "bough")) return false;
+        if (mentions(itemName, "branch") || mentions(actionName, "branch") || mentions(itemResource, "branch")) return false;
         return patternHasTreeOrBush(targetPattern);
     }
 
