@@ -235,9 +235,139 @@
     "2026-10-05-foraging-search-reopen",
     "2026-10-05-merged-pouches",
     "2026-10-05-quarryartz-search-l10n",
-    "2026-10-06-forager-leaf-trees"
+    "2026-10-06-forager-fruit-river",
+    "2026-10-06-forager-leaf-trees",
+    "2026-10-06-wicker-picker-free-inventory",
+    "2026-10-07-htable-wall-hitbox",
+    "2026-10-13-area-folders",
+    "2026-10-13-area-mover",
+    "2026-10-13-area-presets",
+    "2026-10-13-cookbook-variations",
+    "2026-10-13-forage-finds-carrier-spacing",
+    "2026-10-13-forager-independent-tree-actions",
+    "2026-10-13-interface-movement-planner",
+    "2026-10-13-leaf-zone",
+    "2026-10-13-main-menu-settings",
+    "2026-10-13-map-mark-clustering",
+    "2026-10-13-smokering-farmer",
+    "2026-10-13-storage-tracking-tabs",
+    "2026-10-13-swill-piles",
+    "2026-10-13-tree-planter-stacks",
+    "2026-10-13-tunnel-frames",
+    "2026-10-13-unbox-buffer",
+    "2026-10-13-unified-timers",
+    "2026-10-13-upstream-graphics",
+    "2026-10-13-village-storage"
   ],
   "releases": [
+    {
+      "id": "2.103.226",
+      "date": "2026-10-13",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Сохраняйте группы зон как шаблоны и размещайте их в другом месте.",
+          "Книга рецептов показывает неопробованные варианты и наличие ингредиентов на складе деревни.",
+          "Склад учитывает кучи и содержимое бочек, предлагает вкладки и сохраняет учёт перенесённых контейнеров.",
+          "В окне таймеров появились напоминания, метки на карте и сроки задач To-Do.",
+          "В настройках графики появились новые эффекты, сглаживание TAA и фоторежим для Vulkan.",
+          "Сборщик не идёт к дереву без плодов и не застревает на цели за глубокой водой.",
+          "Папки зон теперь можно переносить вместе с содержимым и отменять перенос.",
+          "Новый переносчик опустошает кучи и контейнеры между выбранными зонами, сохраняя личные вещи.",
+          "Карта запоминает добытые находки с качеством, а переносчик умеет оставлять промежутки между предметами.",
+          "Обновлено оформление интерфейса, улучшена плавность движения и добавлен планировщик крафта по вики.",
+          "Близкие метки руды, самоцветов и камня можно группировать на карте.",
+          "Новый бот ловит дымные кольца и кораблики, пополняя табак в трубке.",
+          "Тоннелирование поддерживает деревянные, усиленные и каменные рамные опоры.",
+          "Стол травника и стенки домов с подвалами занимают свой настоящий контур.",
+          "Новый бот переносит пойло из куч в кормушки.",
+          "Посадка по чертежу собирает готовые горшки партиями и не берёт семена без свободного горшка.",
+          "Список хранилищ теперь можно ограничить своей деревней.",
+          "Корзинки Wicker Picker на поясе видны справа в инвентаре и выгружаются как сумки охотника.",
+          "Сборщик собирает оливковые ветви и выполняет отдельные действия с деревом даже без плодов.",
+          "Сборщик листьев работает в области Trees («Деревья») и доставляет листья в подходящие PUT-зоны.",
+          "Кнопка настроек снова видна в главном меню.",
+          "Зону распаковки можно использовать как склад-буфер без возврата выгружаемых вещей обратно."
+        ],
+        "en": [
+          "Save groups of areas as presets and place them elsewhere.",
+          "The cookbook shows untried variations and which ingredients are in village storage.",
+          "Storage tracks piles and barrel contents, offers tabs and follows moved containers.",
+          "The timer panel now includes reminders, map pins and To-Do deadlines.",
+          "Graphics settings gain new effects, TAA and a photo mode for Vulkan.",
+          "Forager skips a tree with no fruit and no longer gets stuck on a target across deep water.",
+          "Area folders can now be moved with their contents, and moves can be undone.",
+          "A new mover empties piles and containers between selected areas while keeping personal items.",
+          "The map remembers picked forageables with quality, and the carrier can leave gaps between placed objects.",
+          "Updated interface styling, smoother movement and a wiki crafting planner.",
+          "Nearby ore, gem and stone marks can be grouped on the map.",
+          "A new bot catches smoke rings and ships while refilling your pipe.",
+          "Tunneling now supports timber, reinforced and stone arch frames.",
+          "The herbalist table and house or cellar walls use their real outline.",
+          "A new bot carries swill from stockpiles to troughs.",
+          "Blueprint planting collects ready pots in batches and does not fetch seeds without an empty pot.",
+          "The storage list can now show only your village.",
+          "Belt Wicker Pickers now show in the inventory sidebar and empty like hunter pouches.",
+          "Forager collects olive branches and performs independent tree actions even without fruit.",
+          "A zone leaf picker gathers leaves in a Trees area and delivers them to matching PUT areas.",
+          "The settings button is visible in the main menu again.",
+          "An Unbox zone can serve as a storage buffer without receiving its own unloaded items again."
+        ]
+      },
+      "details": {
+        "ru": [
+          "Откройте окно зон и нажмите «Шаблоны». Выбирайте готовые схемы или сохраняйте свои зоны; перед размещением на карте поворачивайте и отражайте схему. Сохраняются папки, правила зон, направление заполнения и показ качества.",
+          "Откройте книгу рецептов и нажмите ПКМ на блюде, чтобы увидеть неопробованные сочетания. Зелёная рамка означает, что все перечисленные виды ингредиентов есть на складе деревни; количество для приготовления не проверяется. Щелчок по рецепту открывает ремесло и подставляет подходящие ингредиенты.",
+          "В окне склада доступны настраиваемые вкладки с иконками и прежний список с расстояниями, фильтрами качества и удалением записей. Жидкости отображаются в своих единицах; забирать их нужно вручную подходящей ёмкостью. Перенос контейнера обновляет его адрес в учёте. У ботов появились перетаскиваемые индикаторы с текущим действием, ожиданием и остановкой; прежнее управление ботами сохранено.",
+          "Откройте «Таймеры» кнопкой миникарты: здесь собраны ресурсы, напоминания и метки. Таймер можно повторить, отложить или скрыть только для себя; общие таймеры доступны деревне. В To-Do можно назначать сроки задач. Прежние таймеры сохраняют положение, значки и автоудаление, включая автоматически созданные таймеры ресурсов и костров BoughBee.",
+          "В настройках графики можно включить новые эффекты окружения, сглаживание TAA и улучшенное масштабирование. Фоторежим скрывает интерфейс для снимка: Ctrl+Shift+P включает его, Esc возвращает игру, щелчок задаёт фокус. Исправлена работа оверлеев карты при нескольких открытых сессиях; наши настройки и подсветка опор сохранены.",
+          "Плоды он проверяет так же, как листву: подходит только если значок урожая на дереве их показывает. Цель, до которой по прямой лежит глубокая вода, он больше не выбирает и не ищет путь вокруг реки без конца. Мелкая вода по-прежнему проходима, в лодке глубокая вода не мешает.",
+          "В окне зон перетаскивайте зоны и папки или выберите «Переместить в…» в меню строки. Путь над списком помогает перейти в нужную папку; Ctrl+Z отменяет перенос до следующего изменения папок.",
+          "В меню ботов выберите «Перенос между зонами» и задайте зоны либо выделите их на карте. Бот заполняет подходящие кучи и контейнеры, при необходимости создаёт кучи и останавливается при заполнении назначения. Личные вещи, включая содержимое сумок, защищены; если стопка пересоздала личную вещь, предметы этого типа остаются у игрока. Перенос доступен и шагом сценария.",
+          "В «Инструментах карты» можно включить запись находок и открыть поиск по названию, качеству и дате. Выбор результата переводит карту к месту сбора; при подключённой БД находки доступны деревне. Наши прежние метки и их фильтры сохранены. В окне переносчика появился интервал между расставляемыми предметами: 0 оставляет плотную расстановку, 11 соответствует одной клетке.",
+          "Оформление окон переключается в настройках. Отдельная кнопка атласа в главном меню открывает рецепты вики и расчёт цепочек производства; прежняя энциклопедия и компас доступны как раньше. График времени кадров открывается Ctrl+F10, запись диагностики движения — Ctrl+F9. Слой исследованной карты обновляется в фоне. Добавлены импорт друзей и улучшения эффектов Vulkan.",
+          "Откройте «Инструменты карты» и включите «Группировать метки добычи». На общей метке видно количество находок и качество лучшей; щелчок правой кнопкой открывает действия для группы.",
+          "Наденьте бычью трубку и откройте бота «Фермер дымных колец» в разделе производства. Назначьте выходные области для Smokering и Smokeship и входную область с бочкой Pipestuff. Бот ловит появления, относит улов, возвращается на место и снимает трубку, когда здоровье падает ниже 50%. Если инвентарь полон, трубка может остаться в руке.",
+          "В окне тоннелирования выберите рамную опору: бот проходит по её защищённой ширине и ставит следующую раму перед продолжением. Для широких рам можно оставить только центральный проход. Сохранены прежние обычные опоры, двойной тоннель и настройки. Исправлена работа границы проходки при отрицательных координатах; перед добычей проверяется фактическая защита клеток.",
+          "Хитбокс стола травника совпадает со столешницей, а не с более длинным прямоугольником. Край дома и стенки подвала лежат на земле вдоль самой стены и учитываются при расстановке, поэтому вещи не ставятся в стену. Привязка к соседям и по граням ставит предмет вплотную к этому контуру.",
+          "В меню ботов выберите «Кучи пойла в кормушки». Отметьте кучи специализацией «Swill stockpiles», а кормушки — зоной «Trough for swill». Бот собирает пойло из всех доступных отмеченных зон, кормит животных и может освобождать полные кормушки через цистерну в зоне «Swill». Его можно добавить шагом сценария.",
+          "Бот посадки деревьев по чертежу забирает со стола сразу нужные готовые горшки с учётом места в инвентаре. При подготовке рассады сначала проверяет пустой горшок, чтобы не оставлять лишние семена и землю. Готовые саженцы не используются как пустые горшки. Добавлен правильный учёт стопок Adder’s Lying Tongue; наши остальные правила стопок сохранены.",
+          "В окне хранимых предметов включён фильтр «Только моя деревня»: он показывает вещи в связанной сети записанных участков с наибольшим числом ваших зон, включая дома и погреба. Снимите флажок, чтобы снова увидеть все хранилища. Если деревня ещё не определена, список остаётся полным.",
+          "Содержимое корзинок Wicker Picker на поясе появляется в расширенном списке справа, как у сумок охотника и семенных мешков. Сами корзинки строку не занимают. «Освободить инвентарь» забирает эти вещи по тем же правилам, корзинки остаются надетыми.",
+          "В сборщике проверка наличия плодов применяется к сбору предметов через меню дерева. Она больше не мешает собирать оливковые ветви, использовать правый клик и выполнять вручную настроенные действия без выбранного предмета. Проверка листвы и плодов для обычного списка сбора сохранена.",
+          "Назначьте области специализацию Trees («Деревья») и запустите «Сборщик листьев (зоны)» в меню ботов. Он выбирает зрелые деревья и кусты с листьями, пропускает виды без подходящей PUT-зоны и доставляет сбор с учётом качества. Обычный сборщик листьев остаётся доступен.",
+          "Кнопка «Что нового» больше не перекрывает настройки: она находится справа в верхнем ряду, над списком дел. Настройки остались на прежнем месте, слева от новостей.",
+          "При разгрузке зоны со специализацией Unbox бот исключает эту же зону из получателей PUT. Теперь ей можно задать правила хранения для временного буфера: при распаковке вещи уходят в другие подходящие зоны и не возвращаются в исходные контейнеры."
+        ],
+        "en": [
+          "Open Areas and choose Presets. Use a bundled layout or save your own areas, then rotate or mirror it before placing it on the map. Folders, area rules, fill direction, and quality display carry over.",
+          "Open the cookbook and right-click a dish to explore untried combinations. A green frame means every listed ingredient type is present in village storage; it does not check whether there is enough to craft. Clicking a recipe opens crafting and selects matching ingredients.",
+          "The storage window offers customizable icon tabs and the existing list with distances, quality filters and record deletion. Liquids show their own units and require manual collection with a vessel. Moving a container updates its recorded location. Bots have draggable indicators for actions, waits and stopping; existing bot controls remain available.",
+          "Open Timers from the minimap button to manage resources, reminders and map pins. Restart, snooze or dismiss timers just for yourself; shared timers are available to the village. To-Do tasks can have deadlines. Existing timers retain their locations, icons and automatic removal, including automatic resource and BoughBee pyre timers.",
+          "Graphics settings offer new environment effects, TAA and improved upscaling. Photo mode hides the interface for screenshots: Ctrl+Shift+P enables it, Esc returns to play, and a click sets focus. Map overlays work correctly across multiple open sessions; existing settings and support highlighting are preserved.",
+          "Fruit is checked the same way as leaves: Forager walks over only when the harvest icon on the tree shows it. A target with deep water on the straight line is left alone, instead of searching for a way around the river without end. Shallow water is still crossable, and deep water does not block a boat.",
+          "In the Areas window, drag areas and folders or choose Move to… from a row menu. The path above the list helps navigate folders; Ctrl+Z undoes a move until the next folder edit.",
+          "Choose Area Mover in the bot menu and select saved areas or draw them on the map. It fills matching piles and containers, creates piles when enabled, and stops when the destination fills up. Personal items and bag contents are protected; if stacking recreates a personal item, items of that type stay with the player. The mover is also available as a scenario step.",
+          "Enable forage recording in Map Tools and search finds by name, quality and date. Selecting a result centers the map on its pickup spot; database sharing makes finds available to the village. Existing markers and filters remain available. The carrier has a placement gap setting: 0 keeps objects packed together, and 11 equals one tile.",
+          "Switch window styling in settings. A separate atlas button in the main menu opens wiki recipes and production chains; the existing encyclopedia and compass remain available. Ctrl+F10 opens frame timing, and Ctrl+F9 records movement diagnostics. Explored map shading updates in the background. Friend import and Vulkan effects have also been improved.",
+          "Open Map Tools and enable Group mined marks. A grouped badge shows the number of finds and the best quality; right-click it for group actions.",
+          "Equip a Bull Pipe and start Smokering Farmer from Production. Mark output areas for Smokering and Smokeship and an input area with a Pipestuff barrel. The bot catches spawns, delivers them, returns to its starting spot, and removes the pipe below 50% HP. With a full inventory, it may leave the pipe in your hand.",
+          "Select a tunnel frame in the tunneling window. The bot mines its supported width and builds the next frame before continuing. Wide frames can use a centre passage only. Existing ordinary supports, double tunnels and settings are retained. Frontier detection handles negative coordinates, and mining checks actual supported tiles.",
+          "The herbalist table hitbox matches the tabletop instead of a longer rectangle. House edges and cellar walls lie on the ground along the wall itself and are included when placing objects, so items are not put into the wall. Snapping to neighbours or by edges places an object flush against that outline.",
+          "Choose Swill Piles to Troughs in the bot menu. Mark the source areas as Swill stockpiles and set a Trough for swill area. The bot gathers swill from every reachable marked area and feeds it to troughs. A cistern in a Swill area can empty full troughs. You can also use it as a scenario step.",
+          "The blueprint tree planter takes the ready pots it needs from a table in batches that fit the inventory. Seedling preparation gets an empty pot first, avoiding leftover seeds and soil. Ready seedlings are not treated as empty pots. Adder’s Lying Tongue stack capacity is now recognized while other existing stack rules remain intact.",
+          "The Stored Items window now has an Only show my village filter. It uses the connected recorded area with the most of your zones, including houses and cellars. Clear the checkbox to see every storage location again. Until a village can be identified, the full list stays visible.",
+          "Items inside belt Wicker Pickers appear in the expanded inventory list on the right, the same way as hunter pouches and seedbags. The baskets themselves do not take a row. Free Inventory stores or drops those items by the same rules, and the baskets stay equipped.",
+          "Forager checks fruit availability for item pickups through the tree menu. This no longer prevents collecting olive branches, right-clicking a tree, or running manually configured actions without a selected item. Leaf and fruit availability checks remain active for the normal pickup list.",
+          "Assign the Trees specialisation to an area and start Leaf Picker (Zones) from the bot menu. It picks mature trees and bushes with leaves, skips species without a matching PUT area, and delivers leaves according to quality. The existing leaf picker remains available.",
+          "The What's New button no longer covers settings: it is now on the right of the top row, above the to-do list. Settings remain in their original position, to the left of the news button.",
+          "When unloading an area with the Unbox specialization, the bot excludes that area from PUT destinations. You can configure storage rules for a temporary buffer: unpacked items go to other matching areas and do not return to their original containers."
+        ]
+      }
+    },
     {
       "id": "2.103.225",
       "date": "2026-10-06",
@@ -1523,38 +1653,6 @@
           "Map tools have ore, stone and gemstone toggles. Right-click opens Mineral Search: category, type and minimum quality over recorded marks.",
           "Master Miner (mining bots) watches what you mine and drops stone below your threshold. Settings → Mining Mastery sets thresholds and which finds to mark on the map.",
           "The bot picker has an Animals section. Cookbook Reload refreshes its data. Ore, stone and gemstone map icons are updated."
-        ]
-      }
-    },
-    {
-      "id": "2.103.193",
-      "date": "2026-09-12",
-      "title": {
-        "ru": "Новое в клиенте",
-        "en": "Client updates"
-      },
-      "summary": {
-        "ru": [
-          "У сборщика свои настройки: что поднимать, профили действий и маршруты на карте.",
-          "Боты поля: редис, арбуз и белый лук — обычный посев и качественные делянки.",
-          "Бот Irrlight ловит огоньки у тигля; Tansy натирает кожу до 10 стаков."
-        ],
-        "en": [
-          "Forager has its own settings: pickups, action profiles and map routes.",
-          "Field bots for radish, watermelon and white onion, including quality patches.",
-          "Irrlight Farmer farms lights at a crucible; Apply Tansy keeps ten scent stacks."
-        ]
-      },
-      "details": {
-        "ru": [
-          "Откройте Настройки → Forager. Задайте профиль, что подбирать (перетащите предмет, каталог или имя), нарисуйте маршрут на карте и зоны-исключения. Опасные кольца останавливают сборщика отдельно от видимости на карте.",
-          "В меню ботов — фермеры редиса, арбуза и белого лука, каждый с вариантом качества. Нужны зоны crop/seed (и cropQ/seedQ), склад урожая и по желанию корыто для месива.",
-          "Irrlight Farmer в меню ботов: встаньте у горящего тигля с прутком, зона Put для Irrlight и по желанию топливо-ветки. Apply Tansy берёт пижму из Take и поддерживает бафф, а не мажет только при нуле."
-        ],
-        "en": [
-          "Open Settings → Forager. Set a profile, choose pickups (drag an item, catalogue or name), paint the route and exclusion zones. Dangerous rings can stop Forager independently of map visibility.",
-          "The bot menu has radish, watermelon and white onion farmers, each with a quality variant. Mark crop/seed (and cropQ/seedQ) zones, a harvest Put area, and optionally a trough for swill.",
-          "Irrlight Farmer is in the bot menu: stand by a lit crucible with a bar, mark an Irrlight Put zone and optional branch fuel. Apply Tansy takes tansy from Take and tops the buff up rather than only at zero."
         ]
       }
     }
