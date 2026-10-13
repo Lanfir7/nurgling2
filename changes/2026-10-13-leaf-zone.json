@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-leaf-zone",
+  "priority": 4,
+  "summary": {
+    "ru": "Сборщик листьев работает в области Trees («Деревья») и доставляет листья в подходящие PUT-зоны.",
+    "en": "A zone leaf picker gathers leaves in a Trees area and delivers them to matching PUT areas."
+  },
+  "detail": {
+    "ru": "Назначьте области специализацию Trees («Деревья») и запустите «Сборщик листьев (зоны)» в меню ботов. Он выбирает зрелые деревья и кусты с листьями, пропускает виды без подходящей PUT-зоны и доставляет сбор с учётом качества. Обычный сборщик листьев остаётся доступен.",
+    "en": "Assign the Trees specialisation to an area and start Leaf Picker (Zones) from the bot menu. It picks mature trees and bushes with leaves, skips species without a matching PUT area, and delivers leaves according to quality. The existing leaf picker remains available."
+  }
+}
