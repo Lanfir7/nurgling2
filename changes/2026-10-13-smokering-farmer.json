@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-smokering-farmer",
+  "priority": 6,
+  "summary": {
+    "ru": "Новый бот ловит дымные кольца и кораблики, пополняя табак в трубке.",
+    "en": "A new bot catches smoke rings and ships while refilling your pipe."
+  },
+  "detail": {
+    "ru": "Наденьте бычью трубку и откройте бота «Фермер дымных колец» в разделе производства. Назначьте выходные области для Smokering и Smokeship и входную область с бочкой Pipestuff. Бот ловит появления, относит улов, возвращается на место и снимает трубку, когда здоровье падает ниже 50%. Если инвентарь полон, трубка может остаться в руке.",
+    "en": "Equip a Bull Pipe and start Smokering Farmer from Production. Mark output areas for Smokering and Smokeship and an input area with a Pipestuff barrel. The bot catches spawns, delivers them, returns to its starting spot, and removes the pipe below 50% HP. With a full inventory, it may leave the pipe in your hand."
+  }
+}

@@ -3264,6 +3264,8 @@ public class VSpec {
         NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/reedship\",\"name\":\"Reed Ship\"}"));
         NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/frogspawn\",\"name\":\"Frogspawn\"}"));
         NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/foetus\",\"name\":\"Beast Unborn\"}"));
+        NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/smokering\",\"name\":\"Smokering\"}"));
+        NoneStackableCurio.add(new JSONObject("{\"static\":\"gfx/invobjs/smokeship\",\"name\":\"Smokeship\"}"));
         categories.put("Curiosities", NoneStackableCurio);
 
         ArrayList<JSONObject> NaturalResources = new ArrayList<>();
@@ -3318,6 +3320,7 @@ public class VSpec {
         ArrayList<JSONObject> pipeweed = new ArrayList<>();
         pipeweed.add(new JSONObject("{\"static\":\"gfx/invobjs/tobacco-fresh\",\"name\":\"Fresh Leaf of Pipeweed\"}"));
         pipeweed.add(new JSONObject("{\"static\":\"gfx/invobjs/tobacco-cured\",\"name\":\"Cured Pipeweed\"}"));
+        pipeweed.add(new JSONObject("{\"static\":\"gfx/invobjs/tobacco-ground\",\"name\":\"Pipestuff\"}"));
         categories.put("Pipeweed", pipeweed);
 
         ArrayList<JSONObject> sharpTools = new ArrayList<>();

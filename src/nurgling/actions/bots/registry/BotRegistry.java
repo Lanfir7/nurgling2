@@ -148,6 +148,7 @@ public class BotRegistry {
         bots.add(new BotDescriptor("steel", BotDescriptor.BotType.PRODUCTIONS, "Steel Action", "Makes steel.", true, true, SteelAction.class, "steel", true));
         bots.add(new BotDescriptor("fineryforge", BotDescriptor.BotType.PRODUCTIONS, "Forging ", "Forging.", true, true, FFAction.class, "fineryforge", true));
         bots.add(new BotDescriptor("irrlight", BotDescriptor.BotType.PRODUCTIONS, "bot.irrlight.title", "bot.irrlight.desc", false, true, IrrlightBot.class, "irrlight", false));
+        bots.add(new BotDescriptor("smokering", BotDescriptor.BotType.PRODUCTIONS, "bot.smokering.title", "bot.smokering.desc", false, true, SmokeringBot.class, "smokering", false));
 
         // Silk
         bots.add(new BotDescriptor("mulberry_leaf_refiller", BotDescriptor.BotType.PRODUCTIONS, "Refill silkworm cupboards with mulberry leafs", "Refill silkworm cupboards with mulberry leafs.", true, true, RefillSilkwormFeedingCupboards.class, "mulberry_leaf", false));
