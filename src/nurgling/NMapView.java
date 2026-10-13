@@ -2964,6 +2964,12 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
 
     @Override
     public void wdgmsg(String msg, Object... args) {
+        if("place".equals(msg) && ui != null && ui.core != null)
+            ui.core.notePlace(args);
+        if("click".equals(msg) && ui != null) {
+            if(ui.core != null) ui.core.noteMapClick(args);
+            if(ui.gui != null && ui.gui.pileWatch != null) ui.gui.pileWatch.noteMapClick(args);
+        }
         if("click".equals(msg) && ui != null && ui.gui != null && ui.gui.forageRecorder != null)
             ui.gui.forageRecorder.noteMapClick(args);
         if ("sel".equals(msg) && args.length >= 2 && args[0] instanceof Coord && args[1] instanceof Coord) {

@@ -31,7 +31,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Attributes inventory deltas to a stockpile gob after itemact/place/ISBox
@@ -56,6 +58,9 @@ public final class StockpileStorageTracker {
     private static String pendingPlaceResName;
     private static long placementDeadlineMs;
     private static final AtomicInteger seq = new AtomicInteger();
+    private static final AtomicLong pileObservationClock = new AtomicLong();
+    private static final ConcurrentHashMap<String, CountedPile> committedPileCounts = new ConcurrentHashMap<>();
+    private static final int MAX_COUNTED_PILES = 1000;
     private static List<StockpileStoragePolicy.Item> lastVhand = List.of();
     private static List<StockpileStoragePolicy.Item> armedPlacementHand = List.of();
     private static long armedPlacementHandAtMs;
@@ -70,8 +75,40 @@ public final class StockpileStorageTracker {
     private static Integer pileCountBefore;
     private static Integer pileCountAfter;
     private static boolean pileCountObserved;
+    private static long pileCountObservationSeq;
     private static boolean sessionStartedAtHome;
     private static final Deque<InventoryTransition> passiveTransitions = new ArrayDeque<>();
+
+    private static final class CountedPile {
+        final long observation;
+        final int count;
+
+        CountedPile(long observation, int count) {
+            this.observation = observation;
+            this.count = count;
+        }
+    }
+
+    static long nextPileObservation() {
+        return pileObservationClock.incrementAndGet();
+    }
+
+    static void noteCommittedPileCount(String hash, long observation, int count) {
+        if (hash == null || observation == 0) return;
+        committedPileCounts.compute(hash, (key, old) -> old == null || old.observation < observation
+                ? new CountedPile(observation, count) : old);
+        if (committedPileCounts.size() > MAX_COUNTED_PILES) {
+            java.util.Iterator<String> it = committedPileCounts.keySet().iterator();
+            while (committedPileCounts.size() > MAX_COUNTED_PILES && it.hasNext())
+                committedPileCounts.remove(it.next());
+        }
+    }
+
+    static Integer newerCommittedPileCount(String hash, long observation, Integer fallback) {
+        CountedPile latest = committedPileCounts.get(hash);
+        if (latest != null && latest.observation > observation) return latest.count;
+        return fallback;
+    }
 
     private static final class InventoryTransition {
         final List<StockpileStoragePolicy.Item> before;
@@ -161,6 +198,7 @@ public final class StockpileStorageTracker {
                     pileCountBefore = currentPileCount;
                     pileCountAfter = currentPileCount;
                 }
+                pileCountObservationSeq = nextPileObservation();
                 lastChangeMs = System.currentTimeMillis();
                 return;
             }
@@ -175,6 +213,7 @@ public final class StockpileStorageTracker {
             pileCountBefore = currentPileCount;
             pileCountAfter = currentPileCount;
             pileCountObserved = false;
+            pileCountObservationSeq = nextPileObservation();
             lastChangeMs = System.currentTimeMillis();
         }
         onGob(gob);
@@ -225,6 +264,7 @@ public final class StockpileStorageTracker {
             pileCountBefore = currentPileCount;
             pileCountAfter = currentPileCount;
             pileCountObserved = false;
+            pileCountObservationSeq = nextPileObservation();
             passiveTransitions.clear();
             lastChangeMs = System.currentTimeMillis();
         }
@@ -252,6 +292,7 @@ public final class StockpileStorageTracker {
             }
             pileCountAfter = newCount;
             pileCountObserved = true;
+            pileCountObservationSeq = nextPileObservation();
             if (transferDirection == observedDirection && pileCountBefore != null) {
                 selectCorrelatedBaselineUnlocked();
             }
@@ -436,6 +477,7 @@ public final class StockpileStorageTracker {
                     if (found != null && found.ngob != null
                             && StockpileStoragePolicy.isStockpileRes(found.ngob.name)) {
                         sessionGob = found;
+                        pileCountObservationSeq = nextPileObservation();
                         pendingPlaceRc = null;
                         if (openPile != null) {
                             openPile.parentGob = found;
@@ -470,8 +512,8 @@ public final class StockpileStorageTracker {
                 return;
             }
             boolean placementMetadataPending = placementDeadlineMs > 0
-                    && (sessionGob.ngob == null || sessionGob.ngob.hash == null
-                    || sessionGob.ngob.gcoord == null);
+                    && (sessionGob.ngob == null || sessionGob.ngob.storageHash() == null
+                    || sessionGob.ngob.storageCoord() == null);
             if (placementMetadataPending) {
                 return;
             }
@@ -660,8 +702,8 @@ public final class StockpileStorageTracker {
         if (sessionGui == null || NUtils.getGameUI() != sessionGui) {
             return;
         }
-        if (sessionGob.ngob == null || sessionGob.ngob.hash == null
-                || sessionGob.ngob.gcoord == null) {
+        if (sessionGob.ngob == null || sessionGob.ngob.storageHash() == null
+                || sessionGob.ngob.storageCoord() == null) {
             return;
         }
         if (transferDirection == null || expectedItemName == null) {
@@ -694,9 +736,12 @@ public final class StockpileStorageTracker {
         Gob gob = sessionGob;
         NGameUI owner = sessionGui;
         boolean startedAtHome = sessionStartedAtHome;
-        String hash = gob.ngob.hash;
-        long gridId = gob.ngob.grid_id;
-        Coord gcoord = gob.ngob.gcoord;
+        String hash = gob.ngob.storageHash();
+        long gridId = gob.ngob.storageGridId();
+        Coord gcoord = gob.ngob.storageCoord();
+        Integer finalCount = pileCountObserved ? pileCountAfter : null;
+        long countObservation = pileCountObservationSeq;
+        String itemName = expectedItemName;
         clearTransferUnlocked();
         if (gone.isEmpty() && gained.isEmpty()) {
             return;
@@ -709,7 +754,8 @@ public final class StockpileStorageTracker {
         if (db == null || !db.isReady()) {
             return;
         }
-        db.submitTask(() -> applyDelta(db, hash, gridId, gcoord, gone, gained));
+        db.submitTask(() -> applyDelta(db, hash, gridId, gcoord, gone, gained,
+                finalCount, countObservation, itemName));
     }
 
     private static void clearTransferUnlocked() {
@@ -723,6 +769,7 @@ public final class StockpileStorageTracker {
         pileCountBefore = null;
         pileCountAfter = null;
         pileCountObserved = false;
+        pileCountObservationSeq = 0;
         preexistingPlacePileIds = Set.of();
         pendingPlaceResName = null;
         placementDeadlineMs = 0;
@@ -752,6 +799,7 @@ public final class StockpileStorageTracker {
         pileCountBefore = null;
         pileCountAfter = null;
         pileCountObserved = false;
+        pileCountObservationSeq = 0;
         passiveTransitions.clear();
     }
 
@@ -803,42 +851,26 @@ public final class StockpileStorageTracker {
 
     private static void applyDelta(DatabaseManager db, String containerHash, long gridId, Coord gcoord,
                                    List<StockpileStoragePolicy.Item> gone,
-                                   List<StockpileStoragePolicy.Item> gained) {
+                                   List<StockpileStoragePolicy.Item> gained,
+                                   Integer finalCount, long countObservation, String itemName) {
         try {
             if (db == null || !db.isReady()) {
                 return;
             }
-            db.executeOperation(adapter -> {
+            Integer committedCount = db.executeOperation(adapter -> {
                 if (containerHash != null && gcoord != null) {
                     new ContainerDao().saveContainer(adapter, containerHash, gridId, gcoord.toString());
                 }
                 StorageItemDao dao = new StorageItemDao();
-                for (StockpileStoragePolicy.Item item : gone) {
-                    int n = seq.incrementAndGet();
-                    String itemHash = NUtils.calculateSHA256(
-                            item.name + item.quality + containerHash + "_" + n);
-                    dao.saveStorageItem(adapter, itemHash, item.name, item.quality,
-                            Coord.of(n, 0).toString(), containerHash);
-                }
-                if (!gained.isEmpty()) {
-                    List<StorageItemDao.StorageItemData> existing =
-                            dao.loadStorageItemsByContainer(adapter, containerHash);
-                    for (StockpileStoragePolicy.Item item : gained) {
-                        List<StockpileStoragePolicy.Item> storedItems = new ArrayList<>();
-                        for (StorageItemDao.StorageItemData row : existing) {
-                            storedItems.add(new StockpileStoragePolicy.Item(
-                                    row.getName(), row.getQuality()));
-                        }
-                        int matchIndex = StockpileStoragePolicy.withdrawalRecordIndex(item, storedItems);
-                        if (matchIndex >= 0) {
-                            StorageItemDao.StorageItemData match = existing.get(matchIndex);
-                            dao.deleteStorageItem(adapter, match.getItemHash());
-                            existing.remove(matchIndex);
-                        }
-                    }
-                }
-                return null;
+                List<StorageItemDao.StorageItemData> existing =
+                        dao.loadStorageItemsByContainer(adapter, containerHash);
+                Integer newestCount = newerCommittedPileCount(containerHash, countObservation, finalCount);
+                List<ItemWatcher.Row> reconciled = reconcilePileDelta(existing, gone, gained,
+                        newestCount, itemName, containerHash);
+                ItemWatcher.replaceRows(adapter, containerHash, reconciled);
+                return reconciled.size();
             });
+            noteCommittedPileCount(containerHash, countObservation, committedCount);
             ItemWatcher.invalidateContainerCache(containerHash);
             NGlobalSearchItems.clearQueryCache();
             NSearchItem.notifyContainerDataChanged();
@@ -855,5 +887,58 @@ public final class StockpileStorageTracker {
                 e.printStackTrace();
             }
         }
+    }
+
+    /** Apply a settled transfer against the latest counted pile snapshot in transaction order. */
+    static List<ItemWatcher.Row> reconcilePileDelta(List<StorageItemDao.StorageItemData> existing,
+                                                    List<StockpileStoragePolicy.Item> deposited,
+                                                    List<StockpileStoragePolicy.Item> withdrawn,
+                                                    Integer finalCount, String itemName,
+                                                    String containerHash) {
+        List<ItemWatcher.Row> candidates = new ArrayList<>();
+        for (StorageItemDao.StorageItemData row : existing) {
+            if (row.isBulk()) continue;
+            candidates.add(new ItemWatcher.Row(row.getItemHash(), row.getName(),
+                    row.hasQuality() ? row.getQuality() : null, row.getCoordinates()));
+        }
+        int beforeCount = candidates.size();
+        for (StockpileStoragePolicy.Item item : withdrawn) {
+            List<StockpileStoragePolicy.Item> stored = new ArrayList<>();
+            for (ItemWatcher.Row row : candidates)
+                stored.add(new StockpileStoragePolicy.Item(row.name,
+                        row.quality == null ? 0 : row.quality));
+            int index = StockpileStoragePolicy.withdrawalRecordIndex(item, stored);
+            if (index < 0) {
+                for (int i = 0; i < candidates.size(); i++) {
+                    if (candidates.get(i).coordinates != null
+                            && candidates.get(i).coordinates.startsWith("#pile:")) {
+                        index = i;
+                        break;
+                    }
+                }
+            }
+            if (index >= 0) candidates.remove(index);
+        }
+        for (StockpileStoragePolicy.Item item : deposited) {
+            int n;
+            String hash;
+            boolean taken;
+            do {
+                n = seq.incrementAndGet();
+                hash = NUtils.calculateSHA256(item.name + item.quality + containerHash + "_" + n);
+                taken = false;
+                for (ItemWatcher.Row row : candidates) {
+                    if (hash.equals(row.hash)) {
+                        taken = true;
+                        break;
+                    }
+                }
+            } while (taken);
+            candidates.add(new ItemWatcher.Row(hash, item.name,
+                    item.quality > 0 ? item.quality : null, Coord.of(n, 0).toString()));
+        }
+        int target = finalCount != null && finalCount >= 0 ? finalCount
+                : Math.max(0, beforeCount + deposited.size() - withdrawn.size());
+        return ItemWatcher.reconcilePileCount(candidates, target, itemName, containerHash);
     }
 }

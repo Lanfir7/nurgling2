@@ -10,6 +10,22 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class StorageItemsCompressTest {
     @Test
+    void compressionKeepsAmountsAndItemCountsInSeparateUnits() {
+        StorageItemDao.StorageItemData item = new StorageItemDao.StorageItemData("item", "Plant", 12, "(0,0)", "chest");
+        StorageItemDao.StorageItemData liters = new StorageItemDao.StorageItemData("liters", "Plant", 12, "#bulk:2.5 l", "barrel");
+        StorageItemDao.StorageItemData seeds = new StorageItemDao.StorageItemData("seeds", "Plant", 12, "#bulk:50 seeds", "barrel2");
+        List<StorageItemsCompress.Row> rows = List.of(
+                new StorageItemsCompress.Row("Plant", 12, List.of(item), 1, "chest"),
+                new StorageItemsCompress.Row("Plant", 12, List.of(liters), 2, "barrel"),
+                new StorageItemsCompress.Row("Plant", 12, List.of(seeds), 3, "barrel2"));
+
+        List<StorageItemsCompress.Row> compressed = StorageItemsCompress.byType(rows);
+        assertEquals(3, compressed.size());
+        assertEquals(List.of(item), compressed.get(0).items);
+        assertEquals(List.of(liters), compressed.get(1).items);
+        assertEquals(List.of(seeds), compressed.get(2).items);
+    }
+    @Test
     void mergesSameTypeIntoOneRow() {
         StorageItemsCompress.Row q33 = row("Lead Glance", 33.02, 7, 7, "Stockpile-ore");
         StorageItemsCompress.Row q32 = row("Lead Glance", 32.52, 31, 7, "Stockpile-ore");

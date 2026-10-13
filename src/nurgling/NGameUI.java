@@ -4,7 +4,6 @@ import nurgling.hotkeys.Hotkeys;
 
 import haven.*;
 import haven.res.ui.rbuff.RealmBuff;
-import haven.res.ui.relcnt.RelCont;
 import nurgling.conf.NDiscordNotification;
 import nurgling.conf.NToolBeltProp;
 import nurgling.craftatlas.CraftAtlasPreferences;
@@ -43,7 +42,6 @@ import static haven.MCache.cmaps;
 import java.awt.event.KeyEvent;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -89,6 +87,7 @@ public class NGameUI extends GameUI
     /** This world's forage finds; the same instance for every session on the world. */
     public nurgling.forage.ForageStore forageStore;
     public nurgling.forage.ForageRecorder forageRecorder;
+    public monitoring.PileWatch pileWatch;
     public nurgling.widgets.ForageSearchWindow forageSearchWindow = null;
     public nurgling.timers.TimerNotifier timerNotifier;
     public nurgling.todo.TaskDeadlines taskDeadlines;
@@ -348,7 +347,11 @@ public class NGameUI extends GameUI
         setCompassVisible(NCompassSettings.showBar());
         // Scheduled login starts a scenario on the first map tick. The registry
         // must already exist, or that tick kills the UI thread and the world stays black.
-        add(biw = new BotsInterruptWidget(), Coord.z);
+        biw = new BotsInterruptWidget();
+        boolean botstatusPlaced = !nurgling.conf.NDragProp.get("botstatus").c.equals(Coord.z);
+        NDraggableWidget botstatus = add(new NDraggableWidget(biw, "botstatus", biw.sz.add(NDraggableWidget.delta)));
+        if(!botstatusPlaced)
+            botstatus.target_c = new Coord(Math.max(0, sz.x - UI.scale(330)), UI.scale(80));
     }
 
     public void setCompassVisible(boolean visible) {
@@ -432,6 +435,7 @@ public class NGameUI extends GameUI
         timerStore = nurgling.sessions.SessionManager.getInstance().timerStore(genus);
         forageStore = nurgling.sessions.SessionManager.getInstance().forageStore(genus);
         forageRecorder = new nurgling.forage.ForageRecorder(this);
+        pileWatch = new monitoring.PileWatch(this);
         timerNotifier = new nurgling.timers.TimerNotifier(this);
         taskDeadlines = new nurgling.todo.TaskDeadlines(this);
         add(timersPanel = new nurgling.widgets.timers.TimersPanel(), new Coord(100, 100));
@@ -920,6 +924,7 @@ public class NGameUI extends GameUI
                 if ("This is bait".equals(wnd.cap)) {
                     FishingWindowExtension.addSaveFishButton(wnd, this);
                 }
+                nurgling.widgets.BulkStorageWindowExtension.attach(wnd);
             }
 
             if (maininv != null && !((NInventory) maininv).mainInvInstalled)
@@ -1007,6 +1012,8 @@ public class NGameUI extends GameUI
             taskDeadlines.tick();
         if(forageRecorder != null)
             forageRecorder.tick();
+        if(pileWatch != null)
+            pileWatch.tick();
         Gob player = (map == null) ? null : map.player();
         String pose = (player == null) ? null : player.pose();
         if (player == null || (pose != null && pose.contains("gfx/borka/point")))
@@ -1199,37 +1206,22 @@ public class NGameUI extends GameUI
     public double getBarrelContent(NAlias content){
         Window spwnd = getWindow ( "Barrel" );
         if(spwnd!=null) {
-            for (Widget sp = spwnd.lchild; sp != null; sp = sp.prev) {
-                /// Выбираем внутренний контейнер
-                if (sp instanceof RelCont) {
-                    for(Pair<Widget, Supplier<Coord>> pair:((RelCont) sp).childpos) {
-                        if (pair.a.getClass().getName().contains("TipLabel")) {
-                            try {
-                                ///TODO
-                                for (ItemInfo inf : (Collection<ItemInfo>) (pair.a.getClass().getField("info").get(pair.a))) {
-                                    if (inf instanceof ItemInfo.Name) {
-                                        String name = ((ItemInfo.Name) inf).str.text;
-                                        if (NParser.checkName(name.toLowerCase(), content))
-                                            return Double.parseDouble(name.substring(0, name.indexOf(' ')));
-                                        // Handle seed name format difference: "Flax Seeds" vs "1234 seeds of Flax"
-                                        if (name.toLowerCase().contains(" seeds of ")) {
-                                            int ofIndex = name.toLowerCase().indexOf(" seeds of ");
-                                            String seedType = name.substring(ofIndex + 10).trim(); // Extract "Flax" from "1234 seeds of Flax"
-                                            String inventoryFormat = seedType + " seeds"; // Convert to "Flax seeds"
-                                            if (NParser.checkName(inventoryFormat.toLowerCase(), content))
-                                                return Double.parseDouble(name.substring(0, name.indexOf(' ')));
-                                        }
-                                    } else if (inf instanceof ItemInfo.AdHoc) {
-                                        if (NParser.checkName(((ItemInfo.AdHoc) inf).str.text, "Empty")) {
-                                            return 0;
-                                        }
-                                    }
-                                }
-                            } catch (NoSuchFieldException | IllegalAccessException e) {
-                                e.printStackTrace();
-                                throw new RuntimeException(e);
-                            }
-                        }
+            for (ItemInfo inf : nurgling.tools.LiquidContent.tipInfos(spwnd)) {
+                if (inf instanceof ItemInfo.Name) {
+                    String name = ((ItemInfo.Name) inf).str.text;
+                    if (NParser.checkName(name.toLowerCase(), content))
+                        return Double.parseDouble(name.substring(0, name.indexOf(' ')));
+                    // Handle seed name format difference: "Flax Seeds" vs "1234 seeds of Flax"
+                    if (name.toLowerCase().contains(" seeds of ")) {
+                        int ofIndex = name.toLowerCase().indexOf(" seeds of ");
+                        String seedType = name.substring(ofIndex + 10).trim(); // Extract "Flax" from "1234 seeds of Flax"
+                        String inventoryFormat = seedType + " seeds"; // Convert to "Flax seeds"
+                        if (NParser.checkName(inventoryFormat.toLowerCase(), content))
+                            return Double.parseDouble(name.substring(0, name.indexOf(' ')));
+                    }
+                } else if (inf instanceof ItemInfo.AdHoc) {
+                    if (NParser.checkName(((ItemInfo.AdHoc) inf).str.text, "Empty")) {
+                        return 0;
                     }
                 }
             }
@@ -1240,31 +1232,18 @@ public class NGameUI extends GameUI
     public double findBarrelContent(ArrayList<Window> windows, NAlias content){
         for (Window spwnd: windows) {
             if (spwnd != null) {
-                for (Widget sp = spwnd.lchild; sp != null; sp = sp.prev) {
-                    if (sp instanceof RelCont) {
-                        for (Pair<Widget, Supplier<Coord>> pair : ((RelCont) sp).childpos) {
-                            if (pair.a.getClass().getName().contains("TipLabel")) {
-                                try {
-                                    for (ItemInfo inf : (Collection<ItemInfo>) (pair.a.getClass().getField("info").get(pair.a))) {
-                                        if (inf instanceof ItemInfo.Name) {
-                                            String name = ((ItemInfo.Name) inf).str.text;
-                                            if (NParser.checkName(name.toLowerCase(), content))
-                                                return Double.parseDouble(name.substring(0, name.indexOf(' ')));
-                                            // Handle seed name format difference: "Flax Seeds" vs "1234 seeds of Flax"
-                                            if (name.toLowerCase().contains(" seeds of ")) {
-                                                int ofIndex = name.toLowerCase().indexOf(" seeds of ");
-                                                String seedType = name.substring(ofIndex + 10).trim(); // Extract "Flax" from "1234 seeds of Flax"
-                                                String inventoryFormat = seedType + " seeds"; // Convert to "Flax seeds"
-                                                if (NParser.checkName(inventoryFormat.toLowerCase(), content))
-                                                    return Double.parseDouble(name.substring(0, name.indexOf(' ')));
-                                            }
-                                        }
-                                    }
-                                } catch (NoSuchFieldException | IllegalAccessException e) {
-                                    e.printStackTrace();
-                                    throw new RuntimeException(e);
-                                }
-                            }
+                for (ItemInfo inf : nurgling.tools.LiquidContent.tipInfos(spwnd)) {
+                    if (inf instanceof ItemInfo.Name) {
+                        String name = ((ItemInfo.Name) inf).str.text;
+                        if (NParser.checkName(name.toLowerCase(), content))
+                            return Double.parseDouble(name.substring(0, name.indexOf(' ')));
+                        // Handle seed name format difference: "Flax Seeds" vs "1234 seeds of Flax"
+                        if (name.toLowerCase().contains(" seeds of ")) {
+                            int ofIndex = name.toLowerCase().indexOf(" seeds of ");
+                            String seedType = name.substring(ofIndex + 10).trim(); // Extract "Flax" from "1234 seeds of Flax"
+                            String inventoryFormat = seedType + " seeds"; // Convert to "Flax seeds"
+                            if (NParser.checkName(inventoryFormat.toLowerCase(), content))
+                                return Double.parseDouble(name.substring(0, name.indexOf(' ')));
                         }
                     }
                 }

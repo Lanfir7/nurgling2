@@ -22,4 +22,6 @@ public abstract class NTask
     protected int maxCounter = 200;
     protected boolean infinite = true;
     protected boolean criticalOnTimeout = true;
+    /** Start of the current addTask wait, for the bot status display. */
+    public volatile long waitSince;
 }

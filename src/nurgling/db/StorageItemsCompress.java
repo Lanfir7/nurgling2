@@ -72,7 +72,9 @@ public final class StorageItemsCompress {
         }
         Map<String, List<Row>> byName = new LinkedHashMap<>();
         for (Row row : rows) {
-            byName.computeIfAbsent(row.name, k -> new ArrayList<>()).add(row);
+            String unit = row.items.isEmpty() ? null : row.items.get(0).getBulkUnit();
+            String key = row.name + "\0" + (unit == null ? "items" : "bulk:" + unit);
+            byName.computeIfAbsent(key, k -> new ArrayList<>()).add(row);
         }
         List<Row> out = new ArrayList<>();
         for (List<Row> group : byName.values()) {

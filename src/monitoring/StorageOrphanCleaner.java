@@ -281,13 +281,13 @@ public class StorageOrphanCleaner implements OCache.ChangeCallback {
                 if (skipGob(gob) || gob.ngob == null) {
                     continue;
                 }
-                if (gob.ngob.hash != null) {
-                    live.hashes.add(gob.ngob.hash);
+                if (gob.ngob.storageHash() != null) {
+                    live.hashes.add(gob.ngob.storageHash());
                 }
                 if (gob.ngob.gcoord != null && StockpileStoragePolicy.isStockpileRes(gob.ngob.name)) {
                     live.stockpileGcoords.add(gob.ngob.gcoord);
                 }
-                if (gob.rc != null && gob.ngob.hash == null && player.rc.dist(gob.rc) <= near) {
+                if (gob.rc != null && gob.ngob.storageHash() == null && player.rc.dist(gob.rc) <= near) {
                     live.nearbyUnhashed = true;
                 }
             }

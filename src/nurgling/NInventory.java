@@ -127,7 +127,7 @@ public class NInventory extends Inventory
             return isIndexable;
         }
 
-        NGameUI gui = NUtils.getGameUI();
+        NGameUI gui = storageOwnerGui();
         if (gui != null && this == gui.maininv) {
             isIndexable = false;
             return false;
@@ -152,6 +152,10 @@ public class NInventory extends Inventory
 
         isIndexable = true;
         return true;
+    }
+
+    private NGameUI storageOwnerGui() {
+        return ui != null && ui.gui != null ? ui.gui : NUtils.getGameUI();
     }
     private long pendingSearchRefreshTick = 0;
     
@@ -258,7 +262,7 @@ public class NInventory extends Inventory
      */
     private void addSortButtonIfContainer() {
         // Skip if this is the main inventory (it has its own sort button via installMainInv)
-        NGameUI gui = NUtils.getGameUI();
+        NGameUI gui = storageOwnerGui();
         if (gui == null || this == gui.maininv) {
             return;
         }
@@ -1083,6 +1087,20 @@ public class NInventory extends Inventory
             parent.pack();
             positionTitleBarButtons();
         }
+    }
+
+    /** Opens the search panel, if closed, and searches for the given text. */
+    public void searchFor(String text) {
+        if (searchwdg == null || searchwdg.searchF == null)
+            return;
+        if (!searchVisible) {
+            if (searchBtn instanceof NHeaderToggle)
+                ((NHeaderToggle) searchBtn).a = true;
+            toggleSearch(true);
+        }
+        searchwdg.searchF.settext(text);
+        if (NUtils.getGameUI() != null && NUtils.getGameUI().itemsForSearch != null)
+            NUtils.getGameUI().itemsForSearch.install(text);
     }
 
     private void focusSearch() {
@@ -2520,10 +2538,7 @@ public class NInventory extends Inventory
         return NUtils.calculateSHA256(data);
     }
 
-    /**
-     * Bind this window to the gob it actually belongs to. Last-action is often
-     * a previously clicked chest while Hidden Hollow is the window on screen.
-     */
+    /** Bind a container window using the click that opened it, then the nearby matching gob. */
     private void bindParentGobIfNeeded() {
         Window wnd = getparent(Window.class);
         if (wnd == null || wnd.cap == null) {
@@ -2536,16 +2551,13 @@ public class NInventory extends Inventory
         if (parentGob != null && gobMatchesWindow(parentGob, cap)) {
             return;
         }
-        Gob last = (ui != null && ui.core.getLastActions() != null)
-                ? ui.core.getLastActions().gob : null;
-        boolean lastMatches = gobMatchesWindow(last, cap);
-        Gob nearest = findGobForWindowCap(cap);
-        Gob picked = ContainerInventorySync.pickGob(
-                parentGob, false, last, lastMatches, nearest);
+        Gob clicked = ui != null && ui.core != null
+                ? ui.core.takeClickedGob(gob -> gobMatchesWindow(gob, cap)) : null;
+        Gob picked = clicked != null ? clicked : findGobForWindowCap(cap);
         if (picked != null && picked != parentGob) {
             parentGob = picked;
-            if (parentGob.ngob != null && parentGob.ngob.hash != null) {
-                ItemWatcher.invalidateContainerCache(parentGob.ngob.hash);
+            if (parentGob.ngob != null && parentGob.ngob.storageHash() != null) {
+                ItemWatcher.invalidateContainerCache(parentGob.ngob.storageHash());
             }
         }
     }
@@ -2557,14 +2569,15 @@ public class NInventory extends Inventory
 
     private Gob findGobForWindowCap(String cap) {
         List<String> names = ContainerInventorySync.resourceNamesForCap(cap, NContext.contcaps);
-        if (names.isEmpty() || NUtils.player() == null) {
+        NGameUI gui = storageOwnerGui();
+        Gob player = gui != null && gui.map != null ? gui.map.player() : null;
+        if (names.isEmpty() || player == null) {
             return null;
         }
-        NGameUI gui = NUtils.getGameUI();
         if (gui == null || gui.ui == null || gui.ui.sess == null || gui.ui.sess.glob == null) {
             return null;
         }
-        Coord2d pc = NUtils.player().rc;
+        Coord2d pc = player.rc;
         Gob best = null;
         double bestDist = Double.MAX_VALUE;
         synchronized (gui.ui.sess.glob.oc) {
@@ -2590,10 +2603,10 @@ public class NInventory extends Inventory
      * items taken by another client disappear from DB without sorting.
      */
     private void rebuildIisFromLiveItems(boolean trustEmptyLive) {
-        if (parentGob == null || parentGob.ngob == null || parentGob.ngob.hash == null) {
+        if (parentGob == null || parentGob.ngob == null || parentGob.ngob.storageHash() == null) {
             return;
         }
-        String hash = parentGob.ngob.hash;
+        String hash = parentGob.ngob.storageHash();
         ArrayList<ItemWatcher.ItemInfo> live = new ArrayList<>();
         Map<Coord, List<ItemWatcher.ItemInfo>> cachedBySlot = new HashMap<>();
         for (ItemWatcher.ItemInfo info : iis) {
@@ -2654,10 +2667,10 @@ public class NInventory extends Inventory
 
     private String prepareStorageSnapshot(boolean trustEmptySnapshot) {
         bindParentGobIfNeeded();
-        if (!isIndexable() || parentGob == null || parentGob.ngob == null || parentGob.ngob.hash == null) {
+        if (!isIndexable() || parentGob == null || parentGob.ngob == null || parentGob.ngob.storageHash() == null) {
             return null;
         }
-        String containerHash = parentGob.ngob.hash;
+        String containerHash = parentGob.ngob.storageHash();
         iisPeak = Math.max(iisPeak, iis.size());
         rebuildIisFromLiveItems(trustEmptySnapshot);
         iisPeak = Math.max(iisPeak, iis.size());
@@ -2665,7 +2678,7 @@ public class NInventory extends Inventory
         ItemWatcher.invalidateContainerCache(containerHash);
         if ((!trustEmptySnapshot && !ContainerInventorySync.shouldWrite(iis.size(), iisPeak))
                 || !(Boolean) NConfig.get(NConfig.Key.ndbenable)
-                || !nurgling.db.StorageTrackingPolicy.shouldTrack(NUtils.getGameUI())) {
+                || !nurgling.db.StorageTrackingPolicy.shouldTrack(storageOwnerGui())) {
             return null;
         }
         return containerHash;
@@ -2675,7 +2688,6 @@ public class NInventory extends Inventory
     public void reqdestroy() {
         // Mark as closing
         isClosing = true;
-
         String containerHash = prepareStorageSnapshot(false);
         if (containerHash != null) {
             System.out.println("NInventory.reqdestroy: Syncing " + iis.size() + " items for container " + containerHash);

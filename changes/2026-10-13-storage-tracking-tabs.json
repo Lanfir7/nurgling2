@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-storage-tracking-tabs",
+  "priority": 7,
+  "summary": {
+    "ru": "Склад учитывает кучи и содержимое бочек, предлагает вкладки и сохраняет учёт перенесённых контейнеров.",
+    "en": "Storage tracks piles and barrel contents, offers tabs and follows moved containers."
+  },
+  "detail": {
+    "ru": "В окне склада доступны настраиваемые вкладки с иконками и прежний список с расстояниями, фильтрами качества и удалением записей. Жидкости отображаются в своих единицах; забирать их нужно вручную подходящей ёмкостью. Перенос контейнера обновляет его адрес в учёте. У ботов появились перетаскиваемые индикаторы с текущим действием, ожиданием и остановкой; прежнее управление ботами сохранено.",
+    "en": "The storage window offers customizable icon tabs and the existing list with distances, quality filters and record deletion. Liquids show their own units and require manual collection with a vessel. Moving a container updates its recorded location. Bots have draggable indicators for actions, waits and stopping; existing bot controls remain available."
+  }
+}

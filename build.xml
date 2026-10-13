@@ -197,7 +197,9 @@
          dest="lib/ext/jlatexmath/jlatexmath-1.0.7.jar" skipexisting="true" />
     <checksum file="lib/ext/jlatexmath/jlatexmath-1.0.7.jar" algorithm="SHA-256"
               property="6d04c3843fc98d2eea9ba4cff0be7b80540ca75c5a4e0b3463fd1219c48cc65d" verifyproperty="jlatexmath.ok" />
-    <fail unless="jlatexmath.ok" message="JLaTeXMath checksum mismatch" />
+    <fail message="JLaTeXMath checksum mismatch">
+      <condition><not><istrue value="${jlatexmath.ok}" /></not></condition>
+    </fail>
   </target>
 
   <target name="hafen-client" depends="fresh-client-classes, extlib/jogl, extlib/lwjgl-gl, extlib/lwjgl-vk, extlib/steamworks, extlib/jlatexmath, resources">

@@ -1,6 +1,8 @@
 package nurgling;
 
 import haven.*;
+import monitoring.StockpileStorageTracker;
+import nurgling.db.StockpileStoragePolicy;
 import nurgling.tasks.*;
 
 import java.awt.event.*;
@@ -11,10 +13,17 @@ public class NISBox extends ISBox
     public Gob parentGob = null;
     private TextEntry.NumberValue value;
     private TakeButton take;
+    private Gob observedPile;
+
+    private int rem;
+    /** The piled item's resource; ISBox keeps its own copy private. */
+    public final Indir<Resource> itemres;
 
     public NISBox(Indir<Resource> res, int rem, int av, int bi)
     {
         super(res, rem, av, bi);
+        this.rem = rem;
+        this.itemres = res;
     }
 
     public int calcFreeSpace()
@@ -98,8 +107,10 @@ public class NISBox extends ISBox
                 amount = Integer.parseInt(value.text());
             } catch (Exception ignored) {
             }
-            if (amount > rem) {
-                amount = rem;
+            int available = calcCount();
+            if (available < 0) available = rem;
+            if (amount > available) {
+                amount = available;
             }
             if (amount > 0) {
                 transfer(amount);
@@ -120,15 +131,38 @@ public class NISBox extends ISBox
 
                 parent.add(take, UI.scale(87, 44));
                 take.canactivate = true;
-                if (parentGob == null && ui != null && ui.core.getLastActions() != null) {
-                    parentGob = ui.core.getLastActions().gob;
-                }
-                if (parentGob != null) {
-                    monitoring.StockpileStorageTracker.onGob(parentGob);
-                    monitoring.StockpileStorageTracker.observeOpenPile(
-                            parentGob, stockpileItemName(), stockpileCount());
-                }
+                bindParentPileIfNeeded();
             }
         }
+    }
+
+    @Override
+    public void tick(double dt) {
+        super.tick(dt);
+        bindParentPileIfNeeded();
+    }
+
+    private void bindParentPileIfNeeded() {
+        if (!(parent instanceof Window) || !"Stockpile".equals(((Window) parent).cap))
+            return;
+        if (parentGob != null && (parentGob.ngob == null
+                || !StockpileStoragePolicy.isStockpileRes(parentGob.ngob.name)))
+            parentGob = null;
+        if (parentGob == null && ui != null && ui.core != null) {
+            parentGob = ui.core.takeClickedGob(NISBox::isStockpileGob);
+            if (parentGob == null)
+                parentGob = ui.core.takePlacedGob(NISBox::isStockpileGob);
+        }
+        if (parentGob != null && observedPile != parentGob && ui != null
+                && ui.gui == NUtils.getGameUI()) {
+            observedPile = parentGob;
+            StockpileStorageTracker.onGob(parentGob);
+            StockpileStorageTracker.observeOpenPile(parentGob, stockpileItemName(), stockpileCount());
+        }
+    }
+
+    private static boolean isStockpileGob(Gob gob) {
+        return gob != null && gob.ngob != null
+                && StockpileStoragePolicy.isStockpileRes(gob.ngob.name);
     }
 }
