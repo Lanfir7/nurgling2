@@ -43,6 +43,7 @@ hs_err_pid*.log
 javac.*.args
 /assets/
 /logs/
+/road-debug.log
 /.codegraph/
 /.superpowers/
 /docs/superpowers/
