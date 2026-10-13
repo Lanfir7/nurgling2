@@ -34,7 +34,7 @@ public class TransferLiftable implements Action
         NCarrierProp prop = null;
         try
         {
-            NUtils.getUI().core.addTask(new WaitCheckable(NUtils.addCentered((w = new nurgling.widgets.bots.Carrier()))));
+            NUtils.getUI().core.addTask(new WaitCheckable(NUtils.addCentered((w = new nurgling.widgets.bots.Carrier(true)))));
             prop = w.prop;
         } catch (InterruptedException e)
         {
@@ -96,7 +96,7 @@ public class TransferLiftable implements Action
             // Move to output area and place the item. FindPlaceAndAction walks
             // onto the area first (it has the NArea) so the whole zone is loaded
             // before a drop cell is chosen.
-            new FindPlaceAndAction(null, carrierOutArea).run(gui);
+            new FindPlaceAndAction(null, carrierOutArea, prop.spread).run(gui);
 
             // Move away from the placed item
             Coord2d shift = item.rc.sub(NUtils.player().rc).norm().mul(2);

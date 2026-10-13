@@ -520,6 +520,14 @@ public class Finder
         return getFreePlace(area, hitBox, angle, null);
     }
 
+    /** Keep a gap from other objects while allowing the object to touch the zone edge. */
+    public static Coord2d getFreePlace(Pair<Coord2d,Coord2d> area, NHitBox hitBox,
+                                       double angle, double spread) {
+        ArrayList<Coord2d> candidates = collectFreePlaces(area, hitBox, angle, true, 1,
+                PileFillDirection.LEFT_TO_RIGHT, spread);
+        return candidates.isEmpty() ? null : candidates.get(0);
+    }
+
     public static Coord2d getFreePlace(Pair<Coord2d,Coord2d> area, NHitBox hitBox, double angle, Coord2d nearestTo) {
         ArrayList<Coord2d> candidates = collectFreePlaces(area, hitBox, angle, nearestTo == null, 1,
                 PileFillDirection.LEFT_TO_RIGHT);
@@ -569,6 +577,13 @@ public class Finder
                                                          double angle, boolean firstOnly,
                                                          double candidateStride,
                                                          PileFillDirection direction) {
+        return collectFreePlaces(area, hitBox, angle, firstOnly, candidateStride, direction, 0);
+    }
+
+    private static ArrayList<Coord2d> collectFreePlaces(Pair<Coord2d,Coord2d> area, NHitBox hitBox,
+                                                         double angle, boolean firstOnly,
+                                                         double candidateStride,
+                                                         PileFillDirection direction, double spread) {
         ArrayList<Coord2d> candidates = new ArrayList<>();
 
         ArrayList<NHitBoxD> significantGobs = new ArrayList<> ();
@@ -606,7 +621,7 @@ public class Finder
         }
 
         return collectFreePlacesAgainstObstacles(area, hitBox, angle, firstOnly,
-                candidateStride, direction, significantGobs);
+                candidateStride, direction, significantGobs, spread);
     }
 
     static ArrayList<Coord2d> collectDenseFreePlaces(Pair<Coord2d,Coord2d> area,
@@ -615,7 +630,16 @@ public class Finder
                                                       PileFillDirection direction,
                                                       Collection<NHitBoxD> significantGobs) {
         return collectFreePlacesAgainstObstacles(area, hitBox, angle, false,
-                1, direction, significantGobs);
+                1, direction, significantGobs, 0);
+    }
+
+    static ArrayList<Coord2d> collectDenseFreePlaces(Pair<Coord2d,Coord2d> area,
+                                                      NHitBox hitBox, double angle,
+                                                      PileFillDirection direction,
+                                                      Collection<NHitBoxD> significantGobs,
+                                                      double spread) {
+        return collectFreePlacesAgainstObstacles(area, hitBox, angle, false,
+                1, direction, significantGobs, spread);
     }
 
     private static ArrayList<Coord2d> collectFreePlacesAgainstObstacles(
@@ -625,7 +649,8 @@ public class Finder
             boolean firstOnly,
             double candidateStride,
             PileFillDirection direction,
-            Collection<NHitBoxD> significantGobs) {
+            Collection<NHitBoxD> significantGobs,
+            double spread) {
         ArrayList<Coord2d> candidates = new ArrayList<>();
 
         Coord2d areaSize = area.b.sub(area.a);
@@ -647,15 +672,21 @@ public class Finder
                 ? PileFillDirection.LEFT_TO_RIGHT : direction;
         boolean verticalFill = effectiveDirection == PileFillDirection.TOP_TO_BOTTOM
                 || effectiveDirection == PileFillDirection.BOTTOM_TO_TOP;
+        double gap = Math.max(0, spread);
+        NHitBoxD expandedFootprint = new NHitBoxD(
+                hitBox.begin.sub(gap, gap), hitBox.end.add(gap, gap),
+                Coord2d.of(0), angle, hitBox.mirrorAsymmetric);
+        Coord2d collisionUL = expandedFootprint.getCircumscribedUL();
+        Coord2d collisionBR = expandedFootprint.getCircumscribedBR();
         for (NHitBoxD obstacle : significantGobs) {
             Coord2d obstacleUL = obstacle.getCircumscribedUL();
             Coord2d obstacleBR = obstacle.getCircumscribedBR();
             if (verticalFill) {
-                addCandidateOffset(ys, obstacleUL.y - area.a.y - rotatedBR.y, minY, maxY);
-                addCandidateOffset(ys, obstacleBR.y - area.a.y - rotatedUL.y, minY, maxY);
+                addCandidateOffset(ys, obstacleUL.y - area.a.y - collisionBR.y, minY, maxY);
+                addCandidateOffset(ys, obstacleBR.y - area.a.y - collisionUL.y, minY, maxY);
             } else {
-                addCandidateOffset(xs, obstacleUL.x - area.a.x - rotatedBR.x, minX, maxX);
-                addCandidateOffset(xs, obstacleBR.x - area.a.x - rotatedUL.x, minX, maxX);
+                addCandidateOffset(xs, obstacleUL.x - area.a.x - collisionBR.x, minX, maxX);
+                addCandidateOffset(xs, obstacleBR.x - area.a.x - collisionUL.x, minX, maxX);
             }
         }
 
@@ -664,7 +695,7 @@ public class Finder
             boolean passed = true;
             Coord2d candidateCenter = area.a.add(offset);
             for ( NHitBoxD significantHitbox : significantGobs )
-                if(blocksPlacement(significantHitbox, hitBox, candidateCenter, angle))
+                if(blocksPlacement(significantHitbox, hitBox, candidateCenter, angle, spread))
                     passed = false;
             if(passed) {
                 Coord2d candidate = Coord2d.of(candidateCenter.x, candidateCenter.y);
@@ -740,18 +771,25 @@ public class Finder
     private static final double PLACEMENT_EDGE_SLOP = 1e-4;
 
     private static boolean blocksPlacement(NHitBoxD obstacle, NHitBox hitBox, Coord2d center, double angle) {
+        return blocksPlacement(obstacle, hitBox, center, angle, 0);
+    }
+
+    private static boolean blocksPlacement(NHitBoxD obstacle, NHitBox hitBox,
+                                           Coord2d center, double angle, double spread) {
+        return obstacle.intersects(collisionFootprint(hitBox, center, angle, spread), false);
+    }
+
+    private static NHitBoxD collisionFootprint(NHitBox hitBox, Coord2d center,
+                                                double angle, double spread) {
         double left = Math.min(hitBox.begin.x, hitBox.end.x);
         double right = Math.max(hitBox.begin.x, hitBox.end.x);
         double top = Math.min(hitBox.begin.y, hitBox.end.y);
         double bottom = Math.max(hitBox.begin.y, hitBox.end.y);
         double slop = Math.min(PLACEMENT_EDGE_SLOP, Math.min(right - left, bottom - top) / 4.0);
-        Coord2d begin = hitBox.begin;
-        Coord2d end = hitBox.end;
-        if (slop > 0) {
-            begin = Coord2d.of(left + slop, top + slop);
-            end = Coord2d.of(right - slop, bottom - slop);
-        }
-        return obstacle.intersects(new NHitBoxD(begin, end, center, angle, hitBox.mirrorAsymmetric), false);
+        double gap = Math.max(0, spread);
+        Coord2d begin = Coord2d.of(left - gap + slop, top - gap + slop);
+        Coord2d end = Coord2d.of(right + gap - slop, bottom + gap - slop);
+        return new NHitBoxD(begin, end, center, angle, hitBox.mirrorAsymmetric);
     }
 
     private static void addFlushOffsets(List<Double> xs, List<Double> ys, NHitBoxD obstacle,

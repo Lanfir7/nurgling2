@@ -21,7 +21,7 @@ public class MigrationManager {
      * and this older client may not understand the new columns/tables; we
      * refuse to sync in that case rather than write incompatible rows.
      */
-    public static final int CLIENT_MAX_SCHEMA_VERSION = 26;
+    public static final int CLIENT_MAX_SCHEMA_VERSION = 27;
 
     /** Version of the migration that creates kin_secrets; optional, see {@link Migration#optional}. */
     public static final int MIGRATION_KIN_SECRETS = 15;
@@ -77,6 +77,9 @@ public class MigrationManager {
     public static final int MIGRATION_SCHEMA14_BRIDGE_REPAIR = 24;
     public static final int MIGRATION_TIMERS = 25;
     public static final int MIGRATION_TIMER_NAME_TEXT = 26;
+
+    /** Version of the migration that creates forage_finds; optional, see {@link Migration#optional}. */
+    public static final int MIGRATION_FORAGE_FINDS = 27;
 
     public static class SchemaTooNewException extends SQLException {
         public final int clientVersion;
@@ -1037,6 +1040,39 @@ public class MigrationManager {
                     if(!rs.wasNull() && limit < 512)
                         adapter.executeUpdate("ALTER TABLE timers ALTER COLUMN name TYPE TEXT");
                 }
+            }
+        });
+
+        /* Optional: forage_finds backs only the shared forage finds on the map, which stay on their JSON
+         * file when the table is missing. A role without CREATE on the schema must not lose area,
+         * planning and recipe sync over it. */
+        migrations.add(new Migration(MIGRATION_FORAGE_FINDS, "Create forage_finds table for shared forageable finds", true) {
+            @Override
+            public void run(DatabaseAdapter adapter) throws SQLException {
+                if (!adapter.tableExists("forage_finds")) {
+                    createTable(adapter, "forage_finds",
+                        "CREATE TABLE forage_finds (" +
+                        "id VARCHAR(64) PRIMARY KEY, " +
+                        "profile VARCHAR(255) NOT NULL DEFAULT 'global', " +
+                        "grid_id BIGINT NOT NULL, " +
+                        "ox INTEGER NOT NULL, " +
+                        "oy INTEGER NOT NULL, " +
+                        "gob_res VARCHAR(255) NOT NULL, " +
+                        "item_res VARCHAR(255), " +
+                        "item_name VARCHAR(255) NOT NULL, " +
+                        "quality DOUBLE PRECISION NOT NULL, " +
+                        "amount INTEGER NOT NULL DEFAULT 1, " +
+                        "found_at BIGINT NOT NULL, " +
+                        "found_by VARCHAR(255), " +
+                        "version INTEGER NOT NULL DEFAULT 1, " +
+                        "changed_at BIGINT NOT NULL DEFAULT 0, " +
+                        "deleted_by VARCHAR(255), " +
+                        "deleted_at TIMESTAMP" +
+                        ")");
+                    System.out.println("Created forage_finds table");
+                }
+                safeCreateIndex(adapter, "CREATE INDEX idx_forage_changed ON forage_finds (profile, changed_at)");
+                safeCreateIndex(adapter, "CREATE INDEX idx_forage_grid ON forage_finds (profile, grid_id)");
             }
         });
 

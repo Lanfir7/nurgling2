@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-forage-finds-carrier-spacing",
+  "priority": 6,
+  "summary": {
+    "ru": "Карта запоминает добытые находки с качеством, а переносчик умеет оставлять промежутки между предметами.",
+    "en": "The map remembers picked forageables with quality, and the carrier can leave gaps between placed objects."
+  },
+  "detail": {
+    "ru": "В «Инструментах карты» можно включить запись находок и открыть поиск по названию, качеству и дате. Выбор результата переводит карту к месту сбора; при подключённой БД находки доступны деревне. Наши прежние метки и их фильтры сохранены. В окне переносчика появился интервал между расставляемыми предметами: 0 оставляет плотную расстановку, 11 соответствует одной клетке.",
+    "en": "Enable forage recording in Map Tools and search finds by name, quality and date. Selecting a result centers the map on its pickup spot; database sharing makes finds available to the village. Existing markers and filters remain available. The carrier has a placement gap setting: 0 keeps objects packed together, and 11 equals one tile."
+  }
+}

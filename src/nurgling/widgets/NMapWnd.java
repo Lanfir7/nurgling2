@@ -29,6 +29,7 @@ public class NMapWnd extends MapWnd {
     QuarryartzTopoLegend quarryTopoLegend;
     MapToggleButton animalsBtn;  // Кнопка для переключения видимости маркеров животных (ObjectTracker + БД)
     MapToggleButton foragingBtn;
+    MapToggleButton forageBtn;
     MapToggleButton vectorClearBtn;
     TextEntry markerSearchField;
     Button dbExportBtn;
@@ -108,6 +109,10 @@ public class NMapWnd extends MapWnd {
         foragingBtn = add(new MapToggleButton("tree", "Toggle Foraging markers (Right-click: Foraging Search)", this::openForagingSearch));
         foragingBtn.a = getForagingIconsState();
         foragingBtn.changed(val -> setForagingIconsState(val));
+
+        forageBtn = add(new MapToggleButton("forage", L10n.get("maptools.forage_icons_tip"), MapToolsWindow::openForageSearch));
+        forageBtn.state(() -> NMiniMap.showForageFinds());
+        forageBtn.set(val -> NMiniMap.showForageFinds(val));
 
         // Vector clear button (leftmost)
         vectorClearBtn = add(new MapToggleButton("vector", "Clear tracking vectors", null, false));
@@ -583,7 +588,7 @@ public class NMapWnd extends MapWnd {
     private void layoutMapButtons() {
         Widget[] btns = {
             mapToolsBtn, fishBtn, treeBtn, oreBtn, gemBtn, quarryartzBtn,
-            quarryartzVeinBtn, animalsBtn, foragingBtn, vectorClearBtn
+            quarryartzVeinBtn, animalsBtn, foragingBtn, forageBtn, vectorClearBtn
         };
         int xpad = UI.scale(5);
         int ypad = UI.scale(5);

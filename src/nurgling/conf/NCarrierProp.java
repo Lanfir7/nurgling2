@@ -21,6 +21,8 @@ public class NCarrierProp implements JConf
     public Integer targetZoneId = null;
     public List<String> objectHistory = new ArrayList<>();
     private static final int MAX_HISTORY_SIZE = 30;
+    // Gap kept between a placed object and its neighbours, in world units (11 = one tile)
+    public int spread = 0;
 
 
     public NCarrierProp(String username, String chrid) {
@@ -43,6 +45,8 @@ public class NCarrierProp implements JConf
         }
         if (values.get("objectHistory") != null)
             objectHistory = (List<String>) values.get("objectHistory");
+        if (values.get("spread") instanceof Number)
+            spread = Math.max(0, ((Number) values.get("spread")).intValue());
     }
 
     public void addToHistory(String objectName) {
@@ -101,6 +105,7 @@ public class NCarrierProp implements JConf
         if (targetZoneId != null)
             jcarrier.put("targetZoneId", targetZoneId);
         jcarrier.put("objectHistory", objectHistory);
+        jcarrier.put("spread", spread);
         return jcarrier;
     }
 

@@ -252,6 +252,25 @@ NMiniMap extends MiniMap {
         return settings.shows(mark.kind, mark.quality);
     }
 
+    public static boolean showForageFinds() {
+        Object val = NConfig.get(NConfig.Key.showForageFinds);
+        return !(val instanceof Boolean) || (Boolean) val;
+    }
+
+    public static void showForageFinds(boolean val) {
+        NConfig.set(NConfig.Key.showForageFinds, val);
+    }
+
+    /** Forage finds whose rounded quality is below this are not drawn. */
+    public static int forageMinQuality() {
+        Object val = NConfig.get(NConfig.Key.forageMinQuality);
+        return (val instanceof Number) ? ((Number) val).intValue() : 0;
+    }
+
+    public static void forageMinQuality(int val) {
+        NConfig.set(NConfig.Key.forageMinQuality, val);
+    }
+
     // Cached waypoint number labels to avoid per-frame Text.render() allocations
     private static Text[] waypointNumCache = new Text[128];
     public static Text getWaypointLabel(int num) {
@@ -585,6 +604,7 @@ NMiniMap extends MiniMap {
 
         drawtempmarks(g);
         drawLabeledMarks(g);
+        drawForageFinds(g);
         drawterrainname(g);
         drawTimers(g);
         drawFishLocations(g);
@@ -2465,6 +2485,238 @@ NMiniMap extends MiniMap {
         }
     }
 
+    /* ---------------- Forage finds ---------------- */
+
+    /** Where each find sits on this map; resolved lazily and kept per find id. */
+    private final java.util.Map<String, nurgling.tools.GridLocator.Ref> forageRefs = new java.util.HashMap<>();
+    /** Item icons by resource name; null once a resource turned out not to load. */
+    private final java.util.Map<String, TexI> forageIconCache = new java.util.HashMap<>();
+    private ForageClusters forageClusters;
+    private long forageKeyRev = -1, forageKeySeg;
+    private double forageKeyScale;
+    private int forageKeyMinQ, forageKeyPlaced;
+    private boolean forageKeyCluster;
+    private String forageKeySearch;
+
+    /**
+     * The forage finds of the displayed segment grouped into badges, or null when there is nothing to
+     * show. Regrouped only when the finds, the filter, the zoom or the set of resolved finds change.
+     */
+    private ForageClusters forageClusters() {
+        if(dloc == null || !showForageFinds())
+            return null;
+        NGameUI gui = NUtils.getGameUI();
+        if(gui == null || gui.forageStore == null)
+            return null;
+        MapWnd mapwnd = gui.mapfile;
+        if(mapwnd != null && Utils.eq(mapwnd.markcfg, MapWnd.MarkerConfig.hideall))
+            return null;
+        nurgling.forage.ForageStore store = gui.forageStore;
+        long rev = store.revision();
+        java.util.List<nurgling.forage.ForageFind> finds = store.finds();
+        if(finds.isEmpty())
+            return null;
+        if(forageRefs.size() > finds.size() + 64) {
+            java.util.Set<String> live = new java.util.HashSet<>();
+            for(nurgling.forage.ForageFind f : finds)
+                live.add(f.id);
+            forageRefs.keySet().retainAll(live);
+        }
+        int minQ = forageMinQuality();
+        String search = timerSearch();
+        java.util.List<ForageClusters.Placed> placed = new java.util.ArrayList<>();
+        for(nurgling.forage.ForageFind f : finds) {
+            // Compared as displayed: a find labelled q30 passes a threshold of 30.
+            if(Math.round(f.quality) < minQ)
+                continue;
+            if(search != null && !f.itemName.toLowerCase().contains(search))
+                continue;
+            nurgling.tools.GridLocator.Ref ref = forageRefs.get(f.id);
+            if(ref == null) {
+                ref = new nurgling.tools.GridLocator.Ref(f.gridId, Coord.of(f.ox, f.oy));
+                forageRefs.put(f.id, ref);
+            }
+            nurgling.tools.GridLocator.resolve(gui, ref);
+            Location loc = ref.loc();
+            if(loc == null || loc.seg.id != dloc.seg.id)
+                continue;
+            placed.add(new ForageClusters.Placed(f, loc.tc));
+        }
+        double scale = scalef();
+        boolean cluster = clusterMinedMarks();
+        if(forageClusters == null || forageKeyRev != rev || forageKeySeg != dloc.seg.id || forageKeyScale != scale
+           || forageKeyMinQ != minQ || forageKeyCluster != cluster || forageKeyPlaced != placed.size()
+           || !java.util.Objects.equals(forageKeySearch, search)) {
+            forageClusters = new ForageClusters(placed, scale, MARK_MERGE, cluster);
+            forageKeyRev = rev;
+            forageKeySeg = dloc.seg.id;
+            forageKeyScale = scale;
+            forageKeyMinQ = minQ;
+            forageKeyCluster = cluster;
+            forageKeyPlaced = placed.size();
+            forageKeySearch = search;
+        }
+        return forageClusters;
+    }
+
+    /** Each badge is the best find's item icon with its quality under it, plus a count for a group. */
+    private void drawForageFinds(GOut g) {
+        ForageClusters clusters = forageClusters();
+        if(clusters == null)
+            return;
+        Coord hsz = sz.div(2);
+        double scale = scalef();
+        int iconSize = UI.scale(18);
+        for(ForageClusters.Cluster cluster : clusters.clusters) {
+            Coord sp = cluster.screenPos(dloc.tc, scale, hsz);
+            if(sp.x < -MARK_MERGE || sp.x > sz.x + MARK_MERGE || sp.y < -MARK_MERGE || sp.y > sz.y + MARK_MERGE)
+                continue;
+            nurgling.forage.ForageFind best = cluster.best();
+            TexI tex = forageIcon(best.itemRes);
+            if(tex != null) {
+                int dsz = Math.max(tex.sz().y, tex.sz().x);
+                g.aimage(tex, sp, 0.5, 0.5, UI.scale(iconSize * tex.sz().x / dsz, iconSize * tex.sz().y / dsz));
+            } else {
+                g.chcolor(120, 200, 80, 220);
+                g.fellipse(sp, UI.scale(new Coord(4, 4)));
+                g.chcolor();
+            }
+            Text lbl = LabeledMinimapMark.label("q" + Math.round(best.quality));
+            g.aimage(lbl.tex(), sp.add(0, UI.scale(10)), 0.5, 0);
+            if(cluster.finds.size() > 1)
+                drawMarkCount(g, sp.add(UI.scale(8), -UI.scale(8)), cluster.finds.size());
+        }
+    }
+
+    private TexI forageIcon(String res) {
+        if(res == null)
+            return null;
+        if(forageIconCache.containsKey(res))
+            return forageIconCache.get(res);
+        TexI tex = null;
+        try {
+            // Non-blocking: get() throws Loading until the resource arrives, and a later frame retries.
+            Resource.Image img = Resource.remote().load(res).get().layer(Resource.imgc);
+            if(img != null)
+                tex = new TexI(img.img);
+        } catch(Loading e) {
+            return null;
+        } catch(RuntimeException e) {
+            // A resource that does not exist; draw the plain dot from now on.
+        }
+        forageIconCache.put(res, tex);
+        return tex;
+    }
+
+    /** Forage badges under a screen point, topmost (last drawn) first. */
+    private java.util.List<ForageClusters.Cluster> forageClustersAt(Coord c) {
+        java.util.List<ForageClusters.Cluster> hits = new java.util.ArrayList<>();
+        ForageClusters clusters = forageClusters();
+        if(clusters == null)
+            return hits;
+        Coord hsz = sz.div(2);
+        double scale = scalef();
+        java.util.List<ForageClusters.Cluster> all = clusters.clusters;
+        for(int i = all.size() - 1; i >= 0; i--) {
+            if(c.dist(all.get(i).screenPos(dloc.tc, scale, hsz)) < MARK_HIT_RADIUS)
+                hits.add(all.get(i));
+        }
+        return hits;
+    }
+
+    private Object forageTooltip(Coord c) {
+        java.util.List<ForageClusters.Cluster> hits = forageClustersAt(c);
+        if(hits.isEmpty())
+            return null;
+        BufferedImage[] lines = new BufferedImage[hits.size()];
+        for(int i = 0; i < hits.size(); i++) {
+            ForageClusters.Cluster cluster = hits.get(i);
+            nurgling.forage.ForageFind best = cluster.best();
+            String who = best.foundBy.isEmpty() ? "" : " \u00b7 " + best.foundBy;
+            String line;
+            if(cluster.finds.size() == 1) {
+                line = String.format("%s q%d \u00d7%d \u00b7 %s%s", best.itemName, Math.round(best.quality),
+                                     best.amount, best.foundDate(), who);
+            } else {
+                line = String.format("%s \u00d7%d \u00b7 q%d\u2013q%d \u00b7 best %s%s", best.itemName,
+                                     cluster.finds.size(), Math.round(cluster.worst().quality),
+                                     Math.round(best.quality), best.foundDate(), who);
+            }
+            lines[i] = Text.render(line).img;
+        }
+        return new TexI(ItemInfo.catimgs(0, lines));
+    }
+
+    /** Right-click on a forage badge opens its menu; nothing is deleted without picking Delete. */
+    private boolean forageRightClick(Coord c) {
+        java.util.List<ForageClusters.Cluster> hits = forageClustersAt(c);
+        if(hits.isEmpty())
+            return false;
+        NGameUI gui = NUtils.getGameUI();
+        if(gui == null || gui.forageStore == null)
+            return true;
+        openForageMenu(gui, hits.get(0));
+        return true;
+    }
+
+    /**
+     * Delete / Zoom here for a single find; Delete all / Keep best / Zoom here for a group. A single find
+     * still gets two options: with "single petal" auto-select on, a one-option menu would pick Delete
+     * by itself.
+     */
+    private void openForageMenu(NGameUI gui, ForageClusters.Cluster cluster) {
+        boolean single = cluster.finds.size() == 1;
+        final String deleteAll = single ? L10n.get("forage.delete")
+                                        : L10n.get("maptools.cluster.delete_all", cluster.finds.size());
+        final String keepBest = L10n.get("maptools.cluster.keep_best");
+        final String zoomHere = L10n.get("maptools.cluster.zoom_here");
+        final java.util.List<String> ids = new java.util.ArrayList<>();
+        for(ForageClusters.Placed p : cluster.finds)
+            ids.add(p.find.id);
+        final Coord anchor = cluster.anchor;
+        final MapFile.Segment seg = dloc.seg;
+        final nurgling.forage.ForageStore store = gui.forageStore;
+        String[] opts = single ? new String[]{deleteAll, zoomHere} : new String[]{deleteAll, keepBest, zoomHere};
+        NFlowerMenu menu = new NFlowerMenu(opts) {
+            private boolean done = false;
+
+            @Override
+            public boolean mousedown(MouseDownEvent ev) {
+                if(super.mousedown(ev))
+                    nchoose(null);
+                return(true);
+            }
+
+            @Override
+            public void nchoose(NPetal option) {
+                if(done)
+                    return;
+                done = true;
+                if(option != null) {
+                    if(option.name.equals(deleteAll)) {
+                        store.removeAll(ids);
+                    } else if(option.name.equals(keepBest)) {
+                        store.removeAll(ids.subList(1, ids.size()));
+                    } else if(option.name.equals(zoomHere)) {
+                        zoomTo(seg, anchor);
+                    }
+                }
+                uimsg("cancel");
+            }
+        };
+        menu.shiftMode = true;
+        ui.root.add(menu, ui.mc);
+    }
+
+    /** Centre the map on a tile and zoom in one step (doubling the scale, up to the maximum). */
+    private void zoomTo(MapFile.Segment seg, Coord tc) {
+        follow = false;
+        setloc = null;
+        center(new Location(seg, tc));
+        targetScale = Math.min(16.0f, targetScale * 2);
+        zoomlevel = Utils.clip((int)(Math.log(1.0 / targetScale) / Math.log(2)), 0, 5);
+    }
+
     private void drawterrainname(GOut g) {
         if(dloc == null || display == null || dgext == null) {
             currentProvinceName = null;
@@ -2877,6 +3129,9 @@ NMiniMap extends MiniMap {
         if(dloc != null && sessloc != null) {
             Coord hsz = sz.div(2);
 
+            Object forageTip = forageTooltip(c);
+            if(forageTip != null)
+                return forageTip;
             // Check for tree location tooltip first (check in screen space)
             NGameUI gui = NUtils.getGameUI();
             if(gui != null && gui.treeLocationService != null && showTreeIcons()) {
@@ -3071,7 +3326,9 @@ NMiniMap extends MiniMap {
             Coord tc = c.sub(sz.div(2)).mul(scalef()).add(dloc.tc);
             DisplayMarker mark = markerat(tc);
             if(mark != null) {
-                if(isTimerResource(mark.m))
+                /* Thingwalls keep the game's own tooltip, which says more than the name; the timer hint
+                 * would replace it. */
+                if(isTimerResource(mark.m) && !NParser.checkName(((MapFile.SMarker) mark.m).res.name, "thingwall"))
                     return(Text.render(mark.m.nm + "  \u00b7  " + L10n.get("timers.map.hint")));
                 try {
                     if(mark.m instanceof MapFile.PMarker) {
@@ -4380,6 +4637,8 @@ NMiniMap extends MiniMap {
         // The grouped badge menu opens on release; prevent a walk on the press.
         if(ev.b == 3 && groupedMarkAt(ev.c) != null)
             return true;
+        if(ev.b == 3 && !forageClustersAt(ev.c).isEmpty())
+            return true;
 
         // Check for right-click on an undiscovered-LP marker. Our marker isn't a real
         // DisplayIcon, so without this check, base MiniMap.mousedown() falls through to its own
@@ -4538,6 +4797,8 @@ NMiniMap extends MiniMap {
                 }
             }
         }
+        if(ev.b == 3 && forageRightClick(ev.c))
+            return true;
         
         // Handle right-click release on tree location - open details window
         if(ev.b == 3 && dloc != null && sessloc != null && showTreeIcons()) { // Button 3 is right-clicked

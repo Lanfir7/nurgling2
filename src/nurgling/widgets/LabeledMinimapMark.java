@@ -397,6 +397,11 @@ public class LabeledMinimapMark {
         return labelTex.computeIfAbsent(rgb + " " + fontSize + " " + label, k -> furnace(rgb, fontSize).render(label));
     }
 
+    public static Text label(String text) {
+        return labelTex.computeIfAbsent(Color.WHITE.getRGB() + " 12 " + text,
+                key -> whiteFurnace(12).render(text));
+    }
+
     private static Text.Furnace furnace(int rgb, int fontSize) {
         if(rgb == Color.WHITE.getRGB())
             return whiteFurnace(fontSize);

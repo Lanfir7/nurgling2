@@ -26,7 +26,7 @@ class MigrationManagerLocalTimersRepairTest {
         Map<Integer, String> skipped = new MigrationManager(connection, adapter).runMigrations();
 
         assertEquals(23, MigrationManager.MIGRATION_QUEST_SHARES);
-        assertEquals(26, MigrationManager.CLIENT_MAX_SCHEMA_VERSION);
+        assertTrue(MigrationManager.CLIENT_MAX_SCHEMA_VERSION >= 26);
         assertTrue(skipped.isEmpty());
         assertTrue(adapter.questSharesExists,
                 "a database already at local timer grid migration must still gain quest sharing");
@@ -58,6 +58,19 @@ class MigrationManagerLocalTimersRepairTest {
         assertEquals(26, MigrationManager.MIGRATION_TIMER_NAME_TEXT);
         assertTrue(adapter.timerNameRepaired);
         assertEquals(0, adapter.timerNameLength);
+    }
+
+    @Test
+    void forageMigrationUsesFreshVersionAfterExistingTimerSchema() throws Exception {
+        Connection connection = connectionAtSchemaVersion(26);
+        RecordingPostgresAdapter adapter = new RecordingPostgresAdapter(connection);
+        adapter.timersExists = true;
+
+        new MigrationManager(connection, adapter).runMigrations();
+
+        assertEquals(27, MigrationManager.MIGRATION_FORAGE_FINDS);
+        assertEquals(27, MigrationManager.CLIENT_MAX_SCHEMA_VERSION);
+        assertTrue(adapter.forageExists);
     }
 
     @Test
@@ -216,6 +229,7 @@ class MigrationManagerLocalTimersRepairTest {
         private boolean questSharesExists;
         private boolean planningFoldersExists;
         private boolean timersExists;
+        private boolean forageExists;
         private int timerNameLength;
         private boolean timerNameRepaired;
         private final Set<String> columns = new HashSet<>();
@@ -238,7 +252,8 @@ class MigrationManagerLocalTimersRepairTest {
             return ("local_timers".equals(tableName) && localTimersExists)
                     || ("quest_shares".equals(tableName) && questSharesExists)
                     || ("planning_folders".equals(tableName) && planningFoldersExists)
-                    || ("timers".equals(tableName) && timersExists);
+                    || ("timers".equals(tableName) && timersExists)
+                    || ("forage_finds".equals(tableName) && forageExists);
         }
 
         @Override
@@ -272,6 +287,8 @@ class MigrationManagerLocalTimersRepairTest {
             } else if (sql.startsWith("CREATE TABLE timers")) {
                 timersExists = true;
                 timerNameLength = 0;
+            } else if (sql.startsWith("CREATE TABLE forage_finds")) {
+                forageExists = true;
             } else if (sql.startsWith("ALTER TABLE timers ALTER COLUMN name TYPE TEXT")) {
                 timerNameLength = 0;
                 timerNameRepaired = true;

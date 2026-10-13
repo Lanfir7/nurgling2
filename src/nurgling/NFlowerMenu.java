@@ -274,6 +274,8 @@ public class NFlowerMenu extends FlowerMenu
                     return;
                 }
             }
+            if (ui != null && ui.gui != null && ui.gui.forageRecorder != null)
+                ui.gui.forageRecorder.onPetal(option.name);
             wdgmsg("cl", option.num, ui.modflags());
             nurgling.sessions.SleepLogout.markIfSleep(ui, option.name);
             NCore.LastActions actions = ui.core.getLastActions();

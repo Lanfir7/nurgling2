@@ -144,6 +144,47 @@ class FinderCandidateOrderTest {
         assertEquals(Coord2d.of(2.5, 7.5), fromBottom.get(0));
     }
 
+    @Test
+    void spreadAddsObstacleClearanceWithoutConsumingZoneEdge() {
+        NHitBox pile = new NHitBox(Coord2d.of(-2.5, -2.5),
+                Coord2d.of(2.5, 2.5), true);
+        Pair<Coord2d, Coord2d> zone = new Pair<>(Coord2d.of(0, 0), Coord2d.of(20, 10));
+        List<NHitBoxD> column = Arrays.asList(
+                pile.toWorld(Coord2d.of(3.5, 2.5), 0),
+                pile.toWorld(Coord2d.of(3.5, 7.5), 0));
+
+        assertEquals(Coord2d.of(8.5, 2.5), Finder.collectDenseFreePlaces(
+                zone, pile, 0, PileFillDirection.LEFT_TO_RIGHT, column).get(0));
+        assertEquals(Coord2d.of(10.5, 2.5), Finder.collectDenseFreePlaces(
+                zone, pile, 0, PileFillDirection.LEFT_TO_RIGHT, column, 2).get(0));
+        assertEquals(Coord2d.of(2.5, 2.5), Finder.collectDenseFreePlaces(
+                new Pair<>(Coord2d.of(0, 0), Coord2d.of(5, 5)), pile, 0,
+                PileFillDirection.LEFT_TO_RIGHT, java.util.Collections.emptyList(), 4).get(0));
+    }
+
+    @Test
+    void spreadFollowsRotatedAsymmetricFootprintBesideWall() {
+        NHitBox item = new NHitBox(Coord2d.of(-1, -2), Coord2d.of(4, 2), true);
+        item.mirrorAsymmetric = false;
+        double angle = Math.PI / 2;
+        double gap = 2;
+        NHitBoxD wall = new NHitBoxD(Coord2d.of(-1, -20), Coord2d.of(1, 20),
+                Coord2d.of(5, 15), 0);
+        Pair<Coord2d, Coord2d> zone = new Pair<>(Coord2d.of(0, 0), Coord2d.of(30, 30));
+        NHitBoxD expanded = new NHitBoxD(item.begin.sub(gap, gap),
+                item.end.add(gap, gap), Coord2d.of(0), angle, false);
+        Coord2d first = Finder.collectDenseFreePlaces(zone, item, angle,
+                PileFillDirection.LEFT_TO_RIGHT,
+                java.util.Collections.singletonList(wall), gap).get(0);
+
+        assertEquals(wall.getCircumscribedBR().x - expanded.getCircumscribedUL().x,
+                first.x, 0.001);
+        NHitBoxD actual = item.toWorld(first, angle);
+        assertEquals(0, actual.getCircumscribedUL().y, 0.001);
+        assertEquals(false, wall.intersects(new NHitBoxD(item.begin.sub(gap, gap),
+                item.end.add(gap, gap), first, angle, false), false));
+    }
+
     private static List<Double> xs() {
         return Arrays.asList(1.0, 2.0);
     }
