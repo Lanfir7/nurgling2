@@ -501,6 +501,17 @@ public class NMakewindow extends Widget implements DTarget {
         recipesPersisted = true;
     }
 
+    /** Turns autocrafting on as clicking its checkbox does, so the checkbox shows it. */
+    public void enableAutoMode() {
+        if(autoChk != null)
+            autoChk.set(true);
+    }
+
+    /** Recalculate controls after a cookbook selection changes ingredient slots. */
+    public void refreshModeUi() {
+        applyModeUi();
+    }
+
     /**
      * Check if all category inputs have their ingredient selected.
      */

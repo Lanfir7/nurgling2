@@ -16,10 +16,9 @@ import nurgling.db.dao.StorageItemDao;
 import nurgling.db.service.ContainerService;
 import nurgling.db.service.StorageItemService;
 import nurgling.i18n.L10n;
-import nurgling.areas.NArea;
-import nurgling.navigation.ChunkNavManager;
 import nurgling.sessions.BotExecutor;
 import nurgling.widgets.storage.StashView;
+import nurgling.widgets.storage.VillageStorage;
 
 import java.awt.Color;
 import java.util.*;
@@ -327,8 +326,7 @@ public class NStorageItemsWidget extends Window {
 
         y += UI.scale(30);
 
-        Object onlyVillageConf = NConfig.get(NConfig.Key.storageOnlyVillage);
-        onlyVillage = !(onlyVillageConf instanceof Boolean) || (Boolean) onlyVillageConf;
+        onlyVillage = VillageStorage.onlyVillage();
         onlyVillageBox = add(new CheckBox(L10n.get("storage.only_village")) {
             @Override
             public void changed(boolean val) {
@@ -605,13 +603,7 @@ public class NStorageItemsWidget extends Window {
         long generation = dataGeneration;
         NGameUI gui = ui.gui;
         // Read on the UI thread; the village is worked out with the items, off it
-        ChunkNavManager nav = (gui != null && gui.map instanceof NMapView) ? ((NMapView) gui.map).getChunkNavManager() : null;
-        List<Set<Long>> areaGrids = new ArrayList<>();
-        if (gui != null && gui.map != null) {
-            for (NArea area : gui.map.glob.map.areas.values())
-                if (area.space != null)
-                    areaGrids.add(new HashSet<>(area.space.space.keySet()));
-        }
+        VillageStorage storage = VillageStorage.snapshot(gui);
         StorageItemService storageService = new StorageItemService(ui.core.databaseManager);
         ContainerService containerService = new ContainerService(ui.core.databaseManager);
 
@@ -625,12 +617,8 @@ public class NStorageItemsWidget extends Window {
                 for (ContainerDao.ContainerData container : containerService.loadAllContainers()) {
                     containers.put(container.getHash(), container);
                 }
-                // Filter out items with negative quality (shouldn't be in DB, but just in case)
-                List<StorageItemDao.StorageItemData> validItems = items.stream()
-                    .filter(item -> item.getQuality() >= 0)
-                    .collect(Collectors.toList());
-                Set<Long> village = (nav != null && nav.isInitialized())
-                        ? nav.getGraph().pieceWithMostAreas(areaGrids) : Collections.emptySet();
+                List<StorageItemDao.StorageItemData> validItems = VillageStorage.valid(items);
+                Set<Long> village = storage.village();
                 completedLoad = new LoadResult(generation, validItems, containers, village, null);
             } catch (Exception e) {
                 completedLoad = new LoadResult(generation, Collections.emptyList(),

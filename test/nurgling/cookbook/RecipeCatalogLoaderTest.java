@@ -1,6 +1,9 @@
 package nurgling.cookbook;
 
+import nurgling.NConfig;
 import nurgling.cookbook.connection.RecipeCatalogLoader;
+import nurgling.db.dao.StorageItemDao;
+import nurgling.widgets.storage.VillageStorage;
 import org.junit.jupiter.api.Test;
 
 import java.sql.SQLException;
@@ -117,6 +120,39 @@ class RecipeCatalogLoaderTest {
     }
 
     @Test
+    void storageFailureKeepsCatalogAndFavoritesAvailable() {
+        FakeSource source = FakeSource.ready(Collections.singletonList(recipe("h", "Pie")), setOf("h"));
+        source.stockError = new SQLException("storage down");
+        RecipeCatalogLoader loader = new RecipeCatalogLoader(source, VillageStorage.snapshot(null));
+
+        assertTrue(loader.start());
+        assertTrue(loader.ready.get());
+        assertNull(loader.error());
+        assertEquals(1, loader.recipes().size());
+        assertTrue(loader.recipes().get(0).isFavorite());
+        assertNull(loader.stock());
+    }
+
+    @Test
+    void storageScopeIsCapturedBeforeBackgroundLoad() {
+        NConfig previous = NConfig.current;
+        try {
+            NConfig.current = new NConfig();
+            NConfig.set(NConfig.Key.storageOnlyVillage, true);
+            FakeSource source = FakeSource.ready(Collections.singletonList(recipe("h", "Pie")), Collections.emptySet());
+            RecipeCatalogLoader loader = new RecipeCatalogLoader(source, VillageStorage.snapshot(null));
+            NConfig.set(NConfig.Key.storageOnlyVillage, false);
+
+            assertTrue(loader.start());
+            assertTrue(loader.onlyVillage);
+            assertFalse(VillageStorage.onlyVillage());
+            assertNotNull(loader.stock());
+        } finally {
+            NConfig.current = previous;
+        }
+    }
+
+    @Test
     void skipWhenSourceNotReadyDoesNotLoad() {
         FakeSource source = FakeSource.ready(Collections.singletonList(recipe("h", "X")), setOf("h"));
         source.ready = false;
@@ -192,6 +228,7 @@ class RecipeCatalogLoaderTest {
         List<Recipe> recipes = new ArrayList<Recipe>();
         Set<String> favorites = new HashSet<String>();
         Exception error;
+        Exception stockError;
         final AtomicInteger loadCalls = new AtomicInteger();
 
         static FakeSource ready(List<Recipe> recipes, Set<String> favorites) {
@@ -221,6 +258,13 @@ class RecipeCatalogLoaderTest {
                 throw error;
             }
             return favorites;
+        }
+
+        @Override
+        public List<StorageItemDao.StorageItemData> loadStorageItems() throws Exception {
+            if (stockError != null)
+                throw stockError;
+            return Collections.emptyList();
         }
     }
 }

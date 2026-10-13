@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-cookbook-variations",
+  "priority": 7,
+  "summary": {
+    "ru": "Книга рецептов показывает неопробованные варианты и наличие ингредиентов на складе деревни.",
+    "en": "The cookbook shows untried variations and which ingredients are in village storage."
+  },
+  "detail": {
+    "ru": "Откройте книгу рецептов и нажмите ПКМ на блюде, чтобы увидеть неопробованные сочетания. Зелёная рамка означает, что все перечисленные виды ингредиентов есть на складе деревни; количество для приготовления не проверяется. Щелчок по рецепту открывает ремесло и подставляет подходящие ингредиенты.",
+    "en": "Open the cookbook and right-click a dish to explore untried combinations. A green frame means every listed ingredient type is present in village storage; it does not check whether there is enough to craft. Clicking a recipe opens crafting and selects matching ingredients."
+  }
+}

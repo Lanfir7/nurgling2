@@ -400,12 +400,18 @@ public class RecipeTable extends Widget {
                     if(sb.length() > 0)
                         sb.append('\n');
                     sb.append(RichText.Parser.quote(e.getKey())).append(": ").append(Utils.odformat2(e.getValue().percentage, 2)).append('%');
+                    if(model.stockKnown())
+                        sb.append(" · ").append(stored(model.storedAmount(e.getKey())));
                 }
                 Map<String, Double> woods = CookbookRow.smokingWoods(row.recipe);
                 if(!woods.isEmpty()) {
                     List<String> woodTips = new ArrayList<>();
-                    for(Map.Entry<String, Double> e : woods.entrySet())
-                        woodTips.add(RichText.Parser.quote(e.getKey()) + " (" + Utils.odformat2(e.getValue(), 2) + "%)");
+                    for(Map.Entry<String, Double> e : woods.entrySet()) {
+                        String w = RichText.Parser.quote(e.getKey()) + " (" + Utils.odformat2(e.getValue(), 2) + "%)";
+                        if(model.stockKnown())
+                            w += " · " + stored(model.storedWood(e.getKey()));
+                        woodTips.add(w);
+                    }
                     if(sb.length() > 0)
                         sb.append('\n');
                     sb.append("$col[232,163,61]{").append(RichText.Parser.quote(L10n.get("cookbook.smoked_with")))
@@ -421,6 +427,13 @@ public class RecipeTable extends Widget {
                 ingTip = CookbookTheme.tip.render(sb.toString(), UI.scale(320)).tex();
             }
             return ingTip;
+        }
+
+        /* "534 stored" in green, or "none stored" in red, as rich text. */
+        private String stored(String amount) {
+            if(amount == null)
+                return "$col[224,122,106]{" + RichText.Parser.quote(L10n.get("cookbook.tip.none_stored")) + "}";
+            return "$col[122,209,122]{" + RichText.Parser.quote(L10n.get("cookbook.tip.stored", amount)) + "}";
         }
 
         @Override
@@ -478,6 +491,11 @@ public class RecipeTable extends Widget {
             number(g, Col.FH, perHunger);
             number(g, Col.TOP, top);
             number(g, Col.ENERGY, energy);
+            if(model.cookable(row)) {
+                /* Every listed ingredient type is present in the village's storage. */
+                CookbookTheme.frame(g, Coord.z, Coord.of(sz.x, sz.y - 1), CookbookTheme.stocked);
+                CookbookTheme.frame(g, Coord.of(1, 1), Coord.of(sz.x - 2, sz.y - 3), CookbookTheme.stocked);
+            }
         }
 
         @Override
