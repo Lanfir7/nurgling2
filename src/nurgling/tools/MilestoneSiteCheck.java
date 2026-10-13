@@ -41,7 +41,7 @@ public final class MilestoneSiteCheck {
 
     public static boolean collides(Glob glob, NHitBox hitBox, Coord2d position, double angle, Predicate<Gob> ignore) {
         if (glob == null || hitBox == null || position == null) return false;
-        NHitBoxD candidate = new NHitBoxD(hitBox.begin, hitBox.end, position, angle);
+        NHitBoxD candidate = hitBox.toWorld(position, angle);
         synchronized (glob.oc) {
             for (Gob gob : glob.oc) {
                 if (skip(gob, ignore)) continue;
@@ -61,7 +61,7 @@ public final class MilestoneSiteCheck {
                 NHitBox obstacle = gob.ngob.hitBox;
                 if (obstacle == null && gob.ngob.name != null)
                     obstacle = NHitBox.findCustom(gob.ngob.name);
-                if (obstacle != null && new NHitBoxD(obstacle.begin, obstacle.end, gob.rc, gob.a).contains(point, true))
+                if (obstacle != null && obstacle.toWorld(gob.rc, gob.a).contains(point, true))
                     return true;
             }
         }
@@ -95,7 +95,7 @@ public final class MilestoneSiteCheck {
         if (obstacle == null && gob.ngob.name != null)
             obstacle = NHitBox.findCustom(gob.ngob.name);
         return obstacle != null &&
-                new NHitBoxD(obstacle.begin, obstacle.end, gob.rc, gob.a).intersects(candidate, false);
+                obstacle.toWorld(gob.rc, gob.a).intersects(candidate, false);
     }
 
     /** Swallow a map that is still loading. Callers that must match the old hint keep the throw. */

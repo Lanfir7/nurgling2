@@ -118,7 +118,7 @@ public class MixedGhostStore extends GAttrib {
     public Entry findContaining(Coord2d pos) {
         for (Entry e : entries) {
             if (e.unrotatedHitbox == null) continue;
-            NHitBoxD box = new NHitBoxD(e.unrotatedHitbox.begin, e.unrotatedHitbox.end, e.pos, e.angleRadians());
+            NHitBoxD box = e.unrotatedHitbox.toWorld(e.pos, e.angleRadians());
             // Build a tiny point-sized box at pos and use intersection
             NHitBoxD point = new NHitBoxD(pos.add(-0.5, -0.5), pos.add(0.5, 0.5));
             if (box.intersects(point, false)) return e;
@@ -174,7 +174,7 @@ public class MixedGhostStore extends GAttrib {
      */
     public boolean collides(NHitBox hb, Coord2d pos, int rot, Entry ignore) {
         if (hb == null) return false;
-        NHitBoxD testBox = new NHitBoxD(hb.begin, hb.end, pos, rot * Math.PI / 2.0);
+        NHitBoxD testBox = hb.toWorld(pos, rot * Math.PI / 2.0);
 
         // Real-world obstacles
         try {
@@ -200,7 +200,7 @@ public class MixedGhostStore extends GAttrib {
         for (Entry e : entries) {
             if (e == ignore) continue;
             if (e.unrotatedHitbox == null) continue;
-            NHitBoxD eBox = new NHitBoxD(e.unrotatedHitbox.begin, e.unrotatedHitbox.end, e.pos, e.angleRadians());
+            NHitBoxD eBox = e.unrotatedHitbox.toWorld(e.pos, e.angleRadians());
             if (eBox.intersects(testBox, false)) return true;
         }
         return false;

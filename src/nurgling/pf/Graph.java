@@ -291,7 +291,7 @@ public class Graph implements Runnable
                                     {
                                         Gob g = Finder.findGob(id);
                                         if(g!=null) {
-                                            if (hbd.intersects(new NHitBoxD(g.ngob.hitBox.begin, g.ngob.hitBox.end, g.rc, g.a),true)) {
+                                            if (hbd.intersects(g.ngob.hitBox.toWorld(g.rc, g.a),true)) {
                                                 isFree = false;
                                                 break;
                                             }

@@ -237,7 +237,7 @@ public class BuildTrellis implements Action {
             ArrayList<NHitBoxD> significantGobs = new ArrayList<>();
             NHitBoxD chekerOfArea = new NHitBoxD(area.a, area.b);
 
-            NHitBoxD temporalGobBox = new NHitBoxD(hitBox.begin, hitBox.end, Coord2d.of(0), 0);
+            NHitBoxD temporalGobBox = hitBox.toWorld(Coord2d.of(0), 0);
             if(chekerOfArea.c[2].sub(chekerOfArea.c[0]).x < temporalGobBox.getCircumscribedBR().sub(temporalGobBox.getCircumscribedUL()).x ||
                     chekerOfArea.c[2].sub(chekerOfArea.c[0]).y < temporalGobBox.getCircumscribedBR().sub(temporalGobBox.getCircumscribedUL()).y)
                 return null;
@@ -333,7 +333,7 @@ public class BuildTrellis implements Action {
                     }
 
                     // Check collisions with existing objects (not with our own trellises)
-                    NHitBoxD testGobBox = new NHitBoxD(hitBox.begin, hitBox.end, testPos, 0);
+                    NHitBoxD testGobBox = hitBox.toWorld(testPos, 0);
                     boolean passed = true;
                     for (NHitBoxD significantHitbox : significantGobs) {
                         if(significantHitbox.intersects(testGobBox, false)) {

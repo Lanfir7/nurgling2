@@ -47,13 +47,16 @@ public class PlacementSnap {
         if(pbox == null)
             return(null);
 
-        // Ghost footprint as an axis-aligned box at the current rotation,
-        // centred on the cursor. Half-extents are symmetric about mc.
-        NHitBoxD pd = new NHitBoxD(pbox.begin, pbox.end, mc, plob.a);
+        // Ghost footprint as an axis-aligned box at the current rotation.
+        // Edges are measured from the cursor: an asymmetric obstacle (herbalist
+        // table) is not centred, and half-extents would leave a gap.
+        NHitBoxD pd = pbox.toWorld(mc, plob.a);
         Coord2d pul = pd.getCircumscribedUL();
         Coord2d pbr = pd.getCircumscribedBR();
-        double hw = (pbr.x - pul.x) / 2.0;
-        double hh = (pbr.y - pul.y) / 2.0;
+        double left = pul.x - mc.x;
+        double right = pbr.x - mc.x;
+        double top = pul.y - mc.y;
+        double bottom = pbr.y - mc.y;
 
         MapView mv = plob.mv();
         Gob player = mv.player();
@@ -84,22 +87,21 @@ public class PlacementSnap {
                 if(gob.rc.dist(mc) > SEARCH_RADIUS)
                     continue;
 
-                NHitBoxD nd = new NHitBoxD(nb.begin, nb.end, gob.rc, gob.a);
+                NHitBoxD nd = nb.toWorld(gob.rc, gob.a);
                 Coord2d nul = nd.getCircumscribedUL();
                 Coord2d nbr = nd.getCircumscribedBR();
 
                 // X snapping only makes sense when the ghost overlaps the
                 // neighbour's Y span (i.e. they are side-by-side), within CAPTURE.
-                boolean yAdjacent = (mc.y + hh > nul.y - CAPTURE) && (mc.y - hh < nbr.y + CAPTURE);
+                boolean yAdjacent = (mc.y + bottom > nul.y - CAPTURE) && (mc.y + top < nbr.y + CAPTURE);
                 if(yAdjacent) {
-                    // ghost-right→neighbour-left, ghost-left→neighbour-right, align-left, align-right
-                    double[] r = best(mc.x, nul.x - hw, nbr.x + hw, nul.x + hw, nbr.x - hw, bestDX);
+                    double[] r = best(mc.x, flushCandidates(left, right, nul.x, nbr.x), bestDX);
                     if(r != null) { bestDX = r[0]; snapX = r[1]; }
                 }
 
-                boolean xAdjacent = (mc.x + hw > nul.x - CAPTURE) && (mc.x - hw < nbr.x + CAPTURE);
+                boolean xAdjacent = (mc.x + right > nul.x - CAPTURE) && (mc.x + left < nbr.x + CAPTURE);
                 if(xAdjacent) {
-                    double[] r = best(mc.y, nul.y - hh, nbr.y + hh, nul.y + hh, nbr.y - hh, bestDY);
+                    double[] r = best(mc.y, flushCandidates(top, bottom, nul.y, nbr.y), bestDY);
                     if(r != null) { bestDY = r[0]; snapY = r[1]; }
                 }
             }
@@ -112,14 +114,27 @@ public class PlacementSnap {
     }
 
     /**
-     * From four candidate coordinates, return {currentBest distance, winning
+     * Cursor positions that put this footprint flush with a neighbour.
+     * {@code near}/{@code far} are the ghost edges relative to the cursor.
+     */
+    static double[] flushCandidates(double near, double far, double neighbourNear, double neighbourFar) {
+        return new double[] {
+            neighbourNear - far,
+            neighbourFar - near,
+            neighbourNear - near,
+            neighbourFar - far
+        };
+    }
+
+    /**
+     * From candidate coordinates, return {currentBest distance, winning
      * coordinate} if any beats {@code curBest} (the closest-so-far distance from
      * {@code from}); otherwise {@code null}.
      */
-    private static double[] best(double from, double c1, double c2, double c3, double c4, double curBest) {
+    private static double[] best(double from, double[] candidates, double curBest) {
         double bd = curBest;
         double bc = Double.NaN;
-        for(double c : new double[]{c1, c2, c3, c4}) {
+        for(double c : candidates) {
             double d = Math.abs(c - from);
             if(d < bd) { bd = d; bc = c; }
         }

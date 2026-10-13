@@ -45,11 +45,22 @@ public class NModelBox extends Sprite implements RenderTree.Node {
             if (hitBox != null)
             {
                 ArrayList<Polygon> polygons = new ArrayList<>();
+                Coord2d localBegin = hitBox.begin;
+                Coord2d localEnd = hitBox.end;
                 Coord2d[] polyVertexes = new Coord2d[4];
-                polyVertexes[0] = hitBox.begin.inv();
-                polyVertexes[1] = new Coord2d(hitBox.end.x, hitBox.begin.y).inv();
-                polyVertexes[2] = hitBox.end.inv();
-                polyVertexes[3] = new Coord2d(hitBox.begin.x, hitBox.end.y).inv();
+                // Creature boxes are mirrored with inv(), which matches pathfinding.
+                // Resource walls already sit on the mesh; only the render Y axis is flipped.
+                if (hitBox.mirrorAsymmetric) {
+                    polyVertexes[0] = localBegin.inv();
+                    polyVertexes[1] = new Coord2d(localEnd.x, localBegin.y).inv();
+                    polyVertexes[2] = localEnd.inv();
+                    polyVertexes[3] = new Coord2d(localBegin.x, localEnd.y).inv();
+                } else {
+                    polyVertexes[0] = new Coord2d(localBegin.x, -localBegin.y);
+                    polyVertexes[1] = new Coord2d(localEnd.x, -localBegin.y);
+                    polyVertexes[2] = new Coord2d(localEnd.x, -localEnd.y);
+                    polyVertexes[3] = new Coord2d(localBegin.x, -localEnd.y);
+                }
                 polygons.add(new Polygon(polyVertexes));
 
                 return new NBoundingBox(polygons, true);
@@ -60,6 +71,9 @@ public class NModelBox extends Sprite implements RenderTree.Node {
             }
         }
     }
+
+    /** Gob origin is already the ground. Area fills use that same surface; a tiny lift only avoids z-fighting. */
+    private static final float GROUND_Z = 0.02f;
 
     public static final Color DEF_FILL = new Color(227, 28, 1, 195);
     public static final Color DEF_EDGE = new Color(224, 193, 79, 255);
@@ -241,12 +255,12 @@ public class NModelBox extends Sprite implements RenderTree.Node {
             if (pol.neg) {
                 for (int i = 3; i >= 0; i--) {
                     buf.putFloat((float) pol.vertices[i].x).putFloat((float) -pol.vertices[i].y)
-                            .putFloat(1.0f);
+                            .putFloat(GROUND_Z);
                 }
             } else {
                 for (int i = 0; i < 4; i++) {
                     buf.putFloat((float) pol.vertices[i].x).putFloat((float) pol.vertices[i].y)
-                            .putFloat(1.0f);
+                            .putFloat(GROUND_Z);
                 }
             }
             return (ret);

@@ -2047,7 +2047,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 	    final double snapMax = Math.max(6.0, MCache.tilesz.x * 1.1);
 	    final double searchPad = Math.max(80.0, MCache.tilesz.x * 8.0);
 
-	    final nurgling.pf.NHitBoxD base = new nurgling.pf.NHitBoxD(hb.begin, hb.end, pos, angle);
+	    final nurgling.pf.NHitBoxD base = hb.toWorld(pos, angle);
 	    final Coord2d baseUL = base.getCircumscribedUL();
 	    final Coord2d baseBR = base.getCircumscribedBR();
 
@@ -2073,7 +2073,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		    if(ghb == null)
 			continue;
 
-		    nurgling.pf.NHitBoxD ob = new nurgling.pf.NHitBoxD(ghb.begin, ghb.end, gob.rc, gob.a);
+		    nurgling.pf.NHitBoxD ob = ghb.toWorld(gob.rc, gob.a);
 		    Coord2d oul = ob.getCircumscribedUL();
 		    Coord2d obr = ob.getCircumscribedBR();
 		    if((obr.x < baseUL.x - searchPad) || (oul.x > baseBR.x + searchPad) ||
@@ -2093,7 +2093,7 @@ public class MapView extends PView implements DTarget, Console.Directory {
 		Coord2d obr = ob.getCircumscribedBR();
 
 		java.util.function.Predicate<Coord2d> valid = candPos -> {
-		    nurgling.pf.NHitBoxD cand = new nurgling.pf.NHitBoxD(hb.begin, hb.end, candPos, angle);
+		    nurgling.pf.NHitBoxD cand = hb.toWorld(candPos, angle);
 		    for(nurgling.pf.NHitBoxD other : obstacles) {
 			if(other.intersects(cand, false))
 			    return(false);

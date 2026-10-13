@@ -53,8 +53,8 @@ public class FeedClover implements Action {
                                         NHitBox animal, Coord2d animalRc, double animalA) {
         if (player == null || animal == null || playerRc == null || animalRc == null)
             return false;
-        return new NHitBoxD(player.begin, player.end, playerRc, playerA)
-                .intersects(new NHitBoxD(animal.begin, animal.end, animalRc, animalA), true);
+        return player.toWorld(playerRc, playerA)
+                .intersects(animal.toWorld(animalRc, animalA), true);
     }
 
     static boolean hitboxesTouch(Gob player, Gob animal) {

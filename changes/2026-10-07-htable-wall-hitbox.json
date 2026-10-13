@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-07-htable-wall-hitbox",
+  "priority": 5,
+  "summary": {
+    "ru": "Стол травника и стенки домов с подвалами занимают свой настоящий контур.",
+    "en": "The herbalist table and house or cellar walls use their real outline."
+  },
+  "detail": {
+    "ru": "Хитбокс стола травника совпадает со столешницей, а не с более длинным прямоугольником. Край дома и стенки подвала лежат на земле вдоль самой стены и учитываются при расстановке, поэтому вещи не ставятся в стену. Привязка к соседям и по граням ставит предмет вплотную к этому контуру.",
+    "en": "The herbalist table hitbox matches the tabletop instead of a longer rectangle. House edges and cellar walls lie on the ground along the wall itself and are included when placing objects, so items are not put into the wall. Snapping to neighbours or by edges places an object flush against that outline."
+  }
+}

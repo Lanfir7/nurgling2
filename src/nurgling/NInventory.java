@@ -539,7 +539,7 @@ public class NInventory extends Inventory
     }
 
     /**
-     * Contents of belt pouches such as a Poacher's Pouch. The pouches themselves are not included.
+     * Contents of belt pouches such as a Poacher's Pouch or Wicker Picker. The pouches themselves are not included.
      */
     public List<WItem> beltPouchContents() {
         if (ui == null) {

@@ -8,6 +8,11 @@ public class NHitBox
 {
     public Coord2d begin;
     public Coord2d end;
+    /**
+     * Creature obstacles are authored facing +X and mirrored when placed.
+     * Building pieces whose obstacle already matches the mesh keep this false.
+     */
+    public boolean mirrorAsymmetric = true;
     public NHitBox(Coord begin, Coord end, boolean force)
     {
         this(new Coord2d(begin),new Coord2d(end), force);
@@ -62,7 +67,8 @@ public class NHitBox
             put("gfx/terobjs/candelabrum", new NHitBox(new Coord(-2,-2),new Coord(2,2)));
             put("gfx/terobjs/gardenpot", new NHitBox(new Coord2d(-2.5,-2.5), new Coord2d(2.5,2.5), true));
             put("gfx/terobjs/cupboard", new NHitBox(new Coord2d(-5.5,-5.5),new Coord2d(5.5,5.5)));
-            put("gfx/terobjs/htable", new NHitBox(new Coord2d(-3.5,-7.0),new Coord2d(3.5,7.0), true));
+            put("gfx/terobjs/htable", resourceObstacle(-2.96484375, -5.94580078125, 3.9638671875 + tableFrontNudge(), 5.94580078125));
+            put("gfx/terobjs/arch/hwall", resourceObstacle(-0.8902587890625 + wallRoomNudge(), -10.892578125, -0.11002349853515625 + wallRoomNudge(), -0.11002349853515625));
             put("gfx/terobjs/lanternpost", new NHitBox(new Coord(-2,-2),new Coord(2,2)));
             put("gfx/terobjs/cistern", new NHitBox(new Coord(-9,-9),new Coord(9,9)));
             put("gfx/terobjs/oven", new NHitBox(new Coord2d(-9,-7.5),new Coord2d(9,7.5)));
@@ -194,6 +200,27 @@ public class NHitBox
         return n.contains("skull") || n.contains("beef");
     }
 
+    /** Tiny outward nudge of the table's short front edge. */
+    static double tableFrontNudge() {
+        return 0.05;
+    }
+
+    /** A full place-grid step (tile/8) pushed the thin wall through the table and the next wall. tile/64 stays just inside the real wall. */
+    static double wallRoomNudge() {
+        return MCache.tilesz.x / 64.0;
+    }
+
+    /** Obstacle already in mesh space: placement must not mirror it. */
+    private static NHitBox resourceObstacle(double x0, double y0, double x1, double y1) {
+        NHitBox box = new NHitBox(new Coord2d(x0, y0), new Coord2d(x1, y1), true);
+        box.mirrorAsymmetric = false;
+        return box;
+    }
+
+    public nurgling.pf.NHitBoxD toWorld(Coord2d rc, double angle) {
+        return new nurgling.pf.NHitBoxD(begin, end, rc, angle, mirrorAsymmetric);
+    }
+
     public static NHitBox findCustom(String name)
     {
         if(name == null)
@@ -221,7 +248,9 @@ public class NHitBox
     }
 
     public NHitBox rotate(){
-        return new NHitBox(new Coord((int) begin.y, (int) begin.x),new Coord((int) end.y, (int) end.x), true);
+        NHitBox rotated = new NHitBox(new Coord((int) begin.y, (int) begin.x),new Coord((int) end.y, (int) end.x), true);
+        rotated.mirrorAsymmetric = mirrorAsymmetric;
+        return rotated;
     }
 
     @Override

@@ -575,7 +575,7 @@ public class Finder
         NHitBoxD chekerOfArea = new NHitBoxD(area.a, area.b);
 
         // Check area size with rotated hitbox dimensions
-        NHitBoxD temporalGobBox = new NHitBoxD(hitBox.begin, hitBox.end, Coord2d.of(0), angle);
+        NHitBoxD temporalGobBox = hitBox.toWorld(Coord2d.of(0), angle);
         if(chekerOfArea.c[2].sub(chekerOfArea.c[0]).x < temporalGobBox.getCircumscribedBR().sub(temporalGobBox.getCircumscribedUL()).x ||
                 chekerOfArea.c[2].sub(chekerOfArea.c[0]).y < temporalGobBox.getCircumscribedBR().sub(temporalGobBox.getCircumscribedUL()).y )
             return candidates;
@@ -597,7 +597,7 @@ public class Finder
                     }
 
                     if(effectiveHitBox != null && gob.getattr(Following.class)==null  && gob.id!= NUtils.player().id){
-                        NHitBoxD gobBox = new NHitBoxD(effectiveHitBox.begin, effectiveHitBox.end, gob.rc, gob.a);
+                        NHitBoxD gobBox = effectiveHitBox.toWorld(gob.rc, gob.a);
                         if (gobBox.intersects(chekerOfArea,true))
                             significantGobs.add(gobBox);
                     }
@@ -632,7 +632,7 @@ public class Finder
 
         // Derive the valid center range from the exact rotated bounds.  Using half of the
         // rounded width lets odd-sized piles protrude past the far edge of the area.
-        NHitBoxD tempBox = new NHitBoxD(hitBox.begin, hitBox.end, Coord2d.of(0), angle);
+        NHitBoxD tempBox = hitBox.toWorld(Coord2d.of(0), angle);
         Coord2d rotatedUL = tempBox.getCircumscribedUL();
         Coord2d rotatedBR = tempBox.getCircumscribedBR();
 
@@ -690,7 +690,7 @@ public class Finder
             return positions;
 
         Coord2d areaSize = area.b.sub(area.a);
-        NHitBoxD tempBox = new NHitBoxD(hitBox.begin, hitBox.end, Coord2d.of(0), angle);
+        NHitBoxD tempBox = hitBox.toWorld(Coord2d.of(0), angle);
         Coord2d rotatedUL = tempBox.getCircumscribedUL();
         Coord2d rotatedBR = tempBox.getCircumscribedBR();
         double minX = -rotatedUL.x;
@@ -725,7 +725,7 @@ public class Finder
                 if (passed) {
                     Coord2d placed = candidateCenter;
                     positions.add(placed);
-                    NHitBoxD placedBox = new NHitBoxD(hitBox.begin, hitBox.end, placed, angle);
+                    NHitBoxD placedBox = hitBox.toWorld(placed, angle);
                     blocked.add(placedBox);
                     addFlushOffsets(xs, ys, placedBox, area.a, rotatedUL, rotatedBR, minX, maxX, minY, maxY);
                 }
@@ -751,7 +751,7 @@ public class Finder
             begin = Coord2d.of(left + slop, top + slop);
             end = Coord2d.of(right - slop, bottom - slop);
         }
-        return obstacle.intersects(new NHitBoxD(begin, end, center, angle), false);
+        return obstacle.intersects(new NHitBoxD(begin, end, center, angle, hitBox.mirrorAsymmetric), false);
     }
 
     private static void addFlushOffsets(List<Double> xs, List<Double> ys, NHitBoxD obstacle,
@@ -848,7 +848,7 @@ public class Finder
         NHitBoxD chekerOfArea = new NHitBoxD(area.a, area.b);
 
         // Check area size with rotated hitbox dimensions
-        NHitBoxD temporalGobBox = new NHitBoxD(hitBox.begin, hitBox.end, Coord2d.of(0), angle);
+        NHitBoxD temporalGobBox = hitBox.toWorld(Coord2d.of(0), angle);
         Coord2d rotatedUL = temporalGobBox.getCircumscribedUL();
         Coord2d rotatedBR = temporalGobBox.getCircumscribedBR();
         Coord hitboxSize = rotatedBR.sub(rotatedUL).floor();
@@ -875,7 +875,7 @@ public class Finder
                     }
 
                     if(effectiveHitBox != null && gob.getattr(Following.class)==null  && gob.id!= NUtils.player().id){
-                        NHitBoxD gobBox = new NHitBoxD(effectiveHitBox.begin, effectiveHitBox.end, gob.rc, gob.a);
+                        NHitBoxD gobBox = effectiveHitBox.toWorld(gob.rc, gob.a);
                         if (gobBox.intersects(chekerOfArea,true))
                             significantGobs.add(gobBox);
                     }
@@ -903,7 +903,7 @@ public class Finder
                 }
                 
                 // Create test box at tile center
-                NHitBoxD testGobBox = new NHitBoxD(hitBox.begin, hitBox.end, tileCenter, angle);
+                NHitBoxD testGobBox = hitBox.toWorld(tileCenter, angle);
                 
                 // Check collisions with obstacles
                 boolean passed = true;

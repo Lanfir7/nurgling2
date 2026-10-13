@@ -19,7 +19,7 @@ import java.util.function.Predicate;
 public final class ExtraInvGroupTransfer {
     public static final int TRANSFER_COUNT = 1;
     private static final Set<String> EXTERNAL_BAG_NAMES = Set.of(
-            "Creel", "Poacher's Pouch", "Leather Purse", "Silk Purse", "Seedbag");
+            "Creel", "Poacher's Pouch", "Leather Purse", "Silk Purse", "Seedbag", "Wicker Picker");
 
     private ExtraInvGroupTransfer() {}
 

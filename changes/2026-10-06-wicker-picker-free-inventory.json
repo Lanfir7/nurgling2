@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-06-wicker-picker-free-inventory",
+  "priority": 4,
+  "summary": {
+    "ru": "Корзинки Wicker Picker на поясе видны справа в инвентаре и выгружаются как сумки охотника.",
+    "en": "Belt Wicker Pickers now show in the inventory sidebar and empty like hunter pouches."
+  },
+  "detail": {
+    "ru": "Содержимое корзинок Wicker Picker на поясе появляется в расширенном списке справа, как у сумок охотника и семенных мешков. Сами корзинки строку не занимают. «Освободить инвентарь» забирает эти вещи по тем же правилам, корзинки остаются надетыми.",
+    "en": "Items inside belt Wicker Pickers appear in the expanded inventory list on the right, the same way as hunter pouches and seedbags. The baskets themselves do not take a row. Free Inventory stores or drops those items by the same rules, and the baskets stay equipped."
+  }
+}

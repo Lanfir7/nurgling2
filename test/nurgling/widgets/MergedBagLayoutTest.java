@@ -20,6 +20,7 @@ class MergedBagLayoutTest {
         assertEquals("Silk Purse", PouchKinds.key(null, null, "gfx/invobjs/silkpurse"));
         assertEquals("Silk Purse", PouchKinds.key("Silk Purse", "Inventory", null));
         assertEquals("Seedbag", PouchKinds.key(null, "Seedbag", null));
+        assertEquals("Wicker Picker", PouchKinds.key(null, null, "gfx/invobjs/small/pickingbasket-f"));
         assertEquals(null, PouchKinds.key("Chest", "Chest", "gfx/invobjs/chest"));
     }
 

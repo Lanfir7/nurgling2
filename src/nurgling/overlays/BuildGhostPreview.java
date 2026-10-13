@@ -133,7 +133,7 @@ public class BuildGhostPreview extends GAttrib {
         ArrayList<Coord2d> positions = new ArrayList<>();
         if (placementLimit == 0) return positions;
         // Get rotated hitbox dimensions
-        NHitBoxD tempBox = new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, Coord2d.of(0), rotationAngle);
+        NHitBoxD tempBox = buildingHitBox.toWorld(Coord2d.of(0), rotationAngle);
         Coord2d rotatedUL = tempBox.getCircumscribedUL();
         Coord2d rotatedBR = tempBox.getCircumscribedBR();
         Coord hitboxSize = rotatedBR.sub(rotatedUL).floor();
@@ -168,7 +168,7 @@ public class BuildGhostPreview extends GAttrib {
                 }
                 
                 // Create test box at tile center
-                NHitBoxD testBox = new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, tileCenter, rotationAngle);
+                NHitBoxD testBox = buildingHitBox.toWorld(tileCenter, rotationAngle);
                 
                 // Check collisions with obstacles AND already-placed buildings
                 boolean passed = true;
@@ -193,7 +193,7 @@ public class BuildGhostPreview extends GAttrib {
                     Coord2d worldPos = new Coord2d(testBox.rc.x, testBox.rc.y);
                     positions.add(worldPos);
                     // Add this building to placed list so we don't overlap it
-                    placedBuildings.add(new NHitBoxD(buildingHitBox.begin, buildingHitBox.end, tileCenter, rotationAngle));
+                    placedBuildings.add(buildingHitBox.toWorld(tileCenter, rotationAngle));
                     if (positions.size() >= placementLimit) return positions;
                 }
             }
@@ -334,7 +334,7 @@ public class BuildGhostPreview extends GAttrib {
 
                         if (effectiveHitBox != null && gob.getattr(Following.class) == null &&
                             gob.id != ownerId) {
-                            NHitBoxD gobBox = new NHitBoxD(effectiveHitBox.begin, effectiveHitBox.end, gob.rc, gob.a);
+                            NHitBoxD gobBox = effectiveHitBox.toWorld(gob.rc, gob.a);
                             if (gobBox.intersects(areaBox, true)) {
                                 obstacles.add(gobBox);
                             }

@@ -52,6 +52,7 @@ public class RouteLookahead {
         boolean later = isClearlyCloser(anchor, best, gob.rc)
                 && !(map != null && constraints.cliffCorridorBlocked(map, best, gob.rc))
                 && !(map != null && constraints.landCorridorBlocked(map, best, gob.rc, waterMode))
+                && !(map != null && constraints.deepWaterCorridorBlocked(map, best, gob.rc, waterMode))
                 && !constraints.corridorExcluded(sessloc, best, gob.rc);
         decided.put(gob.id, later);
         return later;

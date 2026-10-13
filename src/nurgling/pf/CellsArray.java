@@ -23,7 +23,7 @@ public class CellsArray {
     }
 
     public CellsArray(NHitBox hb, double angl, Coord2d rc) {
-        NHitBoxD objToApproach = new NHitBoxD(hb.begin, hb.end, rc, angl);
+        NHitBoxD objToApproach = hb.toWorld(rc, angl);
         begin = Utils.toPfGrid(objToApproach.getCircumscribedUL());
         end = Utils.toPfGrid(objToApproach.getCircumscribedBR());
         NHitBoxD tile = new NHitBoxD(begin);

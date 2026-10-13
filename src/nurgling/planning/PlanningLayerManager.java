@@ -680,7 +680,7 @@ public class PlanningLayerManager implements ProfileAwareService, PlanningServic
             // contains(). Normalize to [0, 2π) before constructing.
             double a = g.angleRadians() % (2 * Math.PI);
             if (a < 0) a += 2 * Math.PI;
-            NHitBoxD box = new NHitBoxD(hb.begin, hb.end, ghostPos, a);
+            NHitBoxD box = hb.toWorld(ghostPos, a);
             return box.contains(clickPos, true);
         } catch (Exception ex) {
             // Belt-and-braces: never let a hit-test bug propagate up the render

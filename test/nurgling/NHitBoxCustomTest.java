@@ -1,10 +1,13 @@
 package nurgling;
 
+import haven.Coord2d;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NHitBoxCustomTest {
     @Test
@@ -82,6 +85,33 @@ class NHitBoxCustomTest {
     @Test
     void stoneArchTunnelHasForceZeroHitbox() {
         assertForceZeroHitbox("gfx/terobjs/stonearchtunnel");
+    }
+
+    @Test
+    void herbalistTableUsesResourceObstacle() {
+        NHitBox box = NHitBox.findCustom("gfx/terobjs/htable");
+        assertNotNull(box);
+        assertFalse(box.mirrorAsymmetric);
+        assertEquals(-2.96484375, box.begin.x, 1e-6);
+        assertEquals(-5.94580078125, box.begin.y, 1e-6);
+        assertEquals(3.9638671875 + NHitBox.tableFrontNudge(), box.end.x, 1e-6);
+        assertEquals(5.94580078125, box.end.y, 1e-6);
+    }
+
+    @Test
+    void houseWallSitsOnePlaceStepIntoTheRoom() {
+        NHitBox box = NHitBox.findCustom("gfx/terobjs/arch/hwall");
+        assertNotNull(box);
+        assertFalse(box.mirrorAsymmetric);
+        double nudge = NHitBox.wallRoomNudge();
+        assertEquals(11.0 / 64.0, nudge, 1e-9);
+        assertEquals(-0.8902587890625 + nudge, box.begin.x, 1e-6);
+        assertEquals(-0.11002349853515625 + nudge, box.end.x, 1e-6);
+        assertEquals(-10.892578125, box.begin.y, 1e-6);
+        nurgling.pf.NHitBoxD world = box.toWorld(Coord2d.of(100, 200), 0);
+        assertTrue(world.getCircumscribedUL().x < 100);
+        assertTrue(world.getCircumscribedBR().x > 100);
+        assertTrue(world.getCircumscribedUL().y < 200);
     }
 
     private static void assertForceZeroHitbox(String name) {

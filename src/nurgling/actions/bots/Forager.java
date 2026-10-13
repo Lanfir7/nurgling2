@@ -719,8 +719,8 @@ public class Forager implements Action {
                 // unreachable without dismounting first - skip it rather than waste a detour
                 // attempt PathFinder can never actually complete.
                 if (waterMode && map != null && !isOnOrNearWater(map, gob.rc)) continue;
-                // Leaf pickups only: skip a tree the harvest overlay would not mark with a leaf
-                // icon, instead of walking over and finding the flower menu empty.
+                // Leaf and fruit pickups: skip a tree the harvest overlay would not mark,
+                // instead of walking over and finding the flower menu empty.
                 if (!leafTargetReady(action, gob)) continue;
                 if (leaveForLater != null && leaveForLater.leaveForLaterStop(gob, map, sessloc, waterMode)) continue;
                 candidates.add(new Pair<>(gob, action));
@@ -737,6 +737,7 @@ public class Forager implements Action {
         for (Pair<Gob, ForagerAction> candidate : candidates) {
             if (map != null && routeConstraints.cliffCorridorBlocked(map, from, candidate.a.rc)) continue;
             if (map != null && routeConstraints.landCorridorBlocked(map, from, candidate.a.rc, waterMode)) continue;
+            if (map != null && routeConstraints.deepWaterCorridorBlocked(map, from, candidate.a.rc, waterMode)) continue;
             if (routeConstraints.corridorExcluded(sessloc, from, candidate.a.rc)) continue;
             if (activeZones == null && routeConstraints.dangerousAnimalNearCorridor(from, candidate.a.rc, ignoreBats)) continue;
             return candidate;
@@ -745,17 +746,21 @@ public class Forager implements Action {
     }
 
     /**
-     * A leaf pickup on a tree or bush is worth approaching only when that gob currently has the
-     * live leaf layer. Bark and herbs are unchanged. A tree whose sprite has not loaded yet is
-     * skipped until that layer can be read.
+     * A leaf or fruit pickup on a tree or bush is worth approaching only when that gob currently
+     * has the matching live layer. Bark, boughs and herbs are unchanged. A tree whose sprite has
+     * not loaded yet is skipped until that layer can be read.
      */
     static boolean leafTargetReady(ForagerAction action, Gob gob) {
-        if (action == null || !HarvestState.tracksLiveLeaves(action.sourceItemName, action.sourceItemResource, action.actionName))
+        if (action == null || gob == null || gob.ngob == null || !HarvestState.isTreeOrBushRes(gob.ngob.name))
             return true;
-        if (gob == null || gob.ngob == null || !HarvestState.isTreeOrBushRes(gob.ngob.name))
+        boolean leaves = HarvestState.tracksLiveLeaves(action.sourceItemName, action.sourceItemResource, action.actionName);
+        boolean fruit = HarvestState.tracksLiveFruit(action.sourceItemName, action.sourceItemResource, action.actionName, action.targetObjectPattern);
+        if (!leaves && !fruit)
             return true;
         try {
-            return HarvestState.hasHarvestableLeaf(gob);
+            if (leaves && !HarvestState.hasHarvestableLeaf(gob)) return false;
+            if (fruit && !HarvestState.hasHarvestableSeed(gob)) return false;
+            return true;
         } catch (Loading l) {
             return false;
         }
@@ -870,7 +875,12 @@ public class Forager implements Action {
             if (player.rc.dist(nearest.a.rc) > MAX_HOP_DISTANCE) {
                 // Too far for one PathFinder call - hop toward it; stop the whole pass if a hop fails rather than retrying forever.
                 detour.clusterEntry = null;
-                if (!walkInHops(gui, preset, nearest.a.rc, detour, null)) return;
+                if (!walkInHops(gui, preset, nearest.a.rc, detour, null)) {
+                    // A failed approach (a river with no ford, for example) must not be chosen again this run.
+                    if (!isInventoryFull(gui))
+                        processedGobs.add(nearest.a.id);
+                    return;
+                }
                 continue;
             }
 

@@ -143,6 +143,12 @@ public class ForagerRouteConstraints {
         return LandCorridorChecker.corridorBlocked(map, from, to);
     }
 
+    /** On foot, a gob whose straight line crosses deep water is unreachable. A coracle may cross it. */
+    public boolean deepWaterCorridorBlocked(MCache map, Coord2d from, Coord2d to, boolean waterMode) {
+        if (waterMode) return false;
+        return WaterCorridorChecker.corridorBlocked(map, from, to);
+    }
+
     /** True if a dangerous animal (per Ring Settings' own per-species radius/dangerous flag - the
      *  same config DangerousAnimalTrigger uses, respecting ignoreBats the same way, via
      *  NAreaRad.isActiveThreat/triggerDist) is within its own danger radius of any point along the

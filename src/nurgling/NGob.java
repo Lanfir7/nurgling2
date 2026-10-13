@@ -127,7 +127,7 @@ public class NGob
     private static final NAlias PLANTS_ALIAS = new NAlias("plants");
     private static final NAlias GARDEN_POT_ALIAS = new NAlias("gardenpot");
     private static final NAlias MOUNDBED_ALIAS = new NAlias("gfx/terobjs/moundbed");
-    private static final NAlias IGNORED_ARCH = new NAlias("-door", "arch/hwall");
+    private static final NAlias IGNORED_ARCH = new NAlias("-door");
     private static final NAlias KRITTER_ALIAS = new NAlias("kritter");
     private static final NAlias BORKA_ALIAS_SETDYNAMIC = new NAlias("borka");
     private static final NAlias VEHICLE_ALIAS = new NAlias("vehicle");

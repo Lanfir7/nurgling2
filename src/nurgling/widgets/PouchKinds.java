@@ -34,6 +34,8 @@ public final class PouchKinds {
             return "Creel";
         if ("poacherpouch".equals(leaf) || "poacherspouch".equals(leaf))
             return "Poacher's Pouch";
+        if ("pickingbasket".equals(leaf) || leaf.startsWith("pickingbasket-"))
+            return "Wicker Picker";
         return null;
     }
 }

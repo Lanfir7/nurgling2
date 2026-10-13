@@ -44,6 +44,7 @@ class ExtraInvGroupTransferTest {
         assertTrue(ExtraInvGroupTransfer.isExternalBag("Poacher's Pouch"));
         assertTrue(ExtraInvGroupTransfer.isExternalBag("Leather Purse"));
         assertTrue(ExtraInvGroupTransfer.isExternalBag("Silk Purse"));
+        assertTrue(ExtraInvGroupTransfer.isExternalBag("Wicker Picker"));
         assertFalse(ExtraInvGroupTransfer.isExternalBag("Hammer"));
         assertFalse(ExtraInvGroupTransfer.isExternalBag("Keyring"));
         assertFalse(ExtraInvGroupTransfer.isExternalBag(null));
@@ -158,6 +159,7 @@ class ExtraInvGroupTransferTest {
         NestedItem leatherContent = new NestedItem("Coin", false);
         NestedItem silkContent = new NestedItem("Gemstone", false);
         NestedItem seedContent = new NestedItem("Seeds of Wheat", false);
+        NestedItem pickerContent = new NestedItem("Blueberries", false);
         NestedItem key = new NestedItem("Key", false);
 
         List<NestedItem> listed = ExtraInvGroupTransfer.externalBagContents(
@@ -167,6 +169,7 @@ class ExtraInvGroupTransferTest {
                         new NestedItem("Leather Purse", false, leatherContent),
                         new NestedItem("Silk Purse", false, silkContent),
                         new NestedItem("Seedbag", false, seedContent),
+                        new NestedItem("Wicker Picker", false, pickerContent),
                         new NestedItem("Keyring", false, key)),
                 item -> item.transferTarget,
                 item -> item.name,
@@ -174,7 +177,7 @@ class ExtraInvGroupTransferTest {
                 item -> item.transparent);
 
         assertEquals(List.of(creelContent, poacherContent, leatherContent,
-                silkContent, seedContent), listed);
+                silkContent, seedContent, pickerContent), listed);
     }
 
     @Test

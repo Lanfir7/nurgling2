@@ -132,7 +132,7 @@ public class TrellisGhostPreview extends Sprite {
                     }
 
                     // Check collisions
-                    NHitBoxD testBox = new NHitBoxD(rotatedHitBox.begin, rotatedHitBox.end, testPos, 0);
+                    NHitBoxD testBox = rotatedHitBox.toWorld(testPos, 0);
                     boolean passed = true;
                     for (NHitBoxD obstacle : obstacles) {
                         if (obstacle.intersects(testBox, false)) {

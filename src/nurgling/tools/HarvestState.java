@@ -259,10 +259,33 @@ public class HarvestState {
         return mentionsLeaf(itemName) || mentionsLeaf(actionName);
     }
 
+    /**
+     * True when a forager pickup is the fruit/seed layer of a tree or bush. Bark, boughs and
+     * leaves are not gated by that bit. Display-only: callers still check the gob itself.
+     */
+    public static boolean tracksLiveFruit(String itemName, String itemResource, String actionName, String targetPattern) {
+        if (tracksLiveLeaves(itemName, itemResource, actionName)) return false;
+        if (isBarkProductName(itemName)) return false;
+        if (mentions(itemName, "bark") || mentions(actionName, "bark") || mentions(itemResource, "bark")) return false;
+        if (mentions(itemName, "bough") || mentions(actionName, "bough") || mentions(itemResource, "bough")) return false;
+        return patternHasTreeOrBush(targetPattern);
+    }
+
+    private static boolean patternHasTreeOrBush(String targetPattern) {
+        if (targetPattern == null) return false;
+        for (String part : targetPattern.split(",")) {
+            if (isTreeOrBushRes(part.trim())) return true;
+        }
+        return false;
+    }
+
     private static boolean mentionsLeaf(String text) {
+        return mentions(text, "leaf") || mentions(text, "leaves");
+    }
+
+    private static boolean mentions(String text, String word) {
         if (text == null) return false;
-        String lower = text.toLowerCase(java.util.Locale.ROOT);
-        return lower.contains("leaf") || lower.contains("leaves");
+        return text.toLowerCase(java.util.Locale.ROOT).contains(word);
     }
 
     // Named accessors for the live per-instance state bitmask's two known bits, so callers that

@@ -37,6 +37,26 @@ class ForagerLeafTargetTest {
     }
 
     @Test
+    void emptyTreeIsNotApproachedForFruit() {
+        Gob apple = gob("gfx/terobjs/trees/appletree");
+        ForagerAction fruit = new ForagerAction("gfx/terobjs/trees/appletree", ForagerAction.ActionType.FLOWER_ACTION, "Pick apple");
+        fruit.sourceItemName = "Red Apple";
+        fruit.sourceItemResource = "gfx/invobjs/apple";
+
+        assertFalse(Forager.leafTargetReady(fruit, apple));
+    }
+
+    @Test
+    void boughOnTheSameTreeIsStillApproached() {
+        Gob alder = gob("gfx/terobjs/trees/alder");
+        ForagerAction bough = new ForagerAction("gfx/terobjs/trees/alder", ForagerAction.ActionType.FLOWER_ACTION, "Take bough");
+        bough.sourceItemName = "Alder Bough";
+        bough.sourceItemResource = "gfx/invobjs/bough-alder";
+
+        assertTrue(Forager.leafTargetReady(bough, alder));
+    }
+
+    @Test
     void knownLeafIconCountsEvenWithoutTheWordInTheAction() {
         Gob maple = gob("gfx/terobjs/trees/maple");
         ForagerAction leaves = new ForagerAction("gfx/terobjs/trees/maple", ForagerAction.ActionType.FLOWER_ACTION, "Pick");

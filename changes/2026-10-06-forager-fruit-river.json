@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-06-forager-fruit-river",
+  "priority": 6,
+  "summary": {
+    "ru": "Сборщик не идёт к дереву без плодов и не застревает на цели за глубокой водой.",
+    "en": "Forager skips a tree with no fruit and no longer gets stuck on a target across deep water."
+  },
+  "detail": {
+    "ru": "Плоды он проверяет так же, как листву: подходит только если значок урожая на дереве их показывает. Цель, до которой по прямой лежит глубокая вода, он больше не выбирает и не ищет путь вокруг реки без конца. Мелкая вода по-прежнему проходима, в лодке глубокая вода не мешает.",
+    "en": "Fruit is checked the same way as leaves: Forager walks over only when the harvest icon on the tree shows it. A target with deep water on the straight line is left alone, instead of searching for a way around the river without end. Shallow water is still crossable, and deep water does not block a boat."
+  }
+}
