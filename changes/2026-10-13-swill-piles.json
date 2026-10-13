@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-swill-piles",
+  "priority": 5,
+  "summary": {
+    "ru": "Новый бот переносит пойло из куч в кормушки.",
+    "en": "A new bot carries swill from stockpiles to troughs."
+  },
+  "detail": {
+    "ru": "В меню ботов выберите «Кучи пойла в кормушки». Отметьте кучи специализацией «Swill stockpiles», а кормушки — зоной «Trough for swill». Бот собирает пойло из всех доступных отмеченных зон, кормит животных и может освобождать полные кормушки через цистерну в зоне «Swill». Его можно добавить шагом сценария.",
+    "en": "Choose Swill Piles to Troughs in the bot menu. Mark the source areas as Swill stockpiles and set a Trough for swill area. The bot gathers swill from every reachable marked area and feeds it to troughs. A cistern in a Swill area can empty full troughs. You can also use it as a scenario step."
+  }
+}

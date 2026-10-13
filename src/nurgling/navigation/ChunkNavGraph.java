@@ -355,6 +355,88 @@ public class ChunkNavGraph {
     }
 
     /**
+     * The recorded piece of the world holding the most of the given areas: chunks joined by walking or
+     * through a portal (door, cellar, mine hole), so a village keeps its houses and cellars. Ties go to
+     * the bigger piece. Empty when no area stands on a recorded chunk.
+     *
+     * @param areaGrids for each area, the grids it covers
+     */
+    public Set<Long> pieceWithMostAreas(Collection<? extends Collection<Long>> areaGrids) {
+        // A link is recorded on one side only, so walk every link both ways
+        Map<Long, Set<Long>> links = new HashMap<>();
+        for (ChunkNavData chunk : chunks.values()) {
+            List<Long> walking = new ArrayList<>(List.of(chunk.neighborNorth, chunk.neighborSouth,
+                    chunk.neighborEast, chunk.neighborWest));
+            walking.addAll(chunk.connectedChunks);
+            for (long otherId : walking) {
+                ChunkNavData other = chunks.get(otherId);
+                // Old neighbor IDs can point into another instance. Walking links must satisfy
+                // the same layer/instance rule as updateConnections; portals join interiors.
+                if (other != null && chunk.instanceId != 0 && chunk.instanceId == other.instanceId
+                        && chunk.layer.equals(other.layer))
+                    addUndirectedLink(links, chunk.gridId, otherId);
+            }
+            for (ChunkPortal portal : chunk.portals)
+                if (chunks.containsKey(portal.connectsToGridId))
+                    addUndirectedLink(links, chunk.gridId, portal.connectsToGridId);
+        }
+
+        Map<Long, Integer> pieceOf = new HashMap<>();
+        List<Set<Long>> pieces = new ArrayList<>();
+        List<Integer> areaCounts = new ArrayList<>();
+        for (Collection<Long> grids : areaGrids) {
+            // An area spanning several grids of one piece counts once
+            Set<Integer> touched = new HashSet<>();
+            for (long grid : grids) {
+                if (!chunks.containsKey(grid))
+                    continue;
+                Integer piece = pieceOf.get(grid);
+                if (piece == null) {
+                    piece = pieces.size();
+                    pieces.add(flood(grid, piece, links, pieceOf));
+                    areaCounts.add(0);
+                }
+                touched.add(piece);
+            }
+            for (int piece : touched)
+                areaCounts.set(piece, areaCounts.get(piece) + 1);
+        }
+
+        int best = -1;
+        for (int i = 0; i < pieces.size(); i++) {
+            if (best < 0 || areaCounts.get(i) > areaCounts.get(best)
+                    || (areaCounts.get(i).equals(areaCounts.get(best)) && pieces.get(i).size() > pieces.get(best).size()))
+                best = i;
+        }
+        return best < 0 ? Collections.emptySet() : pieces.get(best);
+    }
+
+    private static void addUndirectedLink(Map<Long, Set<Long>> links, long from, long to) {
+        if (from == to)
+            return;
+        links.computeIfAbsent(from, k -> new HashSet<>()).add(to);
+        links.computeIfAbsent(to, k -> new HashSet<>()).add(from);
+    }
+
+    private static Set<Long> flood(long start, int piece, Map<Long, Set<Long>> links, Map<Long, Integer> pieceOf) {
+        Set<Long> members = new HashSet<>();
+        Deque<Long> queue = new ArrayDeque<>();
+        pieceOf.put(start, piece);
+        members.add(start);
+        queue.add(start);
+        while (!queue.isEmpty()) {
+            for (long next : links.getOrDefault(queue.poll(), Collections.emptySet())) {
+                if (!pieceOf.containsKey(next)) {
+                    pieceOf.put(next, piece);
+                    members.add(next);
+                    queue.add(next);
+                }
+            }
+        }
+        return members;
+    }
+
+    /**
      * Clear all data.
      */
     public void clear() {

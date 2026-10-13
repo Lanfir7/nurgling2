@@ -58,6 +58,7 @@ public class Specialisation extends Window
         water,
         boiler,
         swill,
+        swillPiles,
         trough,
         crop,
         cropQ,
@@ -187,6 +188,7 @@ public class Specialisation extends Window
         specialisation.add(new SpecialisationItem(SpecName.boiler.toString(),"Cauldron",Resource.loadsimg("nurgling/categories/boiler")));
         specialisation.add(new SpecialisationItem(SpecName.swill.toString(),"Swill",Resource.loadsimg("nurgling/categories/swill")));
         specialisation.add(new SpecialisationItem(SpecName.trough.toString(),"Trough for swill",Resource.loadsimg("nurgling/categories/trough")));
+        specialisation.add(new SpecialisationItem(SpecName.swillPiles.toString(),"Swill stockpiles",Resource.loadsimg("nurgling/categories/swillpiles")));
         specialisation.add(new SpecialisationItem(SpecName.crop.toString(),"Crop",Resource.loadsimg("nurgling/categories/crop")));
         specialisation.add(new SpecialisationItem(SpecName.showQuality.toString(), "Show Quality", qualitySpecialisationImage()));
         specialisation.add(new SpecialisationItem(SpecName.cropQ.toString(),"Crop Quality",Resource.loadsimg("nurgling/categories/crop")));

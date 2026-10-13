@@ -10,11 +10,14 @@ import nurgling.db.FetchStorageDbSync;
 import nurgling.db.StorageItemsCompress;
 import nurgling.db.StorageOrphanPolicy;
 import nurgling.db.StorageTableInfo;
+import nurgling.db.StorageVillageFilter;
 import nurgling.db.dao.ContainerDao;
 import nurgling.db.dao.StorageItemDao;
 import nurgling.db.service.ContainerService;
 import nurgling.db.service.StorageItemService;
 import nurgling.i18n.L10n;
+import nurgling.areas.NArea;
+import nurgling.navigation.ChunkNavManager;
 import nurgling.sessions.BotExecutor;
 import nurgling.widgets.storage.StashView;
 
@@ -31,6 +34,8 @@ import java.util.stream.Collectors;
  * - Grouping modes: None, Quality, Q1, Q5, Q10 (like NInventory)
  * - Min quality filter
  * - Pagination for large item sets
+ * - Only items in your village (see {@link nurgling.navigation.ChunkNavGraph#pieceWithMostAreas}), so storage
+ *   seen in another village or at a bot's spot stays out
  */
 public class NStorageItemsWidget extends Window {
     private final StorageItemsRefreshSignal refreshSignal = new StorageItemsRefreshSignal();
@@ -85,13 +90,49 @@ public class NStorageItemsWidget extends Window {
     private Double maxQualityFilter = null;
     private boolean compressByType = false;
     private Grouping currentGrouping = Grouping.Q;
+    /** UI-thread state; workers only publish immutable results below. */
     private boolean isLoading = false;
+    private long dataGeneration = 0;
+    private volatile LoadResult completedLoad;
+    private volatile CleanupResult completedCleanup;
 
+    private static final class LoadResult {
+        final long generation;
+        final List<StorageItemDao.StorageItemData> items;
+        final Map<String, ContainerDao.ContainerData> containers;
+        final Set<Long> village;
+        final Exception error;
+
+        LoadResult(long generation, List<StorageItemDao.StorageItemData> items,
+                   Map<String, ContainerDao.ContainerData> containers, Set<Long> village, Exception error) {
+            this.generation = generation;
+            this.items = Collections.unmodifiableList(new ArrayList<>(items));
+            this.containers = Collections.unmodifiableMap(new HashMap<>(containers));
+            this.village = Collections.unmodifiableSet(new HashSet<>(village));
+            this.error = error;
+        }
+    }
+
+    private static final class CleanupResult {
+        final Set<String> deletedHashes;
+        final int deletedCount;
+
+        CleanupResult(Set<String> deletedHashes) {
+            this.deletedHashes = Collections.unmodifiableSet(new HashSet<>(deletedHashes));
+            this.deletedCount = deletedHashes.size();
+        }
+    }
     /** May be called from the database worker after tracked storage contents change. */
     public void requestRefresh() {
         refreshSignal.request();
     }
 
+    private CheckBox onlyVillageBox;
+    private Label hiddenLabel;
+    /** Hides rows whose container isn't in the village, or has no location at all. */
+    private boolean onlyVillage = true;
+    /** Recorded chunks of the village, worked out on each load; empty when there's nothing to go by. */
+    private volatile Set<Long> villageChunks = Collections.emptySet();
     
     // Clickable column headers
     private Label nameHeaderLabel;
@@ -286,6 +327,22 @@ public class NStorageItemsWidget extends Window {
 
         y += UI.scale(30);
 
+        Object onlyVillageConf = NConfig.get(NConfig.Key.storageOnlyVillage);
+        onlyVillage = !(onlyVillageConf instanceof Boolean) || (Boolean) onlyVillageConf;
+        onlyVillageBox = add(new CheckBox(L10n.get("storage.only_village")) {
+            @Override
+            public void changed(boolean val) {
+                onlyVillage = val;
+                NConfig.set(NConfig.Key.storageOnlyVillage, val);
+                applyAreaFilter();
+            }
+        }, new Coord(margin, y));
+        onlyVillageBox.a = onlyVillage;
+        onlyVillageBox.settip(L10n.get("storage.only_village_tip"));
+        hiddenLabel = add(new Label(""), onlyVillageBox.pos("ur").adds(UI.scale(10), 0));
+
+        y += UI.scale(22);
+
         // Column headers (clickable for sorting)
         int headerY = y;
         nameHeaderLabel = add(new Label(L10n.get("storage.col_name") + " ▼") {
@@ -348,7 +405,7 @@ public class NStorageItemsWidget extends Window {
         y += UI.scale(20);
 
         // Items list
-        itemsList = add(new StorageItemsList(UI.scale(new Coord(WINDOW_WIDTH - 20, WINDOW_HEIGHT - 120))),
+        itemsList = add(new StorageItemsList(UI.scale(new Coord(WINDOW_WIDTH - 20, WINDOW_HEIGHT - 142))),
                 new Coord(UI.scale(5), y));
 
         // Pagination controls at bottom
@@ -380,7 +437,8 @@ public class NStorageItemsWidget extends Window {
         totalLabel = add(new Label(""), new Coord(UI.scale(10), bottomY + UI.scale(5)));
 
         // The tab view starts below the toolbar's tallest control and fills the rest of the window
-        int stashY = Math.max(modeButton.c.y + modeButton.sz.y, searchField.c.y + searchField.sz.y) + UI.scale(6);
+        int stashY = Math.max(onlyVillageBox.c.y + onlyVillageBox.sz.y,
+                Math.max(modeButton.c.y + modeButton.sz.y, searchField.c.y + searchField.sz.y)) + UI.scale(6);
         stashView = add(new StashView(new Coord(UI.scale(WINDOW_WIDTH - 10), UI.scale(WINDOW_HEIGHT - 5) - stashY), this::openInList),
                 new Coord(UI.scale(5), stashY));
         stashView.setSearch(searchText);
@@ -393,6 +451,27 @@ public class NStorageItemsWidget extends Window {
     @Override
     public void tick(double dt) {
         super.tick(dt);
+        LoadResult loaded = completedLoad;
+        if (loaded != null) {
+            completedLoad = null;
+            if (loaded.error != null) {
+                loaded.error.printStackTrace();
+            } else if (loaded.generation == dataGeneration) {
+                villageChunks = loaded.village;
+                processLoadedItems(loaded.items, loaded.containers);
+            } else {
+                requestRefresh();
+            }
+            isLoading = false;
+        }
+        CleanupResult cleaned = completedCleanup;
+        if (cleaned != null) {
+            completedCleanup = null;
+            removeLoadedHashes(cleaned.deletedHashes);
+            NUtils.getGameUI().msg(L10n.get("storage.cleared_items", cleaned.deletedCount));
+            isLoading = false;
+            requestRefresh();
+        }
         if (refreshSignal.take(visible(), isLoading))
             loadItems();
         if (pendingMenu != null) {
@@ -523,6 +602,16 @@ public class NStorageItemsWidget extends Window {
         }
 
         isLoading = true;
+        long generation = dataGeneration;
+        NGameUI gui = ui.gui;
+        // Read on the UI thread; the village is worked out with the items, off it
+        ChunkNavManager nav = (gui != null && gui.map instanceof NMapView) ? ((NMapView) gui.map).getChunkNavManager() : null;
+        List<Set<Long>> areaGrids = new ArrayList<>();
+        if (gui != null && gui.map != null) {
+            for (NArea area : gui.map.glob.map.areas.values())
+                if (area.space != null)
+                    areaGrids.add(new HashSet<>(area.space.space.keySet()));
+        }
         StorageItemService storageService = new StorageItemService(ui.core.databaseManager);
         ContainerService containerService = new ContainerService(ui.core.databaseManager);
 
@@ -540,11 +629,12 @@ public class NStorageItemsWidget extends Window {
                 List<StorageItemDao.StorageItemData> validItems = items.stream()
                     .filter(item -> item.getQuality() >= 0)
                     .collect(Collectors.toList());
-                processLoadedItems(validItems, containers);
+                Set<Long> village = (nav != null && nav.isInitialized())
+                        ? nav.getGraph().pieceWithMostAreas(areaGrids) : Collections.emptySet();
+                completedLoad = new LoadResult(generation, validItems, containers, village, null);
             } catch (Exception e) {
-                e.printStackTrace();
-            } finally {
-                isLoading = false;
+                completedLoad = new LoadResult(generation, Collections.emptyList(),
+                        Collections.emptyMap(), Collections.emptySet(), e);
             }
         }, "StorageItemLoader");
         loader.setDaemon(true);
@@ -564,22 +654,20 @@ public class NStorageItemsWidget extends Window {
         List<String> hashes = unavailableItemHashes(new ArrayList<>(allItems));
 
         Thread cleaner = new Thread(() -> {
-            int deleted = 0;
+            Set<String> deleted = new HashSet<>();
             try {
                 for (String hash : hashes) {
                     try {
                         storageService.deleteStorageItem(hash);
-                        deleted++;
+                        deleted.add(hash);
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
                 }
-                NUtils.getGameUI().msg(L10n.get("storage.cleared_items", deleted));
             } catch (Exception e) {
                 e.printStackTrace();
             } finally {
-                isLoading = false;
-                requestRefresh();
+                completedCleanup = new CleanupResult(deleted);
             }
         }, "StorageItemCleaner");
         cleaner.setDaemon(true);
@@ -601,12 +689,19 @@ public class NStorageItemsWidget extends Window {
 
     private void processLoadedItems(List<StorageItemDao.StorageItemData> items,
                                     Map<String, ContainerDao.ContainerData> containers) {
-        this.rawItems = items;
         this.containersByHash = containers != null ? containers : new HashMap<>();
-        refreshStashItems();
-        processItems();
+        this.loadedItems = items;
+        applyAreaFilter();
     }
 
+    /** Everything the database returned; rawItems is what the filter lets through. */
+    private List<StorageItemDao.StorageItemData> loadedItems = new ArrayList<>();
+    private void removeLoadedHashes(Set<String> hashes) {
+        if (hashes.isEmpty()) return;
+        dataGeneration++;
+        loadedItems = StorageVillageFilter.withoutHashes(loadedItems, hashes);
+        applyAreaFilter();
+    }
     private List<StorageItemDao.StorageItemData> rawItems = new ArrayList<>();
     private void refreshStashItems() {
         if(stashView == null) return;
@@ -617,6 +712,16 @@ public class NStorageItemsWidget extends Window {
         stashView.setMinQ(minQualityFilter);
     }
     private Map<String, ContainerDao.ContainerData> containersByHash = new HashMap<>();
+
+    private void applyAreaFilter() {
+        List<StorageItemDao.StorageItemData> visible = StorageVillageFilter.apply(loadedItems, onlyVillage, villageChunks);
+        int hiddenCount = loadedItems.size() - visible.size();
+        if (hiddenLabel != null)
+            hiddenLabel.settext(hiddenCount > 0 ? L10n.get("storage.hidden_items", hiddenCount) : "");
+        this.rawItems = visible;
+        refreshStashItems();
+        processItems();
+    }
 
     private void processItems() {
         if (rawItems == null || rawItems.isEmpty()) {
@@ -971,16 +1076,19 @@ public class NStorageItemsWidget extends Window {
             }
             StorageItemService storageService = new StorageItemService(ui.core.databaseManager);
             int deleted = 0;
+            Set<String> deletedHashes = new HashSet<>();
             for (String hash : hashes) {
                 try {
                     storageService.deleteStorageItem(hash);
                     deleted++;
+                    deletedHashes.add(hash);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
+            removeLoadedHashes(deletedHashes);
             NUtils.getGameUI().msg(L10n.get("storage.deleted_items").replace("{0}", String.valueOf(deleted)));
-            loadItems();
+            requestRefresh();
         }
     }
 

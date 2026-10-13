@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-village-storage",
+  "priority": 5,
+  "summary": {
+    "ru": "Список хранилищ теперь можно ограничить своей деревней.",
+    "en": "The storage list can now show only your village."
+  },
+  "detail": {
+    "ru": "В окне хранимых предметов включён фильтр «Только моя деревня»: он показывает вещи в связанной сети записанных участков с наибольшим числом ваших зон, включая дома и погреба. Снимите флажок, чтобы снова увидеть все хранилища. Если деревня ещё не определена, список остаётся полным.",
+    "en": "The Stored Items window now has an Only show my village filter. It uses the connected recorded area with the most of your zones, including houses and cellars. Clear the checkbox to see every storage location again. Until a village can be identified, the full list stays visible."
+  }
+}
