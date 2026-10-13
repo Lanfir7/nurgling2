@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-area-mover",
+  "priority": 6,
+  "summary": {
+    "ru": "Новый переносчик опустошает кучи и контейнеры между выбранными зонами, сохраняя личные вещи.",
+    "en": "A new mover empties piles and containers between selected areas while keeping personal items."
+  },
+  "detail": {
+    "ru": "В меню ботов выберите «Перенос между зонами» и задайте зоны либо выделите их на карте. Бот заполняет подходящие кучи и контейнеры, при необходимости создаёт кучи и останавливается при заполнении назначения. Личные вещи, включая содержимое сумок, защищены; если стопка пересоздала личную вещь, предметы этого типа остаются у игрока. Перенос доступен и шагом сценария.",
+    "en": "Choose Area Mover in the bot menu and select saved areas or draw them on the map. It fills matching piles and containers, creates piles when enabled, and stops when the destination fills up. Personal items and bag contents are protected; if stacking recreates a personal item, items of that type stay with the player. The mover is also available as a scenario step."
+  }
+}

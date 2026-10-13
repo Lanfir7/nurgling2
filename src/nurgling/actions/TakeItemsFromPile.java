@@ -36,7 +36,10 @@ public class TakeItemsFromPile implements Action
             int count = Math.min(box.total(), target_size - took);
             if (count <= 0)
                 break;
-            int before = gui.getInventory().getItems().size();
+            // Match WaitItemFromPile's main-grid probe; getItems() also includes worn pouches.
+            GetItems snapshot = new GetItems(gui.getInventory());
+            NUtils.addTask(snapshot);
+            int before = snapshot.getResult().size();
             ((NUI) gui.ui).enableMonitor(gui.maininv);
             box.transfer(count);
             WaitItemFromPile wifp = new WaitItemFromPile(gui.getInventory(), before, count);
