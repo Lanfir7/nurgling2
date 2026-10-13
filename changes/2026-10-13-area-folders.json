@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-area-folders",
+  "priority": 6,
+  "summary": {
+    "ru": "Папки зон теперь можно переносить вместе с содержимым и отменять перенос.",
+    "en": "Area folders can now be moved with their contents, and moves can be undone."
+  },
+  "detail": {
+    "ru": "В окне зон перетаскивайте зоны и папки или выберите «Переместить в…» в меню строки. Путь над списком помогает перейти в нужную папку; Ctrl+Z отменяет перенос до следующего изменения папок.",
+    "en": "In the Areas window, drag areas and folders or choose Move to… from a row menu. The path above the list helps navigate folders; Ctrl+Z undoes a move until the next folder edit."
+  }
+}
