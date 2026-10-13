@@ -3207,6 +3207,7 @@ public class VSpec {
         StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/aurochshair\",\"name\":\"Aurochs Hair\"}"));
         StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/frostflower\",\"name\":\"Frost Flower\"}"));
         StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/herbs/cavelantern\",\"name\":\"Cave Lantern\"}"));
+        StackableCurios.add(new JSONObject("{\"static\":\"gfx/invobjs/addertongue\",\"name\":\"Adder's Lying Tongue\"}"));
         categories.put("Stackable Curiosities", StackableCurios);
         addGemstoneCategories();
 

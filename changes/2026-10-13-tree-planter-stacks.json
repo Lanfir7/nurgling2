@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-tree-planter-stacks",
+  "priority": 5,
+  "summary": {
+    "ru": "Посадка по чертежу собирает готовые горшки партиями и не берёт семена без свободного горшка.",
+    "en": "Blueprint planting collects ready pots in batches and does not fetch seeds without an empty pot."
+  },
+  "detail": {
+    "ru": "Бот посадки деревьев по чертежу забирает со стола сразу нужные готовые горшки с учётом места в инвентаре. При подготовке рассады сначала проверяет пустой горшок, чтобы не оставлять лишние семена и землю. Готовые саженцы не используются как пустые горшки. Добавлен правильный учёт стопок Adder’s Lying Tongue; наши остальные правила стопок сохранены.",
+    "en": "The blueprint tree planter takes the ready pots it needs from a table in batches that fit the inventory. Seedling preparation gets an empty pot first, avoiding leftover seeds and soil. Ready seedlings are not treated as empty pots. Adder’s Lying Tongue stack capacity is now recognized while other existing stack rules remain intact."
+  }
+}
