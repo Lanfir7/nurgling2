@@ -72,6 +72,11 @@ nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_UP;|Fixed widge
 nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_DOWN;|Fixed widget navigation and tooltip presentation
 nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_DELETE;|Delete selected nodes in an active editor
 nurgling/hotkeys/InputNavigation.java|return (mods & KeyMatch.C) != 0 && code == KeyEvent.VK_Z;|Undo edits in an active editor
+nurgling/hotkeys/InputNavigation.java|return (mods & (KeyMatch.C | KeyMatch.S)) == KeyMatch.C && code == KeyEvent.VK_Z;|Undo the last area-folder move only with Ctrl+Z, not Ctrl+Shift+Z
+nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_R;|Rotate only while the modal area-preset placement editor owns input
+nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_F;|Mirror only while the modal area-preset placement editor owns input
+nurgling/hotkeys/InputNavigation.java|return ui != null && ui.modctrl;|Toggle selection inside an active list widget
+nurgling/hotkeys/InputNavigation.java|return ui != null && ui.modshift;|Select a range inside an active list widget
 nurgling/hotkeys/InputNavigation.java|return (mods & KeyMatch.C) != 0 && code == KeyEvent.VK_Y;|Redo edits in an active editor
 nurgling/hotkeys/InputNavigation.java|return code == KeyEvent.VK_SHIFT;|Fixed widget navigation and tooltip presentation
 nurgling/hotkeys/InputNavigation.java|return ui != null && ui.modshift;|Fixed widget navigation and tooltip presentation

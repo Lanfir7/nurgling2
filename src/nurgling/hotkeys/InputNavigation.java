@@ -13,6 +13,12 @@ public final class InputNavigation {
     public static boolean nextRow(int code) { return code == KeyEvent.VK_DOWN; }
     public static boolean delete(int code) { return code == KeyEvent.VK_DELETE; }
     public static boolean undo(int code, int mods) { return (mods & KeyMatch.C) != 0 && code == KeyEvent.VK_Z; }
+    public static boolean undoWithoutShift(int code, int mods) { return (mods & (KeyMatch.C | KeyMatch.S)) == KeyMatch.C && code == KeyEvent.VK_Z; }
+    /** Fixed controls inside the active area-preset placement editor. */
+    public static boolean rotateAreaPreset(int code) { return code == KeyEvent.VK_R; }
+    public static boolean mirrorAreaPreset(int code) { return code == KeyEvent.VK_F; }
+    public static boolean toggleSelection(UI ui) { return ui != null && ui.modctrl; }
+    public static boolean rangeSelection(UI ui) { return ui != null && ui.modshift; }
     public static boolean redo(int code, int mods) { return (mods & KeyMatch.C) != 0 && code == KeyEvent.VK_Y; }
     public static boolean tooltipModifier(int code) { return code == KeyEvent.VK_SHIFT; }
     public static boolean expandedTooltip(UI ui) { return ui != null && ui.modshift; }

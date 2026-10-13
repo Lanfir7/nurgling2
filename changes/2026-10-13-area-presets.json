@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-area-presets",
+  "priority": 7,
+  "summary": {
+    "ru": "Сохраняйте группы зон как шаблоны и размещайте их в другом месте.",
+    "en": "Save groups of areas as presets and place them elsewhere."
+  },
+  "detail": {
+    "ru": "Откройте окно зон и нажмите «Шаблоны». Выбирайте готовые схемы или сохраняйте свои зоны; перед размещением на карте поворачивайте и отражайте схему. Сохраняются папки, правила зон, направление заполнения и показ качества.",
+    "en": "Open Areas and choose Presets. Use a bundled layout or save your own areas, then rotate or mirror it before placing it on the map. Folders, area rules, fill direction, and quality display carry over."
+  }
+}

@@ -233,6 +233,12 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     private static Text.Foundry inspectValueFoundry = null;
     public AtomicBoolean isAreaSelectionMode = new AtomicBoolean(false);
     public volatile boolean pendingHeldFullStockpile = false;
+    /** An area preset being placed, which takes the map's clicks and keys until it is done. */
+    public nurgling.areas.AreaPresetPlacer presetPlacer = null;
+
+    public boolean canStartPresetPlacement() {
+        return presetPlacer == null && !hasModalMouseCapture() && !isAreaSelectionMode.get();
+    }
     public AtomicBoolean isGobSelectionMode = new AtomicBoolean(false);
     public AtomicBoolean isChatAreaSharingMode = new AtomicBoolean(false); // For Alt+Ctrl+LMB chat sharing
     public boolean gridModeRequested = false;
@@ -1465,8 +1471,23 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
 
     public int addArea(NArea.Space result)
     {
-        String key;
-        int createdId;
+        return addArea(result, null, NUtils.getGameUI().areas.currentPath).id;
+    }
+
+    /**
+     * Makes a new area over {@code result}, in folder {@code path}. A null name gets the usual
+     * "New Area" one; a given name is used as it is.
+     */
+    public NArea addArea(NArea.Space result, String name, String path)
+    {
+        return addArea(result, name, path, null);
+    }
+
+    /** Applies preset fields before the first label or persistence update. */
+    public NArea addArea(NArea.Space result, String name, String path,
+                         java.util.function.Consumer<NArea> initialize)
+    {
+        NArea newArea;
         synchronized (glob.map.areas)
         {
             HashSet<String> names = new HashSet<String>();
@@ -1476,26 +1497,31 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
             {
                 names.add(area.name);
             }
-            key = ("New Area" + String.valueOf(glob.map.areas.size()));
-            while(names.contains(key))
+            String key = name;
+            if(key == null)
             {
-                key = key+"(1)";
+                key = ("New Area" + String.valueOf(glob.map.areas.size()));
+                while(names.contains(key))
+                {
+                    key = key+"(1)";
+                }
             }
-            NArea newArea = new NArea(key);
+            newArea = new NArea(key);
             newArea.id = id;
-            createdId = id;
             newArea.space = result;
             newArea.grids_id.addAll(newArea.space.space.keySet());
-            newArea.path = NUtils.getGameUI().areas.currentPath;
+            newArea.path = path;
             AreaCreation.initializeNew(newArea);
             
             applyConfiguredRandomAreaColor(newArea);
+            if (initialize != null)
+                initialize.accept(newArea);
             
             glob.map.areas.put(id, newArea);
 
             createAreaLabel(id);
         }
-        return createdId;
+        return newArea;
     }
 
     public int duplicateArea(int sourceId) {
@@ -1834,6 +1860,10 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         }
         /* Any click in the world counts as having read the layout card. */
         nurgling.widgets.NLayoutHint.dismiss(ui);
+
+        // A preset owns map clicks while it is being placed, including modified clicks.
+        if (presetPlacer != null)
+            return super.mousedown(ev);
 
         // Mining owns a modal tile selector, so this must run before that selector
         // gets first refusal. Ctrl+LMB replaces its ordinary one-tile dig with Vein Miner.
@@ -2199,6 +2229,9 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         }
         if(nurgling.hotkeys.InputNavigation.tooltipModifier(ev.code)) {
             shiftPressed = true;
+        }
+        if(presetPlacer != null && presetPlacer.keydown(ev)) {
+            return true;
         }
 
         // Check preset keybindings first

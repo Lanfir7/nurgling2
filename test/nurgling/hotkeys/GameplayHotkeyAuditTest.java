@@ -23,6 +23,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Completeness guard for gameplay shortcut registration and action labels. */
 class GameplayHotkeyAuditTest {
+    @Test void modalAreaPresetControlsHaveExactFixedNavigationClassification() throws IOException {
+        List<String> allowlist = readAllowlist();
+        String path = "nurgling/hotkeys/InputNavigation.java";
+        String rotate = "return code == KeyEvent.VK_R;";
+        String mirror = "return code == KeyEvent.VK_F;";
+        assertTrue(isAllowlisted(path, rotate, allowlist));
+        assertTrue(isAllowlisted(path, mirror, allowlist));
+        assertFalse(isAllowlisted(path, "return code == KeyEvent.VK_G;", allowlist));
+        assertFalse(isAllowlisted(path, "return code == KeyEvent.VK_R || gameplay();", allowlist));
+        assertTrue(InputNavigation.rotateAreaPreset(java.awt.event.KeyEvent.VK_R));
+        assertFalse(InputNavigation.rotateAreaPreset(java.awt.event.KeyEvent.VK_F));
+        assertTrue(InputNavigation.mirrorAreaPreset(java.awt.event.KeyEvent.VK_F));
+        assertFalse(InputNavigation.mirrorAreaPreset(java.awt.event.KeyEvent.VK_R));
+    }
+
     @Test void configuredCallsCannotLaunderPhysicalAliasClauses() {
         String aliasSource = "boolean control=ui.modctrl; if(Hotkeys.matchesKey(id, ev.awt)||control) gameplay();";
         String aliasCondition = extractConditions(aliasSource).get(0);
