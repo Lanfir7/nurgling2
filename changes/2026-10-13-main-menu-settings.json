@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-main-menu-settings",
+  "priority": 4,
+  "summary": {
+    "ru": "Кнопка настроек снова видна в главном меню.",
+    "en": "The settings button is visible in the main menu again."
+  },
+  "detail": {
+    "ru": "Кнопка «Что нового» больше не перекрывает настройки: она находится справа в верхнем ряду, над списком дел. Настройки остались на прежнем месте, слева от новостей.",
+    "en": "The What's New button no longer covers settings: it is now on the right of the top row, above the to-do list. Settings remain in their original position, to the left of the news button."
+  }
+}
