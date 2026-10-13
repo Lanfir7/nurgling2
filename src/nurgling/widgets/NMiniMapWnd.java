@@ -59,6 +59,48 @@ public class NMiniMapWnd extends Widget{
     }
     
     /**
+     * The timers button: opens the timers panel, and carries a count of ready timers plus an orange ring
+     * while one is due within five minutes, so the minimap says "something is ready" without a click.
+     */
+    public static class TimersButton extends NMenuCheckBox {
+        private static final long SOON = 5 * 60 * 1000L;
+        private int count = 0;
+        private boolean soon = false;
+
+        public TimersButton() {
+            super("nurgling/hud/buttons/toggle_panel/timer", kb_resourcetimers, L10n.get("minimap.resource_timers"));
+        }
+
+        @Override
+        public void tick(double dt) {
+            super.tick(dt);
+            NGameUI gui = NUtils.getGameUI();
+            long now = System.currentTimeMillis();
+            count = (gui == null || gui.timerStore == null) ? 0 : gui.timerStore.unseenReadyCount(now);
+            soon = gui != null && gui.timerStore != null && gui.timerStore.anyDueWithin(now, SOON);
+        }
+
+        @Override
+        public void draw(GOut g) {
+            super.draw(g);
+            if (soon && count == 0) {
+                g.chcolor(nurgling.NStyle.border);
+                g.rect(Coord.z, sz);
+                g.chcolor();
+            }
+            if (count > 0)
+                nurgling.widgets.timers.TimerIcons.badge(g, new Coord(sz.x, 0), count);
+        }
+
+        @Override
+        public Object tooltip(Coord c, Widget prev) {
+            if (count > 0)
+                return L10n.get("minimap.timers_ready", count);
+            return L10n.get("minimap.resource_timers");
+        }
+    }
+
+    /**
      * Special checkbox for explored area toggle that supports right-click menu
      * for session layer management.
      */
@@ -241,15 +283,15 @@ public class NMiniMapWnd extends Widget{
         fog.a = (Boolean) NConfig.get(NConfig.Key.exploredAreaEnable);
         buttons.add(fog);
 
-        ACheckBox timer = new NMenuCheckBox("nurgling/hud/buttons/toggle_panel/timer", kb_resourcetimers, L10n.get("minimap.resource_timers"));
+        ACheckBox timer = new TimersButton();
         timer.state(() -> {
             NGameUI gui = NUtils.getGameUI();
-            return gui != null && gui.localizedResourceTimersWindow != null && gui.localizedResourceTimersWindow.visible();
+            return gui != null && gui.timersPanel != null && gui.timersPanel.visible();
         });
         timer.click(() -> {
             NGameUI gui = NUtils.getGameUI();
             if (gui != null) {
-                gui.toggleResourceTimerWindow();
+                gui.toggleTimersPanel();
             }
         });
         buttons.add(timer);
@@ -580,14 +622,14 @@ public class NMiniMapWnd extends Widget{
                 return true;
             }
 
-            // Handle shift+right-click on resource markers for timer functionality
-            if(Hotkeys.action(Hotkeys.MAP_MARKER_DELETE).current().matchesMouse(button, ui.modflags()) && mark.m instanceof MapFile.SMarker) {
-                MapFile.SMarker smarker = (MapFile.SMarker) mark.m;
-                
-                // Check if this is a localized resource (map resource) and handle through service
+            if(Hotkeys.action(Hotkeys.MAP_MARKER_DELETE).current().matchesMouse(button, ui.modflags()) && NMiniMap.isTimerResource(mark.m)) {
                 NGameUI gui = (NGameUI) NUtils.getGameUI();
-                if(gui != null && gui.localizedResourceTimerService != null &&
-                   gui.localizedResourceTimerService.handleResourceClick(smarker)) {
+                if(gui != null && gui.timerStore != null) {
+                    if(press) {
+                        MapFile.SMarker smarker = (MapFile.SMarker) mark.m;
+                        String name = (smarker.nm != null) ? smarker.nm : smarker.res.name;
+                        gui.showTimerPopover(nurgling.widgets.timers.TimerPopover.forResource(gui, smarker, name));
+                    }
                     return true;
                 }
             }

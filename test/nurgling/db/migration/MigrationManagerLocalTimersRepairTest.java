@@ -26,10 +26,38 @@ class MigrationManagerLocalTimersRepairTest {
         Map<Integer, String> skipped = new MigrationManager(connection, adapter).runMigrations();
 
         assertEquals(23, MigrationManager.MIGRATION_QUEST_SHARES);
-        assertEquals(23, MigrationManager.CLIENT_MAX_SCHEMA_VERSION);
+        assertEquals(26, MigrationManager.CLIENT_MAX_SCHEMA_VERSION);
         assertTrue(skipped.isEmpty());
         assertTrue(adapter.questSharesExists,
                 "a database already at local timer grid migration must still gain quest sharing");
+    }
+
+    @Test
+    void schemaTwentyThreeRepairsVersionFourteenCollisionBeforeCreatingTimers() throws Exception {
+        Connection connection = connectionAtSchemaVersion(23);
+        RecordingPostgresAdapter adapter = new RecordingPostgresAdapter(connection);
+
+        new MigrationManager(connection, adapter).runMigrations();
+
+        assertEquals(24, MigrationManager.MIGRATION_SCHEMA14_BRIDGE_REPAIR);
+        assertEquals(25, MigrationManager.MIGRATION_TIMERS);
+        assertTrue(adapter.planningFoldersExists,
+                "the version-14 UUID/planning bridge must be replayed after another lineage used 14");
+        assertTrue(adapter.timersExists, "timers must use a fresh migration version");
+    }
+
+    @Test
+    void oldTimerNameColumnIsWidenedWithoutChangingExistingTextTable() throws Exception {
+        Connection connection = connectionAtSchemaVersion(25);
+        RecordingPostgresAdapter adapter = new RecordingPostgresAdapter(connection);
+        adapter.timersExists = true;
+        adapter.timerNameLength = 255;
+
+        new MigrationManager(connection, adapter).runMigrations();
+
+        assertEquals(26, MigrationManager.MIGRATION_TIMER_NAME_TEXT);
+        assertTrue(adapter.timerNameRepaired);
+        assertEquals(0, adapter.timerNameLength);
     }
 
     @Test
@@ -147,6 +175,20 @@ class MigrationManagerLocalTimersRepairTest {
         });
     }
 
+    private static ResultSet timerNameResult(int limit) {
+        boolean[] beforeFirst = {true};
+        return proxy(ResultSet.class, (method, args) -> {
+            if(method.equals("next")) {
+                boolean next = beforeFirst[0];
+                beforeFirst[0] = false;
+                return next;
+            }
+            if(method.equals("getInt")) return limit;
+            if(method.equals("wasNull")) return limit == 0;
+            return defaultValue(method);
+        });
+    }
+
     private static Object defaultValue(String method) {
         if (method.equals("isClosed")) return false;
         return null;
@@ -172,6 +214,10 @@ class MigrationManagerLocalTimersRepairTest {
     private static final class RecordingPostgresAdapter extends PostgresAdapter {
         private boolean localTimersExists;
         private boolean questSharesExists;
+        private boolean planningFoldersExists;
+        private boolean timersExists;
+        private int timerNameLength;
+        private boolean timerNameRepaired;
         private final Set<String> columns = new HashSet<>();
         private final TransactionState transaction;
 
@@ -190,12 +236,16 @@ class MigrationManagerLocalTimersRepairTest {
         @Override
         public boolean tableExists(String tableName) {
             return ("local_timers".equals(tableName) && localTimersExists)
-                    || ("quest_shares".equals(tableName) && questSharesExists);
+                    || ("quest_shares".equals(tableName) && questSharesExists)
+                    || ("planning_folders".equals(tableName) && planningFoldersExists)
+                    || ("timers".equals(tableName) && timersExists);
         }
 
         @Override
         public ResultSet executeQuery(String sql, Object... params) throws java.sql.SQLException {
             if (transaction != null && transaction.aborted) throw abortedTransaction();
+            if (sql.contains("character_maximum_length") && sql.contains("timers"))
+                return timerNameResult(timerNameLength);
             if (sql.contains("information_schema.columns") && params.length >= 2) {
                 return resultWithRows(columns.contains(String.valueOf(params[1])));
             }
@@ -217,6 +267,14 @@ class MigrationManagerLocalTimersRepairTest {
                         "description", "created_at", "updated_at"));
             } else if (sql.startsWith("CREATE TABLE quest_shares")) {
                 questSharesExists = true;
+            } else if (sql.startsWith("CREATE TABLE planning_folders")) {
+                planningFoldersExists = true;
+            } else if (sql.startsWith("CREATE TABLE timers")) {
+                timersExists = true;
+                timerNameLength = 0;
+            } else if (sql.startsWith("ALTER TABLE timers ALTER COLUMN name TYPE TEXT")) {
+                timerNameLength = 0;
+                timerNameRepaired = true;
             } else if (sql.startsWith("ALTER TABLE local_timers ADD COLUMN ")) {
                 String rest = sql.substring("ALTER TABLE local_timers ADD COLUMN ".length());
                 columns.add(rest.substring(0, rest.indexOf(' ')));

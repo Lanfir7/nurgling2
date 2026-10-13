@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-unified-timers",
+  "priority": 7,
+  "summary": {
+    "ru": "В окне таймеров появились напоминания, метки на карте и сроки задач To-Do.",
+    "en": "The timer panel now includes reminders, map pins and To-Do deadlines."
+  },
+  "detail": {
+    "ru": "Откройте «Таймеры» кнопкой миникарты: здесь собраны ресурсы, напоминания и метки. Таймер можно повторить, отложить или скрыть только для себя; общие таймеры доступны деревне. В To-Do можно назначать сроки задач. Прежние таймеры сохраняют положение, значки и автоудаление, включая автоматически созданные таймеры ресурсов и костров BoughBee.",
+    "en": "Open Timers from the minimap button to manage resources, reminders and map pins. Restart, snooze or dismiss timers just for yourself; shared timers are available to the village. To-Do tasks can have deadlines. Existing timers retain their locations, icons and automatic removal, including automatic resource and BoughBee pyre timers."
+  }
+}

@@ -329,6 +329,16 @@ public class NConfig
         masterminerprop,
         masterminermarkingconfig,
         miningoverlaymemory,
+        // Timer notifications
+        timerSoundResource,
+        timerSoundPin,
+        timerSoundReminder,
+        timerFlashTaskbar,
+        timerCombatQuiet,
+        timerMyCharacters,
+        taskHeadsUpMinutes,
+        taskNotifyDone,
+        // Auto-logout settings
         autoLogoutEnabled,
         autoLogoutThreshold,
         autoLogoutCountdown,
@@ -872,6 +882,17 @@ public class NConfig
         conf.put(Key.agentMaxTokens, 1024);
         conf.put(Key.agentTimeoutMs, 120000);
         conf.put(Key.agentAutoMode, true);
+        // Timer notifications: alarm resource per kind ("none" = silent)
+        conf.put(Key.timerSoundResource, "alarm/question");
+        conf.put(Key.timerSoundPin, "alarm/quest");
+        conf.put(Key.timerSoundReminder, "alarm/quest");
+        conf.put(Key.timerFlashTaskbar, true);   // flash the taskbar button when the game is in the background
+        conf.put(Key.timerCombatQuiet, true);    // hold banners and sound until a fight ends
+        conf.put(Key.timerMyCharacters, "");     // alts that count as "me", comma separated
+        conf.put(Key.taskHeadsUpMinutes, 60);    // heads-up banner this long before a task is due; 0 = off
+        conf.put(Key.taskNotifyDone, true);      // banner when someone finishes a task I created
+
+        // Auto-logout settings
         conf.put(Key.autoLogoutEnabled, false);
         conf.put(Key.autoLogoutThreshold, 0);
         conf.put(Key.autoLogoutCountdown, 30);

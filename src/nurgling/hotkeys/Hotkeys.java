@@ -91,6 +91,7 @@ public final class Hotkeys {
     public static final String WINDOW_DB_STATS_TOGGLE = "window.db_stats.toggle";
     public static final String WINDOW_AGENT_TOGGLE = "window.agent.toggle";
     public static final String PHOTO_MODE = "photo-mode";
+    public static final String TIMER_QUICK_ADD = "timers_quickadd";
     public static final String WINDOW_RESOURCE_TIMERS_REFRESH = "window.resource_timers.refresh";
     public static final String WINDOW_MAP_ICONS_TOGGLE_SELECTED = "window.map_icons.toggle_selected";
     public static final String SYSTEM_RENDERING_TOGGLE = "system.rendering.toggle";

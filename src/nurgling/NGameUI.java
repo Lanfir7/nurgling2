@@ -81,9 +81,17 @@ public class NGameUI extends GameUI
     private AllowVisitingStatusBuff allowVisitingBuff = null;
     public NRecentActionsPanel recentActionsPanel;
     public DrinkMeter drinkMeter;
-    public LocalizedResourceTimersWindow localizedResourceTimersWindow = null;
-    private LocalizedResourceTimerDialog localizedResourceTimerDialog = null;
-    public LocalizedResourceTimerService localizedResourceTimerService;
+    /** This world's timers; the same instance for every session on the world. */
+    public nurgling.timers.TimerStore timerStore;
+    public nurgling.timers.TimerNotifier timerNotifier;
+    public nurgling.todo.TaskDeadlines taskDeadlines;
+    public nurgling.widgets.timers.TimerBanners timerBanners;
+    public nurgling.widgets.timers.TimersPanel timersPanel;
+    private nurgling.widgets.timers.TimerPopover timerPopover;
+    /** Legacy API compatibility; the unified store owns all live timers. */
+    @Deprecated public LocalizedResourceTimerService localizedResourceTimerService;
+    @Deprecated public LocalizedResourceTimersWindow localizedResourceTimersWindow;
+    @Deprecated private LocalizedResourceTimerDialog localizedResourceTimerDialog;
     public WaypointMovementService waypointMovementService;
     public final nurgling.tools.StraightPathObstacle.Cache pathObstacles = new nurgling.tools.StraightPathObstacle.Cache();
     public PingService pingService;
@@ -409,10 +417,12 @@ public class NGameUI extends GameUI
         add(spec = new Specialisation(), new Coord(sz.x/2 - spec.sz.x/2, sz.y/2 - spec.sz.y/2));
         spec.hide();
 
-        // Heavy service widgets
-        add(localizedResourceTimerDialog = new LocalizedResourceTimerDialog(), new Coord(200, 200));
-        localizedResourceTimerService = new LocalizedResourceTimerService(this, genus);
-        add(localizedResourceTimersWindow = new LocalizedResourceTimersWindow(localizedResourceTimerService), new Coord(100, 100));
+        // Timers: the store is per world, the widgets per session
+        timerStore = nurgling.sessions.SessionManager.getInstance().timerStore(genus);
+        timerNotifier = new nurgling.timers.TimerNotifier(this);
+        taskDeadlines = new nurgling.todo.TaskDeadlines(this);
+        add(timersPanel = new nurgling.widgets.timers.TimersPanel(), new Coord(100, 100));
+        add(timerBanners = new nurgling.widgets.timers.TimerBanners(), Coord.z);
         
         // Database debug overlay - shows in top-right corner
         add(dbStatsOverlay = new DbStatsOverlay(), new Coord(sz.x - 290, 10));
@@ -424,11 +434,6 @@ public class NGameUI extends GameUI
             animalMarkerSyncService.start();
         }
 
-        // Start local timer sync from Postgres (every 5 minutes)
-        if (localTimerSyncService == null && localizedResourceTimerService != null && genus != null) {
-            localTimerSyncService = new LocalTimerSyncService(this);
-            localTimerSyncService.start();
-        }
 
         // Simple routes widget (initialized in attached() after SimpleRouteManager is ready)
         // Will be added in attached() method
@@ -524,11 +529,6 @@ public class NGameUI extends GameUI
             animalMarkerSyncService.start();
         }
 
-        // Start local timer sync from Postgres (every 5 minutes)
-        if (localTimerSyncService == null && localizedResourceTimerService != null && genus != null) {
-            localTimerSyncService = new LocalTimerSyncService(this);
-            localTimerSyncService.start();
-        }
         
         // Автозапуск макроса маркеров животных если включён в настройках
         if (nurgling.widgets.nsettings.AnimalMarkersSettings.isMarkerEnabled()) {
@@ -574,10 +574,6 @@ public class NGameUI extends GameUI
             heavyWidgetsThread.interrupt();
             heavyWidgetsThread = null;
         }
-        if(localizedResourceTimerService != null)
-            localizedResourceTimerService.dispose();
-        if(localTimerSyncService != null)
-            localTimerSyncService.stop();
         if(animalMarkerSyncService != null)
             animalMarkerSyncService.stop();
         if(fishLocationService != null)
@@ -972,6 +968,10 @@ public class NGameUI extends GameUI
         lootNotices.tick(dt);
         if(todoStore != null)
             todoStore.tick();
+        if(timerNotifier != null)
+            timerNotifier.tick();
+        if(taskDeadlines != null)
+            taskDeadlines.tick();
         Gob player = (map == null) ? null : map.player();
         String pose = (player == null) ? null : player.pose();
         if (player == null || (pose != null && pose.contains("gfx/borka/point")))
@@ -1703,7 +1703,7 @@ public class NGameUI extends GameUI
         }
         // Handle resource refill time messages (e.g., "Will refill in 10 hours" or "Refills in 2 weeks")
         // Use clickedGob or pendingRefillGob: "Will refill in" often arrives via system msg after tooltip, when clickedGob may already be cleared
-        if (message != null && localizedResourceTimerService != null) {
+        if (message != null && timerStore != null) {
             MapView.ClickedGob refillGob = map.clickedGob != null ? map.clickedGob : pendingRefillGob;
             if (refillGob != null) {
                 // Match "Will refill in X units", "Refill(s) in X units" (with or without "Will")
@@ -1731,7 +1731,7 @@ public class NGameUI extends GameUI
                         if (durationMs > 0) {
                             Gob gob = refillGob.gob;
                             String resName = gob.ngob != null ? gob.ngob.name : null;
-                            if (resName != null && localizedResourceTimerService.isTimerSupportedResource(resName)) {
+                            if (resName != null && nurgling.timers.TimerStore.isTimerSupportedResource(resName)) {
                                 long segmentId = 0;
                                 Coord tileCoords = null;
                                 String resourceName = null;
@@ -1766,7 +1766,7 @@ public class NGameUI extends GameUI
                                     }
                                 }
                                 if (segmentId != 0 && tileCoords != null && resourceName != null) {
-                                    localizedResourceTimerService.createTimer(
+                                    timerStore.createResourceTimer(this,
                                         segmentId,
                                         tileCoords,
                                         resourceName,
@@ -1973,6 +1973,10 @@ public class NGameUI extends GameUI
             photomode(!nurgling.render.Photo.active(map));
             return true;
         }
+        if (timersPanel != null && Hotkeys.matchesKey(Hotkeys.TIMER_QUICK_ADD, ev.awt)) {
+            timersPanel.showQuickAdd();
+            return true;
+        }
         nurgling.sessions.SessionManager sm = nurgling.sessions.SessionManager.getInstance();
 
         // Check session switching keybindings
@@ -1996,9 +2000,24 @@ public class NGameUI extends GameUI
         return super.globtype(ev);
     }
 
-    public void toggleResourceTimerWindow() {
-        if(localizedResourceTimerService != null) {
-            localizedResourceTimerService.showTimerWindow();
+    public void toggleTimersPanel() {
+        if(timersPanel == null)
+            return;
+        if(timersPanel.visible())
+            timersPanel.hide();
+        else
+            timersPanel.show();
+    }
+
+    /** Open the To-Do window on one task. */
+    public void openTodoTask(int taskId) {
+        if(todoStore == null)
+            return;
+        if(todoWnd == null || !todoWnd.visible())
+            toggleTodo();
+        if(todoWnd != null) {
+            todoWnd.focusTask(taskId);
+            todoWnd.raise();
         }
     }
     
@@ -2011,6 +2030,26 @@ public class NGameUI extends GameUI
     
     public LocalizedResourceTimerDialog getAddResourceTimerWidget() {
         return localizedResourceTimerDialog;
+    }
+
+    public void showTimersPanel() {
+        if(timersPanel != null)
+            timersPanel.show();
+    }
+
+    /** Open a timer popover next to the mouse, closing any other one. */
+    public void showTimerPopover(nurgling.widgets.timers.TimerPopover p) {
+        if(p == null) {
+            msg(nurgling.i18n.L10n.get("timers.not_on_map"));
+            return;
+        }
+        if(timerPopover != null && timerPopover.parent != null)
+            ui.destroy(timerPopover);
+        timerPopover = p;
+        Coord at = ui.mc.sub(rootpos()).add(UI.scale(12), UI.scale(12));
+        add(p, at);
+        p.c = Coord.of(Math.max(0, Math.min(at.x, sz.x - p.sz.x)), Math.max(0, Math.min(at.y, sz.y - p.sz.y)));
+        p.raise();
     }
 
     public void toggleAgentWindow() {

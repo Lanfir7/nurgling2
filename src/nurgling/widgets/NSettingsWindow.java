@@ -116,6 +116,7 @@ public class NSettingsWindow extends Widget {
         general.addChild(new SettingsItem(L10n.get("nsettings.item.discord"), new DiscordSettings(), container));
         general.addChild(new SettingsItem(L10n.get("nsettings.item.llm_agent"), new AgentSettings(), container));
         general.addChild(new SettingsItem(HOTKEY_PAGE_ID, L10n.get("nsettings.item.hotkeys"), HotkeySettings::new, container));
+        general.addChild(new SettingsItem(L10n.get("nsettings.item.timers"), new TimerSettings(), container));
 
         SettingsCategory gameenvironment = new SettingsCategory(L10n.get("nsettings.cat.game_environment"), new Panel(L10n.get("nsettings.cat.game_environment")), container);
         gameenvironment.addChild(new SettingsItem(L10n.get("nsettings.item.world"), world = new World(), container));

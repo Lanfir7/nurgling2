@@ -543,10 +543,10 @@ public class BoughBee implements Action {
     public static void placePyreTimer(NGameUI gui, Gob pyre) {
         if (gui == null || pyre == null || pyre.rc == null)
             return;
-        if (gui.mmap == null || gui.mmap.sessloc == null || gui.localizedResourceTimerService == null)
+        if (gui.mmap == null || gui.mmap.sessloc == null || gui.timerStore == null)
             return;
         Coord tileCoords = pyre.rc.floor(tilesz).add(gui.mmap.sessloc.tc);
-        gui.localizedResourceTimerService.createTimer(
+        gui.timerStore.createResourceTimer(gui,
                 gui.mmap.sessloc.seg.id,
                 tileCoords,
                 "Bough Pyre",

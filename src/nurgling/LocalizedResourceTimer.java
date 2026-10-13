@@ -123,7 +123,7 @@ public class LocalizedResourceTimer {
         this.localPlacement = true;
     }
 
-    static String legacyResourceId(long segmentId, haven.Coord tileCoords, String resourceType) {
+    public static String legacyResourceId(long segmentId, haven.Coord tileCoords, String resourceType) {
         return String.format("res_%d_%d_%d_%s", segmentId, tileCoords.x, tileCoords.y,
                            sanitize(resourceType));
     }

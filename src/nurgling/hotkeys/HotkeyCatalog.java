@@ -66,6 +66,7 @@ public final class HotkeyCatalog {
         core(registry, binding("screenshot", KeyMatch.forchar('S', KeyMatch.M)), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
         core(registry, binding("ui-toggle", KeyMatch.nil), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
         core(registry, binding(Hotkeys.PHOTO_MODE, KeyMatch.forchar('P', KeyMatch.C | KeyMatch.S)), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
+        core(registry, binding(Hotkeys.TIMER_QUICK_ADD, KeyMatch.nil), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
         core(registry, binding("logout", KeyMatch.nil), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
         core(registry, binding("logout-cs", KeyMatch.nil), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);
         core(registry, binding("instantLogoutKB", KeyMatch.forchar('L', KeyMatch.C)), HotkeyCategory.WINDOWS, HotkeyContext.GLOBAL, order);

@@ -311,6 +311,7 @@ public class NCore extends Widget
                             startFishSync();
                             startPeerPositionSync();
                             startQuestShareSync();
+                            startTimerSync();
                         } catch (Exception e) {
                             System.err.println("Failed to initialize DatabaseManager in background: " + e.getMessage());
                             e.printStackTrace();
@@ -341,6 +342,10 @@ public class NCore extends Widget
         {
             startQuestShareSync();
         }
+        if((Boolean) NConfig.get(NConfig.Key.ndbenable) && databaseManager != null && !timerSyncStarted)
+        {
+            startTimerSync();
+        }
 
         if(!(Boolean) NConfig.get(NConfig.Key.ndbenable) && databaseManager != null)
         {
@@ -352,6 +357,7 @@ public class NCore extends Widget
                     stopFishSync();
                     stopPeerPositionSync();
                     stopQuestShareSync();
+                    stopTimerSync();
                     databaseManager.shutdown();
                     databaseManager = null;
                 }
@@ -1005,6 +1011,7 @@ public class NCore extends Widget
     private static volatile boolean routeSyncStarted = false;
     private static volatile boolean peerPositionSyncStarted = false;
     private static volatile boolean questShareSyncStarted = false;
+    private static volatile boolean timerSyncStarted = false;
 
     /**
      * Start periodic area sync from database
@@ -1238,6 +1245,30 @@ public class NCore extends Widget
             databaseManager.getQuestShareService().stopSync();
         }
         questShareSyncStarted = false;
+    }
+
+    /** Start sharing timers with villagers. Same locking as quest sharing, for the same reason. */
+    private void startTimerSync() {
+        if (timerSyncStarted || databaseManager == null || !databaseManager.isReady()) {
+            return;
+        }
+        synchronized (dbLock) {
+            if (timerSyncStarted || databaseManager == null || !databaseManager.isReady()) {
+                return;
+            }
+            nurgling.db.service.TimerSyncService svc = databaseManager.getTimerSyncService();
+            if (svc == null) return;   // optional migration not run yet; timers stay on their file
+
+            svc.startSync(15);
+            timerSyncStarted = true;
+        }
+    }
+
+    private void stopTimerSync() {
+        if (databaseManager != null && databaseManager.getTimerSyncService() != null) {
+            databaseManager.getTimerSyncService().stopSync();
+        }
+        timerSyncStarted = false;
     }
 
     private void stopFishSync() {
