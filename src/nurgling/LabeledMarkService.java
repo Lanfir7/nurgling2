@@ -1110,6 +1110,33 @@ public class LabeledMarkService implements ProfileAwareService {
         return removeMark(mark.getLocationId());
     }
 
+    /** Remove a cluster in one index update and one save. */
+    public int removeMarks(Collection<LabeledMinimapMark> marks) {
+        int removed = 0;
+        lock.writeLock().lock();
+        try {
+            boolean previous = suppressReindex;
+            suppressReindex = true;
+            try {
+                for(LabeledMinimapMark mark : marks) {
+                    if(mark != null && labeledMarks.containsKey(mark.getLocationId())) {
+                        removeMarkFromIndexes(mark.getLocationId());
+                        removed++;
+                    }
+                }
+            } finally {
+                suppressReindex = previous;
+            }
+            if(removed > 0) {
+                reindex();
+                scheduleSave();
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+        return removed;
+    }
+
     /**
      * Find a mark at given segment and tile coordinates.
      * Оптимизировано с использованием индекса по сегменту.

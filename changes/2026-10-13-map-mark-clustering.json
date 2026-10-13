@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-map-mark-clustering",
+  "priority": 6,
+  "summary": {
+    "ru": "Близкие метки руды, самоцветов и камня можно группировать на карте.",
+    "en": "Nearby ore, gem and stone marks can be grouped on the map."
+  },
+  "detail": {
+    "ru": "Откройте «Инструменты карты» и включите «Группировать метки добычи». На общей метке видно количество находок и качество лучшей; щелчок правой кнопкой открывает действия для группы.",
+    "en": "Open Map Tools and enable Group mined marks. A grouped badge shows the number of finds and the best quality; right-click it for group actions."
+  }
+}

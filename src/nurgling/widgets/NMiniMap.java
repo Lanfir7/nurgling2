@@ -187,6 +187,16 @@ NMiniMap extends MiniMap {
         NConfig.set(NConfig.Key.showFishIcons, val);
     }
 
+    /** Whether nearby mined marks of the same resource share a map badge. */
+    public static boolean clusterMinedMarks() {
+        Object val = NConfig.get(NConfig.Key.clusterMinedMarks);
+        return !(val instanceof Boolean) || (Boolean) val;
+    }
+
+    public static void clusterMinedMarks(boolean val) {
+        NConfig.set(NConfig.Key.clusterMinedMarks, val);
+    }
+
     public static nurgling.conf.ProspectMarkSettings prospectSettings() {
         Object val = NConfig.get(NConfig.Key.prospectMarks);
         if(val instanceof nurgling.conf.ProspectMarkSettings)
@@ -2113,19 +2123,85 @@ NMiniMap extends MiniMap {
         }
     }
 
-    /**
-     * Draw labeled marks on the minimap (from Checker bots like CheckWater, CheckClay).
-     * Shows an icon with a quality label underneath (e.g., "q20").
-     * Data is loaded from LabeledMarkService for persistence between sessions.
-     */
+    private static final int MARK_MERGE = UI.scale(28);
+    private static final int MARK_HIT_RADIUS = UI.scale(12);
+    private static final Color MARK_COUNT_BG = new Color(31, 122, 116);
+    private static final Text.Foundry markCountFont =
+        new Text.Foundry(Text.sans.deriveFont(Font.BOLD), 9, Color.WHITE).aa(true);
+    private static final java.util.Map<Integer, Text> markCountText = new java.util.HashMap<>();
+    private LabeledMarkClusters markClusters;
+    private boolean markClustersVein;
+
+    private LabeledMarkClusters labeledMarkClusters() {
+        if(sessloc == null || dloc == null)
+            return null;
+        NGameUI gui = NUtils.getGameUI();
+        if(gui == null || gui.labeledMarkService == null)
+            return null;
+        nurgling.conf.ProspectMarkSettings settings = prospectSettings();
+        java.util.List<LabeledMinimapMark> visible = new java.util.ArrayList<>();
+        for(LabeledMinimapMark mark : gui.labeledMarkService.getMarksForSegment(dloc.seg.id)) {
+            if(!skipHiddenLabeledMark(mark, settings) && mapIconVisible("local", mark.resourceType))
+                visible.add(mark);
+        }
+        if(visible.isEmpty())
+            return null;
+        double scale = scalef();
+        boolean grouping = clusterMinedMarks();
+        boolean vein = quarryartzVeinView();
+        if(markClusters == null || !markClusters.matches(visible, scale, grouping) || markClustersVein != vein) {
+            markClusters = new LabeledMarkClusters(visible, scale, MARK_MERGE, grouping,
+                mark -> !isAnimalMark(mark) && !isForageMark(mark) && isMineralLabeledMark(mark)
+                    && !(vein && "Quarryartz".equals(mark.resourceType)));
+            markClustersVein = vein;
+        }
+        return markClusters;
+    }
+
+    /** Topmost visible badges under the pointer. */
+    private java.util.List<LabeledMarkClusters.Cluster> labeledClustersAt(Coord screenCoord, int radius) {
+        java.util.List<LabeledMarkClusters.Cluster> hits = new java.util.ArrayList<>();
+        LabeledMarkClusters grouped = labeledMarkClusters();
+        if(grouped == null)
+            return hits;
+        Coord half = sz.div(2);
+        double scale = scalef();
+        for(int i = grouped.clusters.size() - 1; i >= 0; i--) {
+            LabeledMarkClusters.Cluster cluster = grouped.clusters.get(i);
+            if(screenCoord.dist(cluster.screenPos(dloc.tc, scale, half)) < radius)
+                hits.add(cluster);
+        }
+        return hits;
+    }
+
+    private static Tex clusteredMarkTooltip(java.util.List<LabeledMarkClusters.Cluster> hits) {
+        BufferedImage[] lines = new BufferedImage[hits.size()];
+        for(int i = 0; i < hits.size(); i++) {
+            LabeledMarkClusters.Cluster cluster = hits.get(i);
+            String line = cluster.type + " ×" + cluster.marks.size() + " · q"
+                + Math.round(cluster.worst().quality) + "–q" + Math.round(cluster.best().quality);
+            lines[i] = Text.render(line).img;
+        }
+        return new TexI(ItemInfo.catimgs(0, lines));
+    }
+
+    private static void drawMarkCount(GOut g, Coord pos, int count) {
+        Text text = markCountText.computeIfAbsent(count, n -> markCountFont.render(String.valueOf(n)));
+        int radius = Math.max(UI.scale(6), (text.sz().x + UI.scale(4)) / 2);
+        g.chcolor(0, 0, 0, 160);
+        g.fellipse(pos, new Coord(radius + 1, radius + 1));
+        g.chcolor(MARK_COUNT_BG);
+        g.fellipse(pos, new Coord(radius, radius));
+        g.chcolor();
+        g.aimage(text.tex(), pos, 0.5, 0.5);
+    }
+
+    /** Draw one icon per visible sample, or one badge per nearby group of mined marks. */
     private void drawLabeledMarks(GOut g) {
         if(sessloc == null || dloc == null) return;
 
         NGameUI gui = NUtils.getGameUI();
         if(gui == null || gui.labeledMarkService == null) return;
-
-        /* Looked up once per frame rather than per mark; NConfig.get is not free. */
-        nurgling.conf.ProspectMarkSettings settings = prospectSettings();
 
         java.util.List<LabeledMinimapMark> marks = gui.labeledMarkService.getMarksForSegment(dloc.seg.id);
         if(marks.isEmpty())
@@ -2145,16 +2221,15 @@ NMiniMap extends MiniMap {
         if (vein)
             drawQuarryTopo(g, marks, hsz, scale);
 
-        for(LabeledMinimapMark mark : marks) {
-            if (skipHiddenLabeledMark(mark, settings) || !mapIconVisible("local", mark.resourceType))
+        LabeledMarkClusters grouped = labeledMarkClusters();
+        if(grouped == null)
+            return;
+        for(LabeledMarkClusters.Cluster cluster : grouped.clusters) {
+            Coord screenPos = cluster.screenPos(dloc.tc, scale, hsz);
+            if(screenPos.x < -MARK_MERGE || screenPos.x > sz.x + MARK_MERGE
+                    || screenPos.y < -MARK_MERGE || screenPos.y > sz.y + MARK_MERGE)
                 continue;
-
-            int px = (int)Math.round((mark.tileCoords.x - dloc.tc.x) / (double)scale) + hsz.x;
-            int py = (int)Math.round((mark.tileCoords.y - dloc.tc.y) / (double)scale) + hsz.y;
-            if(px < 0 || px > sz.x || py < 0 || py > sz.y)
-                continue;
-
-            Coord screenPos = new Coord(px, py);
+            LabeledMinimapMark mark = cluster.best();
 
             if (vein && "Quarryartz".equals(mark.resourceType)) {
                 if (currentScale >= 1.25f) {
@@ -2200,6 +2275,8 @@ NMiniMap extends MiniMap {
                 );
                 g.aimage(labelText.tex(), textPos, 0.5, 0, scaledTextSize);
             }
+            if(cluster.marks.size() > 1)
+                drawMarkCount(g, screenPos.add(UI.scale(8), -UI.scale(8)), cluster.marks.size());
         }
     }
 
@@ -2940,15 +3017,19 @@ NMiniMap extends MiniMap {
                 boolean markersHidden = (mapwnd != null && Utils.eq(mapwnd.markcfg, MapWnd.MarkerConfig.hideall));
 
                 if(!markersHidden) {
-                    java.util.List<LabeledMinimapMark> marks = gui.labeledMarkService.getMarksForSegment(sessloc.seg.id);
+                    java.util.List<LabeledMarkClusters.Cluster> hits = labeledClustersAt(c, UI.scale(10));
+                    boolean hasGroup = hits.stream().anyMatch(hit -> hit.marks.size() > 1);
+                    if(hasGroup)
+                        return clusteredMarkTooltip(hits);
                     int threshold = UI.scale(10); // Screen pixels
 
                     nurgling.conf.ProspectMarkSettings settings = prospectSettings();
-                    for(LabeledMinimapMark mark : marks) {
+                    for(LabeledMarkClusters.Cluster hit : hits) {
+                        LabeledMinimapMark mark = hit.best();
                         if (skipHiddenLabeledMark(mark, settings) || !mapIconVisible("local", mark.resourceType)) continue;
 
                         // Convert segment-relative coordinates to screen coordinates (same as drawing)
-                        Coord screenPos = mark.tileCoords.sub(dloc.tc).div(scalef()).add(hsz);
+                        Coord screenPos = hit.screenPos(dloc.tc, scalef(), hsz);
 
                         if(c.dist(screenPos) < threshold) {
                             String resourceType = mark.resourceType != null ? mark.resourceType : "Unknown";
@@ -3687,32 +3768,64 @@ NMiniMap extends MiniMap {
      * Used for right-click deletion of water/soil quality marks.
      */
     private LabeledMinimapMark labeledMarkAt(Coord screenCoord) {
-        if(dloc == null || sessloc == null) return null;
+        java.util.List<LabeledMarkClusters.Cluster> hits = labeledClustersAt(screenCoord, MARK_HIT_RADIUS);
+        return hits.isEmpty() ? null : hits.get(0).best();
+    }
 
+    private LabeledMarkClusters.Cluster groupedMarkAt(Coord screenCoord) {
+        java.util.List<LabeledMarkClusters.Cluster> hits = labeledClustersAt(screenCoord, MARK_HIT_RADIUS);
+        if(hits.isEmpty())
+            return null;
+        LabeledMarkClusters.Cluster top = hits.get(0);
+        return top.marks.size() > 1 ? top : null;
+    }
+
+    private void openMarkClusterMenu(LabeledMarkClusters.Cluster cluster) {
         NGameUI gui = NUtils.getGameUI();
-        if(gui == null || gui.labeledMarkService == null) return null;
+        if(gui == null || gui.labeledMarkService == null)
+            return;
+        String deleteAll = L10n.get("maptools.cluster.delete_all", cluster.marks.size());
+        String keepBest = L10n.get("maptools.cluster.keep_best");
+        String zoomHere = L10n.get("maptools.cluster.zoom_here");
+        java.util.List<LabeledMinimapMark> marks = new java.util.ArrayList<>(cluster.marks);
+        Coord anchor = cluster.anchor;
+        MapFile.Segment segment = dloc.seg;
+        NFlowerMenu menu = new NFlowerMenu(new String[]{deleteAll, keepBest, zoomHere}) {
+            private boolean done;
 
-        java.util.List<LabeledMinimapMark> marks = gui.labeledMarkService.getMarksForSegment(dloc.seg.id);
-
-        Coord hsz = sz.div(2);
-        int threshold = UI.scale(12); // Click radius
-        nurgling.conf.ProspectMarkSettings settings = prospectSettings();
-
-        for(LabeledMinimapMark mark : marks) {
-            /* A filtered-out mark is not drawn, so it must not be clickable either -
-             * otherwise it keeps an invisible hitbox that swallows right-clicks. */
-            if (skipHiddenLabeledMark(mark, settings) || !mapIconVisible("local", mark.resourceType))
-                continue;
-
-            // Calculate screen position for this mark
-            Coord markScreenPos = mark.tileCoords.sub(dloc.tc).div(scalef()).add(hsz);
-
-            // Check if click is within threshold
-            if(screenCoord.dist(markScreenPos) < threshold) {
-                return mark;
+            @Override
+            public boolean mousedown(MouseDownEvent ev) {
+                if(super.mousedown(ev))
+                    nchoose(null);
+                return true;
             }
-        }
-        return null;
+
+            @Override
+            public void nchoose(NPetal option) {
+                if(done)
+                    return;
+                done = true;
+                if(option != null) {
+                    if(option.name.equals(deleteAll))
+                        gui.labeledMarkService.removeMarks(marks);
+                    else if(option.name.equals(keepBest))
+                        gui.labeledMarkService.removeMarks(marks.subList(1, marks.size()));
+                    else if(option.name.equals(zoomHere))
+                        zoomToMark(segment, anchor);
+                }
+                uimsg("cancel");
+            }
+        };
+        menu.shiftMode = true;
+        ui.root.add(menu, ui.mc);
+    }
+
+    private void zoomToMark(MapFile.Segment segment, Coord tile) {
+        follow = false;
+        setloc = null;
+        center(new Location(segment, tile));
+        targetScale = Math.min(16.0f, targetScale * 2);
+        zoomlevel = Utils.clip((int)(Math.log(1.0 / targetScale) / Math.log(2)), 0, 5);
     }
 
     private BeaconTarget customBeaconTargetAt(Coord screenCoord) {
@@ -4166,6 +4279,10 @@ NMiniMap extends MiniMap {
         }
         
 
+        // The grouped badge menu opens on release; prevent a walk on the press.
+        if(ev.b == 3 && groupedMarkAt(ev.c) != null)
+            return true;
+
         // Check for right-click on an undiscovered-LP marker. Our marker isn't a real
         // DisplayIcon, so without this check, base MiniMap.mousedown() falls through to its own
         // clickloc(..., press=true), which fires mvclick() with no gob immediately on press -
@@ -4261,6 +4378,15 @@ NMiniMap extends MiniMap {
                         return true;
                     }
                 }
+            }
+        }
+
+        // A grouped badge must offer an explicit choice; never delete an unseen member.
+        if(ev.b == 3 || Hotkeys.matchesMapMarkerDelete(ev.b, ui.modflags())) {
+            LabeledMarkClusters.Cluster group = groupedMarkAt(ev.c);
+            if(group != null) {
+                openMarkClusterMenu(group);
+                return true;
             }
         }
 

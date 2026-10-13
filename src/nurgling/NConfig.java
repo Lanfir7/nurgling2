@@ -349,6 +349,7 @@ public class NConfig
         // Map tools panel
         showTreeIcons,
         showFishIcons,
+        clusterMinedMarks,
         prospectMarks,
         // Localization
         language,
@@ -441,6 +442,7 @@ public class NConfig
         conf.put(Key.showView, false);
         conf.put(Key.showTreeIcons, true);
         conf.put(Key.showFishIcons, true);
+        conf.put(Key.clusterMinedMarks, true);
         conf.put(Key.prospectMarks, new ProspectMarkSettings());
         conf.put(Key.disableWinAnim, true);
         conf.put(Key.disableMenugridKeys, false);
