@@ -3,6 +3,7 @@ package nurgling.widgets;
 import haven.*;
 import nurgling.NUtils;
 import nurgling.conf.NTunnelingProp;
+import nurgling.overlays.NMiningSupport;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
@@ -82,7 +83,10 @@ public class TunnelingDialog extends Window {
         NONE("No Support (Minesweeper)", null, null, 0),
         MINE_SUPPORT("Mine Support", "gfx/terobjs/minesupport", "paginae/bld/minesupport", 100),
         STONE_COLUMN("Stone Column", "gfx/terobjs/column", "paginae/bld/column", 125),
-        MINE_BEAM("Mine Beam", "gfx/terobjs/minebeam", "paginae/bld/minebeam", 150);
+        MINE_BEAM("Mine Beam", "gfx/terobjs/minebeam", "paginae/bld/minebeam", 150),
+        TIMBER_TUNNEL("Timber Tunnel", "gfx/terobjs/timbertunnel", "paginae/bld/timbertunnel", 0),
+        REINFORCED_TUNNEL("Reinforced Tunnel", "gfx/terobjs/reinforcedtunnel", "paginae/bld/reinforcedtunnel", 0),
+        STONE_ARCH_TUNNEL("Stone Arch Tunnel", "gfx/terobjs/stonearchtunnel", "paginae/bld/stonearchtunnel", 0);
 
         public final String menuName;
         public final String resourcePath;
@@ -99,6 +103,16 @@ public class TunnelingDialog extends Window {
         public int getTileRadius() {
             return radius / 11;
         }
+
+        /** A tunnel frame's coverage (width x length tiles ahead of it), or null for a circular support. */
+        public NMiningSupport.Spec frameSpec() {
+            NMiningSupport.Spec spec = (resourcePath == null) ? null : NMiningSupport.specFor(resourcePath);
+            return (spec != null && spec.isRect()) ? spec : null;
+        }
+
+        public boolean isFrame() {
+            return frameSpec() != null;
+        }
     }
 
     // Session-persistent selections (static to survive dialog close/reopen)
@@ -111,6 +125,7 @@ public class TunnelingDialog extends Window {
     private static boolean savedWingSouth = false;
     private static boolean savedWingEast = false;
     private static boolean savedWingWest = false;
+    private static boolean savedCentreLine = false;
 
     // Current selections (initialized from saved values)
     private Direction selectedDirection = savedDirection;
@@ -122,6 +137,7 @@ public class TunnelingDialog extends Window {
     private boolean wingEast = savedWingEast;
     private boolean wingWest = savedWingWest;
     private boolean doubleTunnel = false;
+    private boolean centreLine = savedCentreLine;
 
     private int maxLateral = savedMaxLateral;
 
@@ -135,6 +151,7 @@ public class TunnelingDialog extends Window {
     private boolean[] confirmRef = null;
     private boolean[] cancelRef = null;
     private boolean[] doubleTunnelRef = null;
+    private boolean[] centreLineRef = null;
 
     // UI Elements
     private IButton btnDirN, btnDirS, btnDirE, btnDirW;
@@ -149,6 +166,8 @@ public class TunnelingDialog extends Window {
     private Widget columnIconWidget;
     private Label tunnelSideOptionsLabel;
     private Label wingSideOptionsLabel;
+    private Label tunnelSideLabel;
+    private CheckBox centreLineBox;
 
     // Selection outlines
     private SelectionFrame selDirN, selDirS, selDirE, selDirW;
@@ -159,6 +178,8 @@ public class TunnelingDialog extends Window {
     // Mode-specific widgets (shown/hidden based on support type)
     private final List<Widget> tunnelerWidgets = new ArrayList<>();
     private final List<Widget> minesweeperWidgets = new ArrayList<>();
+    // Wing controls, hidden for tunnel frames (a frame props nothing beside its own width)
+    private final List<Widget> wingWidgets = new ArrayList<>();
     private Button confirmButton, cancelButton;
     private int tunnelerButtonY, minesweeperButtonY;
 
@@ -243,8 +264,11 @@ public class TunnelingDialog extends Window {
 
             @Override
             protected void drawitem(GOut g, SupportType item, int idx) {
+                NMiningSupport.Spec frame = item.frameSpec();
                 if (item == SupportType.NONE) {
                     g.text(item.menuName, new Coord(5, 3));
+                } else if (frame != null) {
+                    g.text(item.menuName + " (" + frame.widthTiles + "x" + frame.lengthTiles + " tiles)", new Coord(5, 3));
                 } else {
                     g.text(item.menuName + " (r:" + item.getTileRadius() + " tiles)", new Coord(5, 3));
                 }
@@ -252,6 +276,11 @@ public class TunnelingDialog extends Window {
 
             @Override
             public void change(SupportType item) {
+                // Closing the list without picking reports null; keep the current choice
+                if (item == null) {
+                    super.change(selectedSupportType);
+                    return;
+                }
                 super.change(item);
                 selectedSupportType = item;
                 if (supportIconWidget != null && item != SupportType.NONE) {
@@ -403,6 +432,12 @@ public class TunnelingDialog extends Window {
         tunnelerWidgets.add(selWingRight);
         tunnelerWidgets.add(columnIconWidget);
         tunnelerWidgets.add(supportIconWidget);
+        wingWidgets.add(wingsLabel);
+        wingWidgets.add(btnWingLeft);
+        wingWidgets.add(btnWingRight);
+        wingWidgets.add(selWingLeft);
+        wingWidgets.add(selWingRight);
+        wingWidgets.add(columnIconWidget);
 
         y = compassCenterY + windroseSize.y / 2 + btnDirS.sz.y + btnGap + 25;
 
@@ -453,7 +488,7 @@ public class TunnelingDialog extends Window {
         int tunnelLabelWidth = 75;
         int tunnelBtnStartX = leftMargin + tunnelLabelWidth + labelToAssemblyGap;
 
-        Label tunnelSideLabel = new Label("Tunnel Side:");
+        tunnelSideLabel = new Label("Tunnel Side:");
         add(tunnelSideLabel, new Coord(leftMargin, y));
         tunnelSideOptionsLabel = new Label("(East/West)");
         add(tunnelSideOptionsLabel, new Coord(leftMargin, y + 16));
@@ -495,6 +530,18 @@ public class TunnelingDialog extends Window {
         btnWingSideLeft.hide();
         btnWingSideRight.hide();
 
+        // Tunnel frames only: dig the frame's full width, or just the centre line
+        centreLineBox = new CheckBox("Centre line only") {
+            @Override
+            public void changed(boolean val) {
+                centreLine = val;
+                updatePreview();
+            }
+        };
+        centreLineBox.a = centreLine;
+        add(centreLineBox, new Coord(wingSideLabelX, y + 10));
+        centreLineBox.hide();
+
         // Track tunneler-only widgets for mode switching
         tunnelerWidgets.add(tunnelSideLabel);
         tunnelerWidgets.add(tunnelSideOptionsLabel);
@@ -512,6 +559,14 @@ public class TunnelingDialog extends Window {
         tunnelerWidgets.add(btnWingSideRight);
         tunnelerWidgets.add(selWingSideFirst);
         tunnelerWidgets.add(selWingSideSecond);
+        wingWidgets.add(wingSideLabel);
+        wingWidgets.add(wingSideOptionsLabel);
+        wingWidgets.add(btnWingSideUp);
+        wingWidgets.add(btnWingSideDown);
+        wingWidgets.add(btnWingSideLeft);
+        wingWidgets.add(btnWingSideRight);
+        wingWidgets.add(selWingSideFirst);
+        wingWidgets.add(selWingSideSecond);
 
         y += btnTunnelLeft.sz.y + 20;
 
@@ -525,6 +580,7 @@ public class TunnelingDialog extends Window {
         doubleTunnelCb.a = doubleTunnel;
         add(doubleTunnelCb, new Coord(leftMargin, y));
         tunnelerWidgets.add(doubleTunnelCb);
+        wingWidgets.add(doubleTunnelCb);
         y += 30;
 
         // === 4. PREVIEW with border (left) and LEGEND (right) ===
@@ -541,7 +597,10 @@ public class TunnelingDialog extends Window {
         int legendItemHeight = 22;
         addColoredLegend(legendX, previewBottom - 3 * legendItemHeight, COLOR_SUPPORT, "Support", tunnelerWidgets);
         addColoredLegend(legendX, previewBottom - 2 * legendItemHeight, COLOR_TUNNEL, "Tunnel", tunnelerWidgets);
-        addColoredLegend(legendX, previewBottom - legendItemHeight, COLOR_WING, "Wing", tunnelerWidgets);
+        List<Widget> wingLegend = new ArrayList<>();
+        addColoredLegend(legendX, previewBottom - legendItemHeight, COLOR_WING, "Wing", wingLegend);
+        tunnelerWidgets.addAll(wingLegend);
+        wingWidgets.addAll(wingLegend);
 
         tunnelerWidgets.add(previewLabel);
         tunnelerWidgets.add(previewGrid);
@@ -664,6 +723,7 @@ public class TunnelingDialog extends Window {
         // Restore wing toggle selections
         updateWingToggleSelection();
 
+        applyFrameVisibility();
         updatePreview();
     }
 
@@ -830,6 +890,8 @@ public class TunnelingDialog extends Window {
             updateWingToggleSelection();
             updatePreview();
         }
+        applyFrameVisibility();
+        updatePreview();
     }
 
     private void selectTunnelSide(int index) {
@@ -873,6 +935,38 @@ public class TunnelingDialog extends Window {
             updateTunnelSideSelection(sideIndex(tunnelSides, selectedTunnelSide));
             updateWingSideSelection(sideIndex(wingSides, selectedWingSide));
             updateWingToggleSelection();
+        }
+        applyFrameVisibility();
+    }
+
+    /* A tunnel frame is dug through rather than beside, so the side corridor and
+     * wings don't apply. A 2-wide frame still needs to know which side its second
+     * column goes, so it keeps the side arrows under another name. */
+    private void applyFrameVisibility() {
+        if (centreLineBox == null) return;
+        NMiningSupport.Spec frame = selectedSupportType.frameSpec();
+        if (frame == null) {
+            tunnelSideLabel.settext("Tunnel Side:");
+            centreLineBox.hide();
+            return;
+        }
+        for (Widget w : wingWidgets) w.hide();
+        if (frame.widthTiles == 2) {
+            tunnelSideLabel.settext("2nd Column:");
+        } else {
+            tunnelSideLabel.hide();
+            tunnelSideOptionsLabel.hide();
+            btnTunnelLeft.hide();
+            btnTunnelRight.hide();
+            btnTunnelUp.hide();
+            btnTunnelDown.hide();
+            selTunnelFirst.hide();
+            selTunnelSecond.hide();
+        }
+        if (frame.widthTiles > 1) {
+            centreLineBox.show();
+        } else {
+            centreLineBox.hide();
         }
     }
 
@@ -971,6 +1065,13 @@ public class TunnelingDialog extends Window {
 
             // Guard against null state during initialization
             if (selectedSupportType == null || selectedDirection == null) {
+                g.chcolor();
+                return;
+            }
+
+            NMiningSupport.Spec frame = selectedSupportType.frameSpec();
+            if (frame != null) {
+                drawFramePreview(g, offset, center, frame);
                 g.chcolor();
                 return;
             }
@@ -1088,6 +1189,67 @@ public class TunnelingDialog extends Window {
             }
         }
 
+        /* Frames stacked along the dig direction, starting from a support on the
+         * back row: the corridor runs through each frame, and each frame props
+         * width x length tiles ahead of it. */
+        private void drawFramePreview(GOut g, Coord offset, int center, NMiningSupport.Spec frame) {
+            int[] cols = frameColumns(frame.widthTiles);
+
+            g.chcolor(COLOR_TUNNEL);
+            for (int f = 1; f < GRID_SIZE - 1; f++) {
+                for (int c : cols) {
+                    if (!centreLine || c == 0) {
+                        Coord cell = frameCell(f, c, center);
+                        fillCell(g, offset, cell.x, cell.y);
+                    }
+                }
+            }
+
+            g.chcolor(COLOR_SUPPORT);
+            Coord start = frameCell(0, 0, center);
+            fillCell(g, offset, start.x, start.y);
+            for (int f = 1; f < GRID_SIZE - 1; f += frame.lengthTiles) {
+                for (int c : cols) {
+                    drawFrameBar(g, offset, frameCell(f, c, center));
+                }
+            }
+
+            g.chcolor(COLOR_ARROW);
+            Coord tip = frameCell(GRID_SIZE - 1, 0, center);
+            drawArrow(g, offset, tip.x, tip.y, selectedDirection);
+        }
+
+        /* Lateral offsets of the frame's columns; positive is East (digging N/S)
+         * or South (digging E/W), matching TunnelSide. */
+        private int[] frameColumns(int width) {
+            if (width == 1) return new int[]{0};
+            if (width == 2) {
+                boolean positive = (selectedTunnelSide == TunnelSide.EAST || selectedTunnelSide == TunnelSide.SOUTH);
+                return new int[]{0, positive ? 1 : -1};
+            }
+            return new int[]{-1, 0, 1};
+        }
+
+        private Coord frameCell(int forward, int lateral, int center) {
+            switch (selectedDirection) {
+                case NORTH: return new Coord(center + lateral, GRID_SIZE - 1 - forward);
+                case SOUTH: return new Coord(center + lateral, forward);
+                case EAST: return new Coord(forward, center + lateral);
+                default: return new Coord(GRID_SIZE - 1 - forward, center + lateral);
+            }
+        }
+
+        // A frame stands on the cell's back edge, across the corridor
+        private void drawFrameBar(GOut g, Coord offset, Coord cell) {
+            Coord p = offset.add(cell.x * CELL_SIZE, cell.y * CELL_SIZE);
+            switch (selectedDirection) {
+                case NORTH: g.frect(p.add(0, CELL_SIZE - 2), new Coord(CELL_SIZE, 3)); break;
+                case SOUTH: g.frect(p.add(0, -1), new Coord(CELL_SIZE, 3)); break;
+                case EAST: g.frect(p.add(-1, 0), new Coord(3, CELL_SIZE)); break;
+                default: g.frect(p.add(CELL_SIZE - 2, 0), new Coord(3, CELL_SIZE)); break;
+            }
+        }
+
         private void fillCell(GOut g, Coord offset, int gridX, int gridY) {
             g.frect(offset.add(gridX * CELL_SIZE + 1, gridY * CELL_SIZE + 1),
                     new Coord(CELL_SIZE - 1, CELL_SIZE - 1));
@@ -1148,6 +1310,10 @@ public class TunnelingDialog extends Window {
         this.doubleTunnelRef = doubleTunnelRef;
     }
 
+    public void setFrameReferences(boolean[] centreLineRef) {
+        this.centreLineRef = centreLineRef;
+    }
+
     private void confirm() {
         // Save selections for session persistence
         savedDirection = selectedDirection;
@@ -1160,6 +1326,7 @@ public class TunnelingDialog extends Window {
         savedWingEast = wingEast;
         savedWingWest = wingWest;
         saveToProp();
+        savedCentreLine = centreLine;
 
         if (directionRef != null) {
             directionRef[0] = selectedDirection.ordinal();
@@ -1190,6 +1357,9 @@ public class TunnelingDialog extends Window {
         }
         if (maxLateralRef != null) {
             maxLateralRef[0] = maxLateral;
+        }
+        if (centreLineRef != null) {
+            centreLineRef[0] = centreLine;
         }
         if (confirmRef != null) {
             confirmRef[0] = true;

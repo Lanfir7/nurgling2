@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-13-tunnel-frames",
+  "priority": 6,
+  "summary": {
+    "ru": "Тоннелирование поддерживает деревянные, усиленные и каменные рамные опоры.",
+    "en": "Tunneling now supports timber, reinforced and stone arch frames."
+  },
+  "detail": {
+    "ru": "В окне тоннелирования выберите рамную опору: бот проходит по её защищённой ширине и ставит следующую раму перед продолжением. Для широких рам можно оставить только центральный проход. Сохранены прежние обычные опоры, двойной тоннель и настройки. Исправлена работа границы проходки при отрицательных координатах; перед добычей проверяется фактическая защита клеток.",
+    "en": "Select a tunnel frame in the tunneling window. The bot mines its supported width and builds the next frame before continuing. Wide frames can use a centre passage only. Existing ordinary supports, double tunnels and settings are retained. Frontier detection handles negative coordinates, and mining checks actual supported tiles."
+  }
+}

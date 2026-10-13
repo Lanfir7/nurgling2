@@ -96,7 +96,7 @@ public class NMiningSupport extends Sprite implements RenderTree.Node
         return computeRect(rc, angle, widthTiles, lengthTiles, 0);
     }
 
-    private static Mask computeRect(Coord2d rc, double angle, int widthTiles, int lengthTiles,
+    public static Mask computeRect(Coord2d rc, double angle, int widthTiles, int lengthTiles,
                                     int forwardShiftTiles) {
         Coord origin = rc.div(MCache.tilesz).floor();
         Coord2d localFwd = Coord2d.of(1, 0).rot(angle);
