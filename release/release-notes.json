@@ -257,9 +257,59 @@
     "2026-10-13-unbox-buffer",
     "2026-10-13-unified-timers",
     "2026-10-13-upstream-graphics",
-    "2026-10-13-village-storage"
+    "2026-10-13-village-storage",
+    "2026-10-16-bot-status-l10n",
+    "2026-10-16-cold-cut-deep-cut",
+    "2026-10-16-cupboard-hitbox",
+    "2026-10-16-cupboard-zone-removed",
+    "2026-10-16-worm-farm-fill",
+    "2026-10-16-worm-farm-plane"
   ],
   "releases": [
+    {
+      "id": "2.103.227",
+      "date": "2026-10-16",
+      "title": {
+        "ru": "Новое в клиенте",
+        "en": "Client updates"
+      },
+      "summary": {
+        "ru": [
+          "Червячная ферма больше не стоит минутами перед засыпкой ямы.",
+          "Червячная ферма держит верхний уровень участка и не закапывается ниже него на лишний шаг.",
+          "В лечении ран появились Cold Cut, Ant Paste, укус скорпиона и больная морда.",
+          "Шкаф занимает свой настоящий контур, а не целую клетку.",
+          "Из меню ботов убран устаревший строитель шкафов из зоны.",
+          "Статус бота показывается по-русски, без сырых ключей."
+        ],
+        "en": [
+          "The worm farm no longer stands for minutes before filling the hole back in.",
+          "The worm farm keeps the area's highest level and does not dig an extra step below it.",
+          "Wound treatments now include Cold Cut, Ant Paste, Scorpion Stung, and Sore Snout.",
+          "A cupboard uses its real outline instead of a full tile.",
+          "The outdated cupboard builder from a zone is no longer in the bot menu.",
+          "Bot status is shown in Russian instead of raw text keys."
+        ]
+      },
+      "details": {
+        "ru": [
+          "После выгрузки червей бот один раз возвращается к флагу и засыпает яму, не бегая от него и к нему.",
+          "Если на флаге указан диапазон, например 5–85, макрос запоминает 85. Копка уходит на один шаг вниз и затем возвращает землю к этому уровню, а не к нижней отметке.",
+          "В окне «Здоровье и раны» Cold Cut лечит Deep Cut, Black-eyed и Swollen Bumps. Ant Paste лечит укус пчелы, краба, больное место, палец тюленя, укус скорпиона и больную морду. Укус скорпиона также лечится Snake Juice, а больная морда — Mud Ointment. Нажмите лекарство, чтобы открыть рецепт, или с Ctrl — чтобы искать его на базе.",
+          "При расстановке, привязке к соседям и обходе шкаф занимает точный размер из игры. Рядом можно поставить предмет вплотную, без лишнего зазора в полклетки.",
+          "В разделе строительства остаётся обычный строитель шкафов. Специализация «Boards for build» больше не предлагается: она была нужна только этому макросу.",
+          "В панели статуса бота и в окне подробностей видны «Работает», «Шаг», «Ожидание» и «Стек вызовов». Подсказка строки — «Клик — подробности»."
+        ],
+        "en": [
+          "After unloading worms, the bot returns to the flag once and fills the hole, without walking away and back.",
+          "When the survey shows a range such as 5–85, the macro remembers 85. It digs one step down and then brings the ground back to that level, not to the low mark.",
+          "On the Health & Wounds page, Cold Cut treats Deep Cut, Black-eyed, and Swollen Bumps. Ant Paste treats a bee sting, crab caress, infected sore, seal finger, scorpion sting, and sore snout. A scorpion sting is also treated with Snake Juice, and a sore snout with Mud Ointment. Click a medicine for its recipe, or Ctrl-click to search for it at your base.",
+          "Placement, snapping to neighbours, and walking treat a cupboard as its exact in-game size. Nearby objects can sit flush against it, without a half-tile gap.",
+          "The regular cupboard builder stays in the build section. The Boards for build specialisation is no longer offered, because only that macro used it.",
+          "The bot status panel and its details window show Running, Step, Waiting on, and Call stack. The row tooltip says Click for details."
+        ]
+      }
+    },
     {
       "id": "2.103.226",
       "date": "2026-10-13",
@@ -1621,38 +1671,6 @@
           "Green dots in a mine mark a dug tile that did not cave in. If a natural cave gallery opens, dots are not placed around that cavity — its safety is unknown.",
           "In Forager settings, press Open map. The separate window keeps the current zoom and stays synchronized with route and exclusion-area edits.",
           "The Quarryartz map button toggles its markers and right-click opens search. Horses show the correct health, and the mine helper no longer creates false danger tiles after building a cave gallery."
-        ]
-      }
-    },
-    {
-      "id": "2.103.195",
-      "date": "2026-09-13",
-      "title": {
-        "ru": "Новое в клиенте",
-        "en": "Client updates"
-      },
-      "summary": {
-        "ru": [
-          "На карте поиск минералов: руда, камни и самоцветы по типу и качеству.",
-          "Master Miner и настройки добычи: пороги камня и руды, метки на карте.",
-          "Боты животных собраны в свою категорию; у кулинарной книги — перезагрузка."
-        ],
-        "en": [
-          "The map can search minerals: ore, stone and gems by type and quality.",
-          "Master Miner and mining settings: stone and ore thresholds and map marks.",
-          "Animal bots sit in their own category; the cookbook has a reload button."
-        ]
-      },
-      "details": {
-        "ru": [
-          "На панели карты кнопки руды, камня и самоцветов. ПКМ открывает Mineral Search: категория, тип и минимальное качество по уже записанным меткам.",
-          "Бот Master Miner в категории животных/добычи смотрит, что вы копаете, и бросает камень ниже порога. В Настройках → Mining Mastery задайте пороги и что отмечать на карте.",
-          "В выборе ботов появился раздел Animals. В кулинарной книге кнопка Reload обновляет данные. Значки руды, камня и самоцветов на карте обновлены."
-        ],
-        "en": [
-          "Map tools have ore, stone and gemstone toggles. Right-click opens Mineral Search: category, type and minimum quality over recorded marks.",
-          "Master Miner (mining bots) watches what you mine and drops stone below your threshold. Settings → Mining Mastery sets thresholds and which finds to mark on the map.",
-          "The bot picker has an Animals section. Cookbook Reload refreshes its data. Ore, stone and gemstone map icons are updated."
         ]
       }
     }
