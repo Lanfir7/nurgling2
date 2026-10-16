@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-16-worm-farm-fill",
+  "priority": 5,
+  "summary": {
+    "ru": "Червячная ферма больше не стоит минутами перед засыпкой ямы.",
+    "en": "The worm farm no longer stands for minutes before filling the hole back in."
+  },
+  "detail": {
+    "ru": "После выгрузки червей бот один раз возвращается к флагу и засыпает яму, не бегая от него и к нему.",
+    "en": "After unloading worms, the bot returns to the flag once and fills the hole, without walking away and back."
+  }
+}

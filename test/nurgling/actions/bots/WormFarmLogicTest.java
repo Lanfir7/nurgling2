@@ -45,6 +45,8 @@ class WormFarmLogicTest {
         assertTrue(WormFarmLogic.waitDigTickDone(false, 0, true, 8));
         assertTrue(WormFarmLogic.waitDigTickDone(true, 20, false, 0));
         assertFalse(WormFarmLogic.waitDigTickDone(true, 19, false, 0));
+        assertFalse(WormFarmLogic.waitDigTickDone(true, 20, false, 0, WormFarmLogic.DEFAULT_MIN_FREE, false));
+        assertTrue(WormFarmLogic.waitDigTickDone(true, 20, false, 0, WormFarmLogic.DEFAULT_MIN_FREE, true));
         assertTrue(WormFarmLogic.waitDigTickDone(false, 360, false, 8));
     }
 
@@ -65,6 +67,18 @@ class WormFarmLogicTest {
         assertTrue(WormFarmLogic.fillDidNotUseSoil(false, 5, 8));
         assertFalse(WormFarmLogic.fillDidNotUseSoil(false, 5, 3));
         assertFalse(WormFarmLogic.fillDidNotUseSoil(true, 5, 5));
+        assertTrue(WormFarmLogic.fillTargetMissing(false, 5));
+        assertFalse(WormFarmLogic.fillTargetMissing(true, 5));
+        assertFalse(WormFarmLogic.fillTargetMissing(false, 0));
+        assertFalse(WormFarmLogic.fillStalled(true, 5, 5, WormFarmLogic.FILL_STALL_TICKS - 1));
+        assertTrue(WormFarmLogic.fillStalled(true, 5, 5, WormFarmLogic.FILL_STALL_TICKS));
+        assertFalse(WormFarmLogic.fillStalled(true, 5, 5, WormFarmLogic.FILL_STALL_TICKS, true));
+        assertTrue(WormFarmLogic.fillStalled(true, 5, 5, WormFarmLogic.FILL_WORK_TICKS, true));
+        assertFalse(WormFarmLogic.fillStalled(true, 5, 4, WormFarmLogic.FILL_STALL_TICKS));
+        assertFalse(WormFarmLogic.fillStalled(false, 5, 5, WormFarmLogic.FILL_STALL_TICKS));
+        assertEquals(85, WormFarmLogic.fillHeight(85, 45));
+        assertEquals(90, WormFarmLogic.fillHeight(85, 90));
+        assertEquals(85, WormFarmLogic.fillHeight(85, Integer.MIN_VALUE));
     }
 
     @Test
@@ -72,6 +86,12 @@ class WormFarmLogicTest {
         assertEquals(77, WormFarmLogic.parseTargetLevel("Целевой уровень: 77"));
         assertEquals(77, WormFarmLogic.parseTargetLevel("Target level: 77"));
         assertEquals(70, WormFarmLogic.parseTargetLevel("Target level: 70-80"));
+        assertEquals(85, WormFarmLogic.highestPlaneLevel("Целевой уровень: 5-85"));
+        assertEquals(85, WormFarmLogic.highestPlaneLevel("Target level: 85"));
+        assertEquals(80, WormFarmLogic.highestPlaneLevel("Target level: 70-80"));
+        assertEquals(85, WormFarmLogic.surfacePlane("Целевой уровень: 5-85", 85));
+        assertEquals(85, WormFarmLogic.surfacePlane("Целевой уровень: 5", 85));
+        assertEquals(Integer.MIN_VALUE, WormFarmLogic.highestPlaneLevel("..."));
         assertEquals(-9923, WormFarmLogic.parseTargetLevel("Целевой уровень: -9923"));
         assertEquals(-9923, WormFarmLogic.parseTargetLevel("Целевой уровень: -9\u00a0923"));
         assertEquals(-9923, WormFarmLogic.parseTargetLevel("Target level: -9,923"));

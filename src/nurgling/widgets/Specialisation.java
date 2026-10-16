@@ -124,7 +124,6 @@ public class Specialisation extends Window
         waterForTrees,
         soilForTrees,
         plantingGardenPots,
-        boardsForBuild,
         gardenPotSeeds,
         rawfish,
         candelabrum,
@@ -271,8 +270,6 @@ public class Specialisation extends Window
         // Garden pot filling
         specialisation.add(new SpecialisationItem(SpecName.plantingGardenPots.toString(),"Planting Garden Pots",Resource.loadsimg("nurgling/categories/gardenpotplanted")));
         
-        // Building resources
-        specialisation.add(new SpecialisationItem(SpecName.boardsForBuild.toString(),"Boards for build",Resource.loadsimg("nurgling/categories/block")));
         specialisation.add(new SpecialisationItem(SpecName.gardenPotSeeds.toString(),"Garden Pot Seeds",Resource.loadsimg("nurgling/categories/gardenpot")));
         
         // Raw fish piles

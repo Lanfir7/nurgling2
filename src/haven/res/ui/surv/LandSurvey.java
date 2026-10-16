@@ -140,6 +140,16 @@ public class LandSurvey extends Window {
 	wdgmsg("data", data.encode());
     }
 
+    /** Highest stored target, or {@link Integer#MIN_VALUE} when the flag has no plan yet. */
+    public int highestPlane() {
+	if (!inited || data == null || data.dz == null || data.dz.length == 0)
+	    return Integer.MIN_VALUE;
+	int max = Integer.MIN_VALUE;
+	for (int z : data.dz)
+	    max = Math.max(max, z);
+	return max;
+    }
+
     public void applyAndSend(int height) {
 	if (btnLock != null && btnLock.a)
 	    btnLock.click();

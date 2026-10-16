@@ -53,6 +53,8 @@ public class NWoundTreatments {
     private static final String TANSYEXTRACT = "gfx/invobjs/jar-tansyextract";
     private static final String SOAPBAR     = "gfx/invobjs/soapbar";
     private static final String HONEYWAYBAND = "gfx/invobjs/honeybroadaid";
+    private static final String COLDCUT     = "gfx/invobjs/coldcut";
+    private static final String ANTPASTE    = "gfx/invobjs/antpaste";
 
     /* Side-effect note keys */
     private static final String N_DEEPCUT     = "char.wound.note.todeepcut";
@@ -70,20 +72,20 @@ public class NWoundTreatments {
     static {
 	put("addervenom",      t(SNAKEJUICE));
 	put("antburn",         t(YARROW, N_CONLOSS));
-	put("beesting",        t(GRAYGREASE), t(KELPCREAM));
-	put("blackeye",        t(HONEYWAYBAND), t(HARTSHORN), t(TOADBUTTER));
+	put("beesting",        t(GRAYGREASE), t(KELPCREAM), t(ANTPASTE));
+	put("blackeye",        t(HONEYWAYBAND), t(HARTSHORN), t(TOADBUTTER), t(COLDCUT));
 	put("bladekiss",       t(GAUZE), t(SILKSUTURE));
 	put("blunttrauma",     t(GAUZE), t(LEECH, N_LEECHBURNS), t(HARTSHORN), t(TOADBUTTER),
 			       t(WILLOWWEEP), t(CAMOMILE), t(MUDOINT));
 	put("bruise",          t(LEECH, N_LEECHBURNS), t(WILLOWWEEP), t(POULTICE));
 	put("concussion",      t(COLDCOMP), t(WILLOWWEEP));
-	put("crabcaressed",    t(SILKSUTURE));
+	put("crabcaressed",    t(SILKSUTURE), t(ANTPASTE));
 	put("cruelincision",   t(GAUZE), t(ROOTFILL, N_DEEPCUT), t(SILKSUTURE), t(STITCHPATCH), t(WOUNDGLUE));
-	put("deepcut",         t(GAUZE), t(HONEYWAYBAND), t(WAYBROAD), t(ROOTFILL), t(SILKSUTURE), t(POULTICE));
+	put("deepcut",         t(GAUZE), t(HONEYWAYBAND), t(WAYBROAD), t(ROOTFILL), t(SILKSUTURE), t(POULTICE), t(COLDCUT));
 	put("deepworm",        t(TANSYEXTRACT));
 	put("fellslash",       t(GAUZE), t(SILKSUTURE), t(WOUNDGLUE));
 	put("henpecked",       t(WAYBROAD));
-	put("infectedsore",    t(CAMOMILE), t(SOAPBAR));
+	put("infectedsore",    t(CAMOMILE), t(SOAPBAR), t(ANTPASTE));
 	put("jellysting",      t(GRAYGREASE));
 	put("leechburns",      t(TOADBUTTER, N_WART));
 	put("midgebite",       t(YARROW));
@@ -92,11 +94,13 @@ public class NWoundTreatments {
 	put("punchsore",       t(WILLOWWEEP), t(MUDOINT));
 	put("sandfleabites",   t(GRAYGREASE), t(YARROW));
 	put("scrapesncuts",    t(HONEYWAYBAND), t(YARROW), t(MUDOINT));
-	put("sealfinger",      t(HARTSHORN), t(KELPCREAM));
+	put("sealfinger",      t(HARTSHORN), t(KELPCREAM), t(ANTPASTE));
 	put("severemauling",   t(HARTSHORN, N_BLUNT));
 	put("starvation",      txt("char.wound.treat.anyfood"));
+	put("scorpstung",      t(SNAKEJUICE), t(ANTPASTE));
+	put("soresnout",       t(MUDOINT), t(ANTPASTE));
 	put("swampfever",      t(SNAKEJUICE));
-	put("swollenbump",     t(COLDCOMP), t(LEECH, N_LEECHBURNS), t(POULTICE));
+	put("swollenbump",     t(COLDCOMP), t(LEECH, N_LEECHBURNS), t(POULTICE), t(COLDCUT));
 	put("unfaced",         t(LEECH, N_LEECHBURNS), t(TOADBUTTER, N_WART), t(KELPCREAM), t(MUDOINT), t(YARROW));
 	put("wretchedgore",    t(STITCHPATCH));
 
@@ -115,7 +119,6 @@ public class NWoundTreatments {
 	put("pipewheeze");
 	put("rotgut");
 	put("somethingbroken");
-	put("soresnout");
 	put("tuskalooza");
     }
 

@@ -38,7 +38,15 @@ final class WormFarmLogic {
     }
 
     static boolean waitDigTickDone(boolean filling, int idleCount, boolean restoreNeeds, int calcFreeSpace, int minFree) {
-        if (filling && idleCount >= 20) return true;
+        return waitDigTickDone(filling, idleCount, restoreNeeds, calcFreeSpace, minFree, true);
+    }
+
+    /**
+     * A fill that has not left idle yet is still starting. Counting that idle as
+     * "finished" cancels the walk back to the hole before any soil is placed.
+     */
+    static boolean waitDigTickDone(boolean filling, int idleCount, boolean restoreNeeds, int calcFreeSpace, int minFree, boolean fillStarted) {
+        if (filling && fillStarted && idleCount >= 20) return true;
         if (idleCount >= 360) return true;
         if (restoreNeeds) return true;
         return !filling && shouldStopDig(calcFreeSpace, minFree);
@@ -63,6 +71,32 @@ final class WormFarmLogic {
 
     static boolean fillDidNotUseSoil(boolean fillMode, int soilBefore, int soilAfter) {
         return !fillMode && soilAfter >= soilBefore;
+    }
+
+    /** Dig-down label while soil is still in hand: the fill height was wiped, usually by reopening the flag. */
+    static boolean fillTargetMissing(boolean fillMode, int soilCount) {
+        return soilCount > 0 && !fillMode;
+    }
+
+    /** Idle before the fill pose starts. ~4s, then the height is sent again. */
+    static final int FILL_STALL_TICKS = 80;
+    /** Working, but no soil placed. Long enough to reach the hole from the flag. */
+    static final int FILL_WORK_TICKS = 400;
+
+    static boolean fillStalled(boolean filling, int soilBefore, int soilNow, int waitedTicks) {
+        return fillStalled(filling, soilBefore, soilNow, waitedTicks, false);
+    }
+
+    static boolean fillStalled(boolean filling, int soilBefore, int soilNow, int waitedTicks, boolean started) {
+        if (!filling || soilNow < soilBefore) return false;
+        return waitedTicks >= (started ? FILL_WORK_TICKS : FILL_STALL_TICKS);
+    }
+
+    /** Fill at least up to the remembered surface. A higher remaining peak must be the target, or the flag stays in dig mode and a full inventory cannot place soil. */
+    static int fillHeight(int surface, int groundPeak) {
+        if (groundPeak == Integer.MIN_VALUE || !isUsablePlaneTarget(groundPeak))
+            return surface;
+        return Math.max(surface, groundPeak);
     }
 
     static int parseTargetLevel(String tllbl) {
@@ -94,6 +128,40 @@ final class WormFarmLogic {
         if (!any) return 0;
         int n = (int) val;
         return neg ? -n : n;
+    }
+
+    /**
+     * Highest target in the label. A range like 5-85 must keep 85, not the low end,
+     * or the next dig is measured from ground that is already lowered.
+     */
+    static int highestPlaneLevel(String tllbl) {
+        if (!canReadTarget(tllbl)) return Integer.MIN_VALUE;
+        int first = parseTargetLevel(tllbl);
+        if (!isRangeTarget(tllbl)) return first;
+        int colon = tllbl.lastIndexOf(':');
+        String rem = colon >= 0 ? tllbl.substring(colon + 1) : tllbl;
+        int dash = rangeDash(rem);
+        if (dash < 0) return first;
+        int second = parseTargetLevel(rem.substring(dash + 1));
+        if (!canReadTarget(rem.substring(dash + 1))) return first;
+        return Math.max(first, second);
+    }
+
+    /** Surface to restore: the higher of the label and the heights already stored on the flag. */
+    static int surfacePlane(String label, int storedMax) {
+        int fromLabel = highestPlaneLevel(label);
+        if (fromLabel == Integer.MIN_VALUE) return storedMax;
+        if (storedMax == Integer.MIN_VALUE) return fromLabel;
+        return Math.max(fromLabel, storedMax);
+    }
+
+    private static int rangeDash(String rem) {
+        int i = 0;
+        while (i < rem.length() && isGrouping(rem.charAt(i))) i++;
+        if (i < rem.length() && isMinus(rem.charAt(i))) i++;
+        while (i < rem.length() && (Character.isDigit(rem.charAt(i)) || isGrouping(rem.charAt(i)))) i++;
+        if (i < rem.length() && rem.charAt(i) == '-') return i;
+        return -1;
     }
 
     static boolean canReadTarget(String tllbl) {

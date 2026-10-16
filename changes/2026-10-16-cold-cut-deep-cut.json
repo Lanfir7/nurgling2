@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-16-cold-cut-deep-cut",
+  "priority": 4,
+  "summary": {
+    "ru": "В лечении ран появились Cold Cut, Ant Paste, укус скорпиона и больная морда.",
+    "en": "Wound treatments now include Cold Cut, Ant Paste, Scorpion Stung, and Sore Snout."
+  },
+  "detail": {
+    "ru": "В окне «Здоровье и раны» Cold Cut лечит Deep Cut, Black-eyed и Swollen Bumps. Ant Paste лечит укус пчелы, краба, больное место, палец тюленя, укус скорпиона и больную морду. Укус скорпиона также лечится Snake Juice, а больная морда — Mud Ointment. Нажмите лекарство, чтобы открыть рецепт, или с Ctrl — чтобы искать его на базе.",
+    "en": "On the Health & Wounds page, Cold Cut treats Deep Cut, Black-eyed, and Swollen Bumps. Ant Paste treats a bee sting, crab caress, infected sore, seal finger, scorpion sting, and sore snout. A scorpion sting is also treated with Snake Juice, and a sore snout with Mud Ointment. Click a medicine for its recipe, or Ctrl-click to search for it at your base."
+  }
+}

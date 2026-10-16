@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-16-cupboard-hitbox",
+  "priority": 4,
+  "summary": {
+    "ru": "Шкаф занимает свой настоящий контур, а не целую клетку.",
+    "en": "A cupboard uses its real outline instead of a full tile."
+  },
+  "detail": {
+    "ru": "При расстановке, привязке к соседям и обходе шкаф занимает точный размер из игры. Рядом можно поставить предмет вплотную, без лишнего зазора в полклетки.",
+    "en": "Placement, snapping to neighbours, and walking treat a cupboard as its exact in-game size. Nearby objects can sit flush against it, without a half-tile gap."
+  }
+}

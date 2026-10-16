@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-16-bot-status-l10n",
+  "priority": 3,
+  "summary": {
+    "ru": "Статус бота показывается по-русски, без сырых ключей.",
+    "en": "Bot status is shown in Russian instead of raw text keys."
+  },
+  "detail": {
+    "ru": "В панели статуса бота и в окне подробностей видны «Работает», «Шаг», «Ожидание» и «Стек вызовов». Подсказка строки — «Клик — подробности».",
+    "en": "The bot status panel and its details window show Running, Step, Waiting on, and Call stack. The row tooltip says Click for details."
+  }
+}

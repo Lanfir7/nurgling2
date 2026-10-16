@@ -66,7 +66,7 @@ public class NHitBox
             put("gfx/terobjs/iconsign", new NHitBox(new Coord(-2,-2),new Coord(2,2)));
             put("gfx/terobjs/candelabrum", new NHitBox(new Coord(-2,-2),new Coord(2,2)));
             put("gfx/terobjs/gardenpot", new NHitBox(new Coord2d(-2.5,-2.5), new Coord2d(2.5,2.5), true));
-            put("gfx/terobjs/cupboard", new NHitBox(new Coord2d(-5.5,-5.5),new Coord2d(5.5,5.5)));
+            put("gfx/terobjs/cupboard", resourceObstacle(-5.00048828125, -5.00048828125, 5.00048828125, 5.00048828125));
             put("gfx/terobjs/htable", resourceObstacle(-2.96484375, -5.94580078125, 3.9638671875 + tableFrontNudge(), 5.94580078125));
             put("gfx/terobjs/arch/hwall", resourceObstacle(-0.8902587890625 + wallRoomNudge(), -10.892578125, -0.11002349853515625 + wallRoomNudge(), -0.11002349853515625));
             put("gfx/terobjs/lanternpost", new NHitBox(new Coord(-2,-2),new Coord(2,2)));

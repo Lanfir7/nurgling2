@@ -30,6 +30,7 @@ import nurgling.tasks.WaitFreeHand;
 import nurgling.tasks.WaitWindow;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
+import nurgling.tools.NParser;
 import nurgling.widgets.bots.WormFarmWnd;
 
 import java.util.ArrayList;
@@ -82,25 +83,36 @@ public class WormFarmer implements Action {
                 Results remembered = rememberGroundPlane(survey);
                 if (!remembered.IsSuccess()) return finishWith(gui, remembered);
             }
-            pushPlane(survey, WormFarmLogic.deepHeight(planeZ));
+            int minFree = WormFarmLogic.minFreeSlots(equippedToolName());
+            boolean holdingSoil = count(gui, SOIL) > 0;
+            boolean noRoomToDig = WormFarmLogic.shouldStopDig(gui.getInventory().getNumberFreeCoord(SOIL_SIZE), minFree);
+            if (!(holdingSoil && noRoomToDig)) {
+                pushPlane(survey, WormFarmLogic.deepHeight(planeZ));
+                Results dug = digUntilFull(gui, survey, false);
+                if (!dug.IsSuccess()) return finishWith(gui, dug);
+                dropJunk(gui);
+                Results restored = restorePlaneAtFlag(gui);
+                if (!restored.IsSuccess()) return finishWith(gui, restored);
 
-            Results dug = digUntilFull(gui, survey, false);
-            if (!dug.IsSuccess()) return finishWith(gui, dug);
-            dropJunk(gui);
-            Results restored = restorePlaneAtFlag(gui);
-            if (!restored.IsSuccess()) return finishWith(gui, restored);
-
-            Results drank = drinkAndEquip(gui);
-            if (!drank.IsSuccess()) return finishWith(gui, drank);
-            Results dumped = dumpWormsAndTubers(gui);
-            if (!dumped.IsSuccess()) return finishWith(gui, dumped);
-            refreshStats(gui);
-            survey = openSurvey(gui);
-            if (survey == null) {
-                return finishWith(gui, Results.ERROR("Worm Farm: survey flag gone"));
+                Results drank = drinkAndEquip(gui);
+                if (!drank.IsSuccess()) return finishWith(gui, drank);
+                Results dumped = dumpWormsAndTubers(gui);
+                if (!dumped.IsSuccess()) return finishWith(gui, dumped);
+                refreshStats(gui);
+                survey = openSurvey(gui);
+                if (survey == null) {
+                    return finishWith(gui, Results.ERROR("Worm Farm: survey flag gone"));
+                }
             }
             if (count(gui, SOIL) > 0) {
-                pushPlane(survey, planeZ);
+                if (!goToFlag(gui)) {
+                    return finishWith(gui, Results.ERROR("Worm Farm: survey flag gone"));
+                }
+                survey = openSurvey(gui);
+                if (survey == null) {
+                    return finishWith(gui, Results.ERROR("Worm Farm: survey flag gone"));
+                }
+                pushPlane(survey, fillPlane(survey));
                 waitFillMode(survey);
                 Results filled = digUntilFull(gui, survey, true);
                 if (!filled.IsSuccess()) return finishWith(gui, filled);
@@ -117,6 +129,7 @@ public class WormFarmer implements Action {
     }
 
     private Results digUntilFull(NGameUI gui, LandSurvey survey, boolean filling) throws InterruptedException {
+        int fillResend = 0;
         while (true) {
             dropJunk(gui);
             refreshStats(gui);
@@ -132,8 +145,10 @@ public class WormFarmer implements Action {
                 if (survey == null) {
                     return Results.ERROR("Worm Farm: survey flag gone");
                 }
-                if (!filling && planeZ != null) {
-                    pushPlane(survey, WormFarmLogic.deepHeight(planeZ));
+                if (planeZ != null) {
+                    pushPlane(survey, filling ? fillPlane(survey) : WormFarmLogic.deepHeight(planeZ));
+                    if (filling)
+                        waitFillMode(survey);
                 }
                 continue;
             }
@@ -147,6 +162,11 @@ public class WormFarmer implements Action {
                 if (WormFarmLogic.shouldStopFill(fillMode, soil, required)) {
                     stopDig(gui);
                     return Results.SUCCESS();
+                }
+                if (WormFarmLogic.fillTargetMissing(fillMode, soil)) {
+                    Results resent = resendFill(survey, ++fillResend);
+                    if (resent != null) return resent;
+                    continue;
                 }
             } else if (WormFarmLogic.shouldStopDig(free, minFree)) {
                 stopDig(gui);
@@ -164,15 +184,26 @@ public class WormFarmer implements Action {
             if (player == null) return Results.FAIL();
             final boolean fillWait = filling;
             final int stopFree = minFree;
+            final int soilAtClick = soil;
             NUtils.addTask(new NTask() {
                 int idleCount = 0;
+                int waited = 0;
+                boolean seenWork = false;
                 @Override
                 public boolean check() {
-                    if (player.pose().contains("idle")) idleCount++;
-                    else idleCount = 0;
+                    waited++;
+                    String pose = player.pose();
+                    if (pose != null && pose.contains("idle")) idleCount++;
+                    else if (pose != null) {
+                        seenWork = true;
+                        idleCount = 0;
+                    }
+                    int soilNow = fillWait ? visibleItemCount(gui.getInventory(), SOIL) : soilAtClick;
+                    if (WormFarmLogic.fillStalled(fillWait, soilAtClick, soilNow, waited, seenWork))
+                        return true;
                     if (WormFarmLogic.waitDigTickDone(fillWait, idleCount,
                             WormFarmLogic.shouldRestoreNeeds(NUtils.getStamina(), NUtils.getEnergy()),
-                            gui.getInventory().calcFreeSpace(), stopFree))
+                            gui.getInventory().calcFreeSpace(), stopFree, seenWork))
                         return true;
                     if (stats != null)
                         stats.noteStamina(NUtils.getStamina());
@@ -182,15 +213,70 @@ public class WormFarmer implements Action {
             });
             dropJunk(gui);
             int soilAfter = count(gui, SOIL);
-            boolean fillModeAfter = WormFarmLogic.isFillMode(survey.wlbl.text());
             if (filling && (soilAfter == 0
                     || syslogContainsSince(gui, sysBefore, NEED_SOIL_MSG)
-                    || isNeedSoil(NUtils.getUI().getLastError())
-                    || WormFarmLogic.fillDidNotUseSoil(fillModeAfter, soil, soilAfter))) {
+                    || isNeedSoil(NUtils.getUI().getLastError()))) {
                 stopDig(gui);
                 return Results.SUCCESS();
             }
+            if (filling && soilAfter >= soil) {
+                stopDig(gui);
+                Results resent = resendFill(survey, ++fillResend);
+                if (resent != null) return resent;
+                continue;
+            }
+            if (soilAfter < soil)
+                fillResend = 0;
         }
+    }
+
+    /** Re-apply the fill height after the flag window replaced or rejected it. */
+    private Results resendFill(LandSurvey survey, int attempt) throws InterruptedException {
+        if (attempt > 6)
+            return Results.ERROR("Worm Farm: fill did not start");
+        if (planeZ == null)
+            return Results.ERROR("Worm Farm: fill target missing");
+        pushPlane(survey, fillPlane(survey));
+        waitFillMode(survey);
+        return null;
+    }
+
+    private int fillPlane(LandSurvey survey) {
+        return WormFarmLogic.fillHeight(planeZ, groundPeak(survey));
+    }
+
+    private static int groundPeak(LandSurvey survey) {
+        try {
+            haven.res.ui.surv.Data d = survey.data;
+            if (d == null || d.varea == null) return Integer.MIN_VALUE;
+            MCache map = NUtils.getGameUI().map.glob.map;
+            int max = Integer.MIN_VALUE;
+            for (haven.Coord vc : d.varea) {
+                int vz = Math.round((float) map.getfz(vc) * d.gran);
+                if (vz > max) max = vz;
+            }
+            return max;
+        } catch (Exception e) {
+            return Integer.MIN_VALUE;
+        }
+    }
+
+    /** Already-drawn inventory slots only. Must not call getItems: that waits on the UI thread and freezes the client. */
+    private static int visibleItemCount(Widget inv, NAlias name) {
+        if (inv == null) return 0;
+        int n = 0;
+        for (Widget widget = inv.child; widget != null; widget = widget.next) {
+            if (!(widget instanceof WItem)) continue;
+            WItem item = (WItem) widget;
+            if (!(item.item instanceof NGItem)) continue;
+            NGItem ng = (NGItem) item.item;
+            if (ng.name() == null) continue;
+            if (item.item.contents != null)
+                n += visibleItemCount(item.item.contents, name);
+            else if (NParser.checkName(ng.name(), name))
+                n++;
+        }
+        return n;
     }
 
     private static boolean isNeedSoil(String err) {
@@ -286,6 +372,8 @@ public class WormFarmer implements Action {
     }
 
     private boolean goToFlag(NGameUI gui) throws InterruptedException {
+        Gob sg = findSurveyByTile(flagTile);
+        if (nearFlag(sg)) return true;
         if (flagAt != null && !NUtils.navigateTo(flagAt)) return false;
         final Coord tile = flagTile;
         NUtils.addTask(new NTask() {
@@ -296,10 +384,17 @@ public class WormFarmer implements Action {
                 return findSurveyByTile(tile) != null || ticks > 80;
             }
         });
-        Gob sg = findSurveyByTile(flagTile);
+        sg = findSurveyByTile(flagTile);
         if (sg == null) return false;
+        if (nearFlag(sg)) return true;
         if (PathFinder.isAvailable(sg.rc)) new PathFinder(sg.rc).run(gui);
         return true;
+    }
+
+    private static boolean nearFlag(Gob flag) {
+        Gob player = NUtils.player();
+        if (player == null || flag == null) return false;
+        return player.rc.dist(flag.rc) <= MCache.tilesz.x * 3;
     }
 
     private static Gob pickNearestSurvey() {
@@ -360,20 +455,8 @@ public class WormFarmer implements Action {
         unlock(survey);
         waitForLabel(survey.tllbl);
         String label = survey.tllbl.text();
-        int z = WormFarmLogic.parseTargetLevel(label);
-        if (!WormFarmLogic.canReadTarget(label) || WormFarmLogic.isRangeTarget(label)
-                || !WormFarmLogic.isUsablePlaneTarget(z)) {
-            Button plane = findButton(survey, "Ground plane");
-            if (plane != null)
-                plane.click();
-            waitTicks(10);
-            sendSurvey(survey);
-            waitTicks(15);
-            waitForLabel(survey.tllbl);
-            label = survey.tllbl.text();
-            z = WormFarmLogic.parseTargetLevel(label);
-        }
-        if (!WormFarmLogic.canReadTarget(label) || !WormFarmLogic.isUsablePlaneTarget(z))
+        int z = WormFarmLogic.surfacePlane(label, survey.highestPlane());
+        if (!WormFarmLogic.isUsablePlaneTarget(z) || z == Integer.MIN_VALUE)
             return Results.ERROR("Worm Farm: cannot read Ground plane target");
         planeZ = z;
         return Results.SUCCESS();
@@ -459,7 +542,8 @@ public class WormFarmer implements Action {
             public boolean check() {
                 totalTicks++;
                 if (totalTicks > 100) return true;
-                if (player.pose().contains("idle")) {
+                String pose = player.pose();
+                if (pose != null && pose.contains("idle")) {
                     idleCount++;
                     return idleCount >= 3;
                 }

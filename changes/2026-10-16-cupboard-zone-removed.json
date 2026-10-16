@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-16-cupboard-zone-removed",
+  "priority": 4,
+  "summary": {
+    "ru": "Из меню ботов убран устаревший строитель шкафов из зоны.",
+    "en": "The outdated cupboard builder from a zone is no longer in the bot menu."
+  },
+  "detail": {
+    "ru": "В разделе строительства остаётся обычный строитель шкафов. Специализация «Boards for build» больше не предлагается: она была нужна только этому макросу.",
+    "en": "The regular cupboard builder stays in the build section. The Boards for build specialisation is no longer offered, because only that macro used it."
+  }
+}

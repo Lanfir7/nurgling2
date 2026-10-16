@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-16-worm-farm-plane",
+  "priority": 5,
+  "summary": {
+    "ru": "Червячная ферма держит верхний уровень участка и не закапывается ниже него на лишний шаг.",
+    "en": "The worm farm keeps the area's highest level and does not dig an extra step below it."
+  },
+  "detail": {
+    "ru": "Если на флаге указан диапазон, например 5–85, макрос запоминает 85. Копка уходит на один шаг вниз и затем возвращает землю к этому уровню, а не к нижней отметке.",
+    "en": "When the survey shows a range such as 5–85, the macro remembers 85. It digs one step down and then brings the ground back to that level, not to the low mark."
+  }
+}

@@ -88,6 +88,17 @@ class NHitBoxCustomTest {
     }
 
     @Test
+    void cupboardUsesResourceObstacle() {
+        NHitBox box = NHitBox.findCustom("gfx/terobjs/cupboard");
+        assertNotNull(box);
+        assertFalse(box.mirrorAsymmetric);
+        assertEquals(-5.00048828125, box.begin.x, 1e-12);
+        assertEquals(-5.00048828125, box.begin.y, 1e-12);
+        assertEquals(5.00048828125, box.end.x, 1e-12);
+        assertEquals(5.00048828125, box.end.y, 1e-12);
+    }
+
+    @Test
     void herbalistTableUsesResourceObstacle() {
         NHitBox box = NHitBox.findCustom("gfx/terobjs/htable");
         assertNotNull(box);
