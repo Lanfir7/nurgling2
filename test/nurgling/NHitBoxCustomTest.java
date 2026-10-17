@@ -125,6 +125,22 @@ class NHitBoxCustomTest {
         assertTrue(world.getCircumscribedUL().y < 200);
     }
 
+    @Test
+    void poplarAndTerebinthCountAsStandingTrees() {
+        assertTrue(NHitBox.isStandingTree("gfx/terobjs/trees/poplar"));
+        assertTrue(NHitBox.isStandingTree("gfx/terobjs/trees/terebinth"));
+        assertNotNull(NHitBox.STANDING_TREE);
+        assertEquals(6.0, NHitBox.STANDING_TREE.end.x - NHitBox.STANDING_TREE.begin.x, 0.01);
+    }
+
+    @Test
+    void felledTreesAreNotStandingTrunks() {
+        assertFalse(NHitBox.isStandingTree("gfx/terobjs/trees/poplarlog"));
+        assertFalse(NHitBox.isStandingTree("gfx/terobjs/trees/birchstump"));
+        assertFalse(NHitBox.isStandingTree("gfx/terobjs/trees/oakoldtrunk"));
+        assertFalse(NHitBox.isStandingTree("gfx/terobjs/bushes/teabush"));
+    }
+
     private static void assertForceZeroHitbox(String name) {
         NHitBox box = NHitBox.findCustom(name);
         assertNotNull(box);

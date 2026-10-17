@@ -10,7 +10,6 @@ import nurgling.areas.AreaLabelSync;
 import nurgling.i18n.L10n;
 import nurgling.navigation.MapMarkerBeacon;
 import nurgling.navigation.MapMarkerNavigation;
-import nurgling.render.NGfx;
 import nurgling.tools.ExploredArea;
 import nurgling.hotkeys.Hotkeys;
 import nurgling.contextmenu.GobContextRegistry;
@@ -62,25 +61,12 @@ public class NMiniMapWnd extends Widget{
     public static class NightVisionButton extends NMenuCheckBox {
         public NightVisionButton() {
             super("nurgling/hud/buttons/toggle_panel/daynight", kb_night, L10n.get("minimap.night_vision"));
-            state(() -> usesAutoExposure() ? NGfx.get().autoexp : (Boolean)NConfig.get(NConfig.Key.nightVision));
+            state(() -> Boolean.TRUE.equals(NConfig.get(NConfig.Key.nightVision)));
             set(value -> {
-                if(usesAutoExposure()) {
-                    NGfx.set(NGfx.get().with("autoexp", value));
-                } else {
-                    NConfig.set(NConfig.Key.nightVision, value);
-                    if(ui != null && ui.sess != null && ui.sess.glob != null)
-                        ui.sess.glob.brighten();
-                }
+                NConfig.set(NConfig.Key.nightVision, value);
+                if(ui != null && ui.sess != null && ui.sess.glob != null)
+                    ui.sess.glob.brighten();
             });
-        }
-
-        private boolean usesAutoExposure() {
-            return ui != null && NGfx.supported(ui.getenv());
-        }
-
-        @Override
-        public Object tooltip(Coord c, Widget prev) {
-            return usesAutoExposure() ? L10n.get("gfx.autoexp") : super.tooltip(c, prev);
         }
     }
     

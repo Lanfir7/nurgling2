@@ -1025,6 +1025,8 @@ public class NGob
                             }
                         }
                     }
+                if (hitBox == null && NHitBox.isStandingTree(name))
+                    hitBox = NHitBox.STANDING_TREE;
                 if (hitBox != null)
                 {
                     if (!explicitCustomHitBox && (NParser.checkName(name, MOUNDBED_ALIAS) || NParser.checkName(name, IGNORED_ARCH)))

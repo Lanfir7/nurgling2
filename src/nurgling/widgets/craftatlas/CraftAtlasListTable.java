@@ -94,38 +94,20 @@ final class CraftAtlasListTable {
                             L10n.get("craft_atlas.table.study_time_tip"),
                             entry -> entry.curiosity == null ? Double.NaN : entry.curiosity.studyHours()));
         }
-        if("gildings".equals(section)) {
-            Map<String, String> names = new LinkedHashMap<>();
-            if(entries != null) for(CraftAtlasEntry entry : entries) for(CraftAtlasEntry.Bonus bonus : entry.bonuses) {
-                if(bonus.value == null || "gild:chance".equals(bonus.attributeResource)) continue;
-                String name = canonicalName(bonus.name);
-                names.putIfAbsent(CraftAtlasSearch.normalize(name), name);
-            }
-            List<Map.Entry<String, String>> ordered = new ArrayList<>(names.entrySet());
-            ordered.sort(Comparator
-                    .comparingInt((Map.Entry<String, String> value) -> characterOrder(value.getKey()))
-                    .thenComparing(Map.Entry::getValue, String.CASE_INSENSITIVE_ORDER));
-            List<Column> result = new ArrayList<>();
-            for(Map.Entry<String, String> value : ordered) {
-                String normalized = value.getKey();
-                String name = value.getValue();
-                result.add(new Column("gilding:" + normalized, abbreviation(name), name,
-                        bonusIcon(entries, normalized, name),
-                        entry -> bonusValue(entry, normalized)));
-            }
-            return Collections.unmodifiableList(result);
-        }
+        if("gildings".equals(section))
+            return Collections.unmodifiableList(statColumns("gilding:", entries));
         if(CraftAtlasSections.isEquipment(section)) {
-            return List.of(
-                    new Column("gilding:slots", L10n.get("craft_atlas.table.gilding_slots"),
-                            L10n.get("craft_atlas.table.gilding_slots_tip"),
-                            entry -> gildingSlots(entry)),
-                    new Column("gilding:attributes", L10n.get("craft_atlas.table.gilding_attributes"),
-                            L10n.get("craft_atlas.table.gilding_attributes_tip"), null,
-                            Presentation.ATTRIBUTE_ICONS, entry -> gildingAttributeCount(entry)),
-                    new Column("gilding:chance", L10n.get("craft_atlas.table.gilding_chance"),
-                            L10n.get("craft_atlas.table.gilding_chance_tip"), null,
-                            Presentation.CHANCE_RANGE, entry -> gildingChance(entry)));
+            List<Column> result = new ArrayList<>(statColumns("equipment:", entries));
+            result.add(new Column("gilding:slots", L10n.get("craft_atlas.table.gilding_slots"),
+                    L10n.get("craft_atlas.table.gilding_slots_tip"),
+                    entry -> gildingSlots(entry)));
+            result.add(new Column("gilding:attributes", L10n.get("craft_atlas.table.gilding_attributes"),
+                    L10n.get("craft_atlas.table.gilding_attributes_tip"), null,
+                    Presentation.ATTRIBUTE_ICONS, entry -> gildingAttributeCount(entry)));
+            result.add(new Column("gilding:chance", L10n.get("craft_atlas.table.gilding_chance"),
+                    L10n.get("craft_atlas.table.gilding_chance_tip"), null,
+                    Presentation.CHANCE_RANGE, entry -> gildingChance(entry)));
+            return Collections.unmodifiableList(result);
         }
         return Collections.emptyList();
     }
@@ -142,6 +124,28 @@ final class CraftAtlasListTable {
             return compared != 0 ? compared : left.displayName.compareToIgnoreCase(right.displayName);
         });
         return Collections.unmodifiableList(result);
+    }
+
+    private static List<Column> statColumns(String idPrefix, List<CraftAtlasEntry> entries) {
+        Map<String, String> names = new LinkedHashMap<>();
+        if(entries != null) for(CraftAtlasEntry entry : entries) for(CraftAtlasEntry.Bonus bonus : entry.bonuses) {
+            if(bonus.value == null || "gild:chance".equals(bonus.attributeResource)) continue;
+            String name = canonicalName(bonus.name);
+            names.putIfAbsent(CraftAtlasSearch.normalize(name), name);
+        }
+        List<Map.Entry<String, String>> ordered = new ArrayList<>(names.entrySet());
+        ordered.sort(Comparator
+                .comparingInt((Map.Entry<String, String> value) -> characterOrder(value.getKey()))
+                .thenComparing(Map.Entry::getValue, String.CASE_INSENSITIVE_ORDER));
+        List<Column> result = new ArrayList<>();
+        for(Map.Entry<String, String> value : ordered) {
+            String normalized = value.getKey();
+            String name = value.getValue();
+            result.add(new Column(idPrefix + normalized, abbreviation(name), name,
+                    bonusIcon(entries, normalized, name),
+                    entry -> bonusValue(entry, normalized)));
+        }
+        return result;
     }
 
     private static double bonusValue(CraftAtlasEntry entry, String normalizedName) {

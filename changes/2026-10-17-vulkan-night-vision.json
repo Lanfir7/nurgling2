@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-17-vulkan-night-vision",
+  "priority": 5,
+  "summary": {
+    "ru": "Ночное зрение снова осветляет картинку на Vulkan.",
+    "en": "Night vision brightens the view on Vulkan again."
+  },
+  "detail": {
+    "ru": "Кнопка ночного зрения на миникарте и настройка в качестве жизни поднимают тёмные места и при рендере Vulkan. Яркость берётся из того же ползунка, что и раньше.",
+    "en": "The minimap night-vision button and the comfort setting lift dark areas when Vulkan is the renderer. Brightness still follows the same slider."
+  }
+}

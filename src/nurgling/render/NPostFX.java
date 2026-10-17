@@ -2,6 +2,7 @@ package nurgling.render;
 
 import haven.*;
 import haven.render.*;
+import nurgling.NConfig;
 import haven.render.sl.*;
 import haven.RenderContext.FrameFormat;
 import haven.RenderContext.PostProcessor;
@@ -388,6 +389,42 @@ public class NPostFX {
 	    cur = null;
 	}
 
+	private static boolean nightVisionActive(boolean vulkan) {
+	    return(nightVisionLift(Boolean.TRUE.equals(NConfig.get(NConfig.Key.nightVision)), nightVisionAmount(), vulkan) > 0f);
+	}
+
+	private static float nightVisionAmount() {
+	    Object brightness = NConfig.get(NConfig.Key.nightVisionBrightness);
+	    return((brightness instanceof Number) ? ((Number)brightness).floatValue() : 0.65f);
+	}
+
+	/* Settings sync does not run when only the night-vision toggle changes. */
+	private void ensureNightGrade() {
+	    boolean night = view.ui != null && nightVisionActive(NGfx.supported(view.ui.getenv()));
+	    NGfx.Settings s = cur;
+	    boolean want = night || (s != null && (s.grade || s.bloom || s.vignette || s.autoexp));
+	    if(want && (grade == null)) {
+		grade = new Grade();
+		if(s != null) {
+		    grade.grade = s.grade;
+		    grade.vignette = s.vignette;
+		    grade.tonemap = s.hdr();
+		    grade.exposure = s.exposure; grade.contrast = s.contrast;
+		    grade.saturation = s.saturation; grade.warmth = s.warmth;
+		}
+		grade.nightlift = night ? nightVisionAmount() : 0f;
+		view.tonemap(grade);
+		rebasic.run();
+	    } else if(!want && (grade != null)) {
+		view.tonemap(null);
+		grade.dispose();
+		grade = null;
+		rebasic.run();
+	    } else if(grade != null) {
+		grade.nightlift = night ? nightVisionAmount() : 0f;
+	    }
+	}
+
 	private <T extends PostProcessor> T toggle(T cur, boolean want, java.util.function.Supplier<T> mk) {
 	    if(want && (cur == null)) {
 		cur = mk.get();
@@ -417,7 +454,8 @@ public class NPostFX {
 		bloom.strength = s.bloomstrength;
 	    clar = toggle(clar, s.clarity, Clarity::new);
 	    if(clar != null) clar.amount = s.claritystrength;
-	    boolean wantg = s.grade || s.bloom || s.vignette || s.autoexp;
+	    boolean night = nightVisionActive(sup);
+	    boolean wantg = s.grade || s.bloom || s.vignette || s.autoexp || night;
 	    if(wantg && (grade == null)) {
 		grade = new Grade();
 		view.tonemap(grade);
@@ -434,6 +472,7 @@ public class NPostFX {
 		grade.tonemap = s.hdr();
 		grade.exposure = s.exposure; grade.contrast = s.contrast;
 		grade.saturation = s.saturation; grade.warmth = s.warmth;
+		grade.nightlift = night ? nightVisionAmount() : 0f;
 	    }
 	    boolean rp = GroundRelief.set(s.relief, s.reliefstrength, s.objrelief, s.objreliefstrength,
 					  s.parallax, s.reliefpavingonly);
@@ -560,7 +599,9 @@ public class NPostFX {
 		grade.tod = s.tod ? todtint(mv.glob, sun, raining) : new float[] {1, 1, 1, 1};
 		grade.expo = (autoexp == null) ? null : autoexp.exposure;
 		grade.nightvision = autoexp != null && !outdoors;
+		grade.nightlift = nightVisionActive(view.ui != null && NGfx.supported(view.ui.getenv())) ? nightVisionAmount() : 0f;
 	    }
+	    ensureNightGrade();
 	    if(shafts != null) {
 		Camera cam = view.basic.state().get(Homo3D.cam);
 		if(!outdoors || (sun == null) || (cam == null)) {
@@ -606,8 +647,8 @@ public class NPostFX {
 
     /* Tone mapping and color grading */
 
-    static final RawFunction gradefn = new RawFunction(VEC4, "hv_grade", 7,
-	"vec4 hv_grade(vec4 col, vec2 tc, vec4 g, vec4 v, vec4 tod, sampler2D expo, float vignette)\n" +
+    static final RawFunction gradefn = new RawFunction(VEC4, "hv_grade", 8,
+	"vec4 hv_grade(vec4 col, vec2 tc, vec4 g, vec4 v, vec4 tod, sampler2D expo, float vignette, float nightlift)\n" +
 	"{\n" +
 	"    /* g = (exposure, contrast, saturation, warmth); v = (grade on, tonemap, indoor exposure, brightness);\n" +
 	"     * tod = time-of-day tint and saturation */\n" +
@@ -620,6 +661,12 @@ public class NPostFX {
 	"        gain = 1.0 + (gain - 1.0) * room * room;\n" +
 	"    }\n" +
 	"    x *= gain;\n" +
+	"    if(nightlift > 0.0) {\n" +
+	"        /* Same idea as the classic night-vision light boost: lift shadows, leave lamps alone. */\n" +
+	"        float lift = 1.0 + nightlift * 2.2;\n" +
+	"        float room = max(0.0, 1.0 - max(x.r, max(x.g, x.b)));\n" +
+	"        x *= 1.0 + (lift - 1.0) * room * room;\n" +
+	"    }\n" +
 	"    x = mix(vec3(dot(x, vec3(0.2126, 0.7152, 0.0722))), x, tod.w);\n" +
 	"    if(v.x > 0.5) {\n" +
 	"        x *= g.x;\n" +
@@ -641,12 +688,19 @@ public class NPostFX {
 	"    }\n" +
 	"    return(vec4(clamp(x, 0.0, 1.0), col.a));\n" +
 	"}\n");
-    static final Uniform gr_g = u(VEC4, 0), gr_v = u(VEC4, 1), gr_tod = u(VEC4, 2), gr_expo = u(SAMPLER2D, 3), gr_vignette = u(FLOAT, 4);
-    static final ShaderMacro gr_sh = shader(gradefn, gr_g, gr_v, gr_tod, gr_expo, gr_vignette);
+    static final Uniform gr_g = u(VEC4, 0), gr_v = u(VEC4, 1), gr_tod = u(VEC4, 2), gr_expo = u(SAMPLER2D, 3), gr_vignette = u(FLOAT, 4), gr_night = u(FLOAT, 5);
+    static final ShaderMacro gr_sh = shader(gradefn, gr_g, gr_v, gr_tod, gr_expo, gr_vignette, gr_night);
+
+    /** Vulkan ignores the legacy light boost, so night vision is a shadow lift in the grade pass. */
+    public static float nightVisionLift(boolean enabled, float amount, boolean vulkan) {
+	if(!vulkan || !enabled || !Float.isFinite(amount) || (amount <= 0f))
+	    return(0f);
+	return(Math.min(amount, 1f));
+    }
 
     public static class Grade extends PostProcessor {
 	boolean grade, tonemap, nightvision, vignette;
-	float exposure, contrast, saturation, warmth;
+	float exposure, contrast, saturation, warmth, nightlift;
 	volatile float[] tod = {1, 1, 1, 1};
 	volatile Texture2D.Sampler2D expo = null;
 
@@ -661,7 +715,7 @@ public class NPostFX {
 	public void run(GOut g, Texture2D.Sampler2D in) {
 	    blit(g, in, new Pass(gr_sh, new float[] {exposure, contrast, saturation, warmth},
 				 new float[] {grade ? 1 : 0, tonemap ? 1 : 0, nightvision ? 1 : 0, expo == null ? 1f : 1.15f}, tod,
-				 (expo == null) ? Temporal.one() : expo, vignette ? 1f : 0f));
+				 (expo == null) ? Temporal.one() : expo, vignette ? 1f : 0f, nightlift));
 	}
     }
 

@@ -2,7 +2,10 @@ package nurgling.overlays;
 
 import haven.*;
 import haven.render.*;
+import haven.res.lib.tree.TreeScale;
 import nurgling.*;
+import nurgling.gattrr.NTreeDisplayScale;
+import nurgling.tools.TreeGrowth;
 
 import java.awt.*;
 import java.nio.ByteBuffer;
@@ -334,9 +337,9 @@ public class NModelBox extends Sprite implements RenderTree.Node {
     float currentGobScale = 1f;
 
     /**
-     * Gobs resized for display (hide stockpiles, or any type resized through the Configure
-     * window) scale their whole render subtree, hitbox included. Undo that here so the box keeps
-     * showing the real footprint. The two scales compose, so both are folded in.
+     * Display-only scales (stockpile hide, per-type Configure size, tree resize, tree display
+     * size) transform the whole gob, hitbox included. Fold them in so the box can be drawn
+     * back at the real footprint. Natural tree growth stays: that one is the trunk itself.
      */
     private float gobScale() {
         float scale = 1f;
@@ -346,6 +349,10 @@ public class NModelBox extends Sprite implements RenderTree.Node {
         nurgling.gattrr.NGobCustomScale c = gob.getattr(nurgling.gattrr.NGobCustomScale.class);
         if (c != null && c.scale > 0)
             scale *= c.scale;
+        scale *= TreeGrowth.overlayUndoScale(gob.getattr(TreeScale.class));
+        NTreeDisplayScale display = gob.getattr(NTreeDisplayScale.class);
+        if (display != null && display.scale > 0)
+            scale *= display.scale;
         return scale;
     }
 

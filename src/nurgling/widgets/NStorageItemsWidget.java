@@ -294,8 +294,7 @@ public class NStorageItemsWidget extends Window {
         }, new Coord(maxQualityX + UI.scale(18), y));
         qualityMaxFilterEntry.settip(L10n.get("storage.quality_max_filter_tip"));
 
-        compressBox = add(new CheckBox(L10n.get("storage.compress")),
-                new Coord(maxQualityX + UI.scale(64), y));
+        compressBox = add(new CheckBox(L10n.get("storage.compress")), Coord.z);
         compressBox.changed(val -> {
             compressByType = val;
             applyFiltersAndSort();
@@ -322,7 +321,7 @@ public class NStorageItemsWidget extends Window {
             public void click() {
                 setTabsMode(!tabsMode);
             }
-        }, new Coord(UI.scale(370), y));
+        }, Coord.z);
 
         y += UI.scale(30);
 
@@ -338,8 +337,10 @@ public class NStorageItemsWidget extends Window {
         onlyVillageBox.a = onlyVillage;
         onlyVillageBox.settip(L10n.get("storage.only_village_tip"));
         hiddenLabel = add(new Label(""), onlyVillageBox.pos("ur").adds(UI.scale(10), 0));
+        placeViewControls();
 
-        y += UI.scale(22);
+        y = Math.max(onlyVillageBox.c.y + onlyVillageBox.sz.y,
+                Math.max(modeButton.c.y + modeButton.sz.y, compressBox.c.y + compressBox.sz.y)) + UI.scale(6);
 
         // Column headers (clickable for sorting)
         int headerY = y;
@@ -434,9 +435,7 @@ public class NStorageItemsWidget extends Window {
 
         totalLabel = add(new Label(""), new Coord(UI.scale(10), bottomY + UI.scale(5)));
 
-        // The tab view starts below the toolbar's tallest control and fills the rest of the window
-        int stashY = Math.max(onlyVillageBox.c.y + onlyVillageBox.sz.y,
-                Math.max(modeButton.c.y + modeButton.sz.y, searchField.c.y + searchField.sz.y)) + UI.scale(6);
+        int stashY = headerY;
         stashView = add(new StashView(new Coord(UI.scale(WINDOW_WIDTH - 10), UI.scale(WINDOW_HEIGHT - 5) - stashY), this::openInList),
                 new Coord(UI.scale(5), stashY));
         stashView.setSearch(searchText);
@@ -477,6 +476,14 @@ public class NStorageItemsWidget extends Window {
             pendingMenu = null;
             r.run();
         }
+    }
+
+    /** Список and Сжать sit on the village row, clear of the quality fields and the icon tabs. */
+    private void placeViewControls() {
+        int right = sz.x - UI.scale(10);
+        int rowY = onlyVillageBox.c.y;
+        compressBox.move(new Coord(right - compressBox.sz.x, rowY));
+        modeButton.move(new Coord(compressBox.c.x - UI.scale(8) - modeButton.sz.x, rowY));
     }
 
     private void setTabsMode(boolean tabs) {

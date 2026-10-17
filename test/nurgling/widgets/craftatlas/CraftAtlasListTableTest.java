@@ -119,6 +119,26 @@ class CraftAtlasListTableTest {
     }
 
     @Test
+    void equipmentColumnsShowWornStatsBeforeGilding() {
+        CraftAtlasEntry helm = CraftAtlasEntry.builder("wiki:equipment-grand-troll-helm", "Grand Troll Helm")
+                .category("equipment").category("equipment-hats")
+                .bonus(new CraftAtlasEntry.Bonus("gfx/hud/chr/str", "Strength", 5.0))
+                .bonus(new CraftAtlasEntry.Bonus("gfx/hud/chr/agi", "Agility", -1.0))
+                .bonus(new CraftAtlasEntry.Bonus("gfx/hud/chr/unarmed", "Unarmed Combat", 10.0))
+                .build();
+
+        List<CraftAtlasListTable.Column> columns = CraftAtlasListTable.columnsFor(
+                "equipment-hats", List.of(helm));
+
+        assertEquals(List.of("equipment:strength", "equipment:agility", "equipment:unarmed combat",
+                        "gilding:slots", "gilding:attributes", "gilding:chance"),
+                columns.stream().map(column -> column.id).toList());
+        assertEquals(5.0, columns.get(0).value(helm), 0.001);
+        assertEquals(-1.0, columns.get(1).value(helm), 0.001);
+        assertEquals(10.0, columns.get(2).value(helm), 0.001);
+    }
+
+    @Test
     void curiosityColumnsUseRealHoursAndMentalWeight() {
         CraftAtlasEntry entry = CraftAtlasEntry.builder("curio", "Curio")
                 .category("curiosities")

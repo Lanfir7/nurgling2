@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-17-grand-troll-helm",
+  "priority": 3,
+  "summary": {
+    "ru": "В атласе у большого тролльего шлема видны ловкость и броня.",
+    "en": "The Grand Troll Helm in the atlas now shows agility and armor."
+  },
+  "detail": {
+    "ru": "Шлем лежит в Атласе, раздел Снаряжение, Шляпы. На карточке: сила +5, ловкость −1, безоружный бой +10, броня 250, поглощение 6 и 10. Рецепт: череп тролля и 4 стальных слитка на наковальне.",
+    "en": "The helm is in the Atlas under Equipment, Hats. Its card shows Strength +5, Agility −1, Unarmed Combat +10, armor 250, and absorption 6 and 10. The recipe is a troll skull and 4 steel bars at an anvil."
+  }
+}

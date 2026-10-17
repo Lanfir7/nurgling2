@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-17-storage-toolbar-overlap",
+  "priority": 4,
+  "summary": {
+    "ru": "В хранилище кнопка «Список» больше не закрывает поле качества и вкладки.",
+    "en": "In storage, the List button no longer covers the quality field or the tabs."
+  },
+  "detail": {
+    "ru": "Кнопки «Список» и «Сжать» стоят на строке фильтра деревни, справа. Поля Q>= и Q< и ряд иконок вкладок остаются свободными.",
+    "en": "List and Compress sit on the village-filter row, on the right. The Q>= and Q< fields and the icon tabs stay clear."
+  }
+}

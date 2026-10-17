@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-17-tree-hitboxes",
+  "priority": 5,
+  "summary": {
+    "ru": "Хитбоксы деревьев остаются полного размера, даже если сами деревья уменьшены.",
+    "en": "Tree hitboxes stay full size even when the trees themselves are drawn smaller."
+  },
+  "detail": {
+    "ru": "Уменьшение деревьев в настройках больше не сжимает их контур. Тополь, теребинт и другие деревья без собственного контура получают обычный хитбокс ствола. Границы объектов и скрытые деревья кликаются по настоящему размеру.",
+    "en": "Shrinking trees in settings no longer shrinks their outline. Poplar, terebinth, and other trees without their own outline get a normal trunk hitbox. Object boundaries and hidden trees are clicked at their real size."
+  }
+}

@@ -49126,8 +49126,28 @@
           "value": 5.0
         },
         {
+          "resource": "equipment:agility",
+          "name": "Agility",
+          "value": -1.0
+        },
+        {
           "resource": "equipment:unarmed",
-          "name": "Unarmed",
+          "name": "Unarmed Combat",
+          "value": 10.0
+        },
+        {
+          "resource": "equipment:armor-hp",
+          "name": "Armor HP",
+          "value": 250.0
+        },
+        {
+          "resource": "equipment:absorption-x",
+          "name": "Absorption X",
+          "value": 6.0
+        },
+        {
+          "resource": "equipment:absorption-y",
+          "name": "Absorption Y",
           "value": 10.0
         }
       ]

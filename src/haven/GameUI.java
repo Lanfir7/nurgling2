@@ -1365,7 +1365,7 @@ public class GameUI extends ConsoleHost implements Console.Directory, UI.Notice.
 		if(prog == null) {
 		    Widget slot = progslot();
 		    if(slot != null)
-			prog = slot.add(new Progress(p), nurgling.widgets.NDraggableWidget.off);
+			prog = slot.add(new Progress(p), nurgling.widgets.NDraggableLayout.contentOrigin());
 		    else
 			prog = adda(new Progress(p), 0.5, 0.35);
 		}

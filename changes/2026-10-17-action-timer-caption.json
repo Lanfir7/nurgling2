@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-17-action-timer-caption",
+  "priority": 4,
+  "summary": {
+    "ru": "У таймера действия снова видно, сколько времени осталось.",
+    "en": "The action timer shows the remaining time again."
+  },
+  "detail": {
+    "ru": "Под кружком прогресса больше не торчит пустая чёрная полоска: в ней написано оставшееся время действия.",
+    "en": "The empty black strip under the progress ring is gone. It now shows how long the action has left."
+  }
+}

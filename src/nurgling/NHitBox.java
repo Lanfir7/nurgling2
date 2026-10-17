@@ -221,6 +221,15 @@ public class NHitBox
         return new nurgling.pf.NHitBoxD(begin, end, rc, angle, mirrorAsymmetric);
     }
 
+    /** Trunk-sized box for a standing tree whose resource has no obstacle of its own. */
+    public static final NHitBox STANDING_TREE = new NHitBox(new Coord(-3, -3), new Coord(3, 3));
+
+    public static boolean isStandingTree(String name) {
+        if (name == null || !name.startsWith("gfx/terobjs/trees/"))
+            return false;
+        return !name.endsWith("log") && !name.endsWith("stump") && !name.endsWith("oldtrunk");
+    }
+
     public static NHitBox findCustom(String name)
     {
         if(name == null)

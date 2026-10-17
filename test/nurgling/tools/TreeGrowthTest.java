@@ -67,4 +67,32 @@ class TreeGrowthTest {
         TreeScale ts = treeScale(0.5f, 0f);
         assertEquals(Math.round(100 * (0.5 - 0.1) / 0.9), TreeGrowth.percent(ts, false));
     }
+
+    @Test
+    void resizeSliderIsUndoneForTheHitbox() {
+        float original = treeScaleForGrowth(1.0);
+        TreeScale ts = treeScale(original * 0.38f, original);
+        assertEquals(0.38f, TreeGrowth.overlayUndoScale(ts), 0.0001f);
+    }
+
+    @Test
+    void inBandTreeUndoReturnsTheBoxToIdentity() {
+        TreeScale ts = treeScale(1.2f * 0.38f, 1.2f);
+        assertEquals(1.2f * 0.38f, TreeGrowth.overlayUndoScale(ts), 0.0001f);
+    }
+
+    @Test
+    void saplingKeepsNaturalGrowthInTheHitbox() {
+        float original = treeScaleForGrowth(0.4);
+        TreeScale ts = treeScale(original * 0.38f, original);
+        assertEquals(0.38f, TreeGrowth.overlayUndoScale(ts), 0.0001f);
+    }
+
+    @Test
+    void unresizedTreeDoesNotUndoGrowth() {
+        float original = treeScaleForGrowth(0.4);
+        TreeScale ts = treeScale(original, original);
+        assertEquals(1f, TreeGrowth.overlayUndoScale(ts), 0.0001f);
+        assertEquals(1f, TreeGrowth.overlayUndoScale(null), 0.0001f);
+    }
 }

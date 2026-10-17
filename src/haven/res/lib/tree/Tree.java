@@ -32,6 +32,16 @@ public class Tree extends Sprite {
 	return(mkscale(s, s, s));
     }
 
+    /**
+     * Server scale actually applied as a placement transform.
+     * Values in [1, 1.4) are drawn at identity; the mesh is already that size.
+     */
+    public static float naturalPlacedScale(float serverScale) {
+	if(serverScale < 1.0f || serverScale >= 1.4f)
+	    return(serverScale);
+	return(1f);
+    }
+
     public Collection<Pair<Integer, RenderTree.Node>> lsparts(Resource res, int matsel) {
 	Collection<Pair<Integer, RenderTree.Node>> rl = new ArrayList<>(16);
 	for(FastMesh.MeshRes mr : res.layers(FastMesh.MeshRes.class)) {
