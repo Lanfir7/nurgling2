@@ -35,6 +35,7 @@ public class MinesweeperMiner implements Action {
 
     private final Direction direction;
     private final int maxLateral;
+    private final OreWatch oreWatch;
 
     // Notice sequence taken when mining starts, so we ignore older messages
     private long noticeMark = 0;
@@ -42,8 +43,13 @@ public class MinesweeperMiner implements Action {
     private volatile boolean galleryOpened = false;
 
     public MinesweeperMiner(Direction direction, int maxLateral) {
+        this(direction, maxLateral, null);
+    }
+
+    public MinesweeperMiner(Direction direction, int maxLateral, OreWatch oreWatch) {
         this.direction = direction;
         this.maxLateral = maxLateral;
+        this.oreWatch = oreWatch;
     }
 
     /**
@@ -101,6 +107,8 @@ public class MinesweeperMiner implements Action {
                 gui.msg("Minesweeper Miner: No more safe tiles. Mined " + tilesMinedTotal + " tiles total.");
                 break;
             }
+            Results oreStop = checkOre(gui, target);
+            if (oreStop != null) return oreStop;
 
             Results result = mineTile(gui, solver, target);
             if (!result.IsSuccess()) {
@@ -221,6 +229,8 @@ public class MinesweeperMiner implements Action {
      */
     private Results mineTile(NGameUI gui, MinesweeperSolver solver, Coord tilePos)
             throws InterruptedException {
+        Results oreStop = checkOre(gui, tilePos);
+        if (oreStop != null) return oreStop;
         // Once we are through into a natural cavern we stop digging entirely
         if (caveGalleryOpened(gui)) {
             return Results.SUCCESS();
@@ -260,6 +270,8 @@ public class MinesweeperMiner implements Action {
         Resource resBefore = gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(tilePos));
 
         while (isTileMineable(gui, tilePos)) {
+            oreStop = checkOre(gui, tilePos);
+            if (oreStop != null) return oreStop;
             // Stop swinging the moment we break into a natural cavern
             if (caveGalleryOpened(gui)) {
                 break;
@@ -292,6 +304,8 @@ public class MinesweeperMiner implements Action {
             NUtils.getUI().core.addTask(new GetCurs("arw"));
 
             resBefore = gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(tilePos));
+            oreStop = checkOre(gui, tilePos);
+            if (oreStop != null) return oreStop;
 
             if (!new RestoreResources().run(gui).IsSuccess()) {
                 return Results.ERROR("Cannot restore resources");
@@ -333,7 +347,16 @@ public class MinesweeperMiner implements Action {
         // Run solver with new data
         solver.solve();
 
+        oreStop = checkOre(gui, tilePos);
+        if (oreStop != null) return oreStop;
+
         return Results.SUCCESS();
+    }
+
+    private Results checkOre(NGameUI gui, Coord tile) {
+        if (oreWatch == null) return null;
+        String found = oreWatch.look(gui, tile);
+        return found == null ? null : Results.ERROR(found);
     }
 
     private boolean checkSupportHealth(Coord tilePos) {

@@ -50,6 +50,8 @@ public class PathFinder implements Action {
     public Supplier<List<AvoidZone>> avoidZones = null;
     public boolean blockedByAvoidZones = false;
     public List<Coord2d> learnedBlocks = null;
+    /** Opt in per walk: -1 leaves cliffs unchanged, 0 blocks cliffs, positive adds a tile buffer. */
+    public int blockCliffBuffer = -1;
     public int maxStalls = 3;
     private List<AvoidZone> plannedZones = Collections.emptyList();
     private boolean ignoreZones = false;
@@ -452,6 +454,7 @@ public class PathFinder implements Action {
             }
             pfmap.waterMode = waterMode;
             pfmap.gatesAlwaysClosed = gatesAlwaysClosed;
+            pfmap.cliffBuffer = blockCliffBuffer;
             pfmap.build();
             blockAvoided();
             for (Gob obstacle : additionalObstacles) {
@@ -777,6 +780,25 @@ public class PathFinder implements Action {
         PathFinder pf = new PathFinder(target);
         LinkedList<Graph.Vertex> res = pf.construct(true);
         return res != null || pf.dn;
+    }
+
+    /** Length of a planned walk without moving the player; infinity means unreachable. */
+    public static double walkLength(Gob target) throws InterruptedException {
+        Gob player = NUtils.player();
+        if (player == null || target == null)
+            return Double.POSITIVE_INFINITY;
+        PathFinder pf = new PathFinder(target);
+        LinkedList<Graph.Vertex> path = pf.construct(true);
+        if (path == null)
+            return pf.dn ? 0 : Double.POSITIVE_INFINITY;
+        double length = 0;
+        Coord2d at = player.rc;
+        for (Graph.Vertex vertex : path) {
+            Coord2d next = Utils.pfGridToWorld(vertex.pos);
+            length += at.dist(next);
+            at = next;
+        }
+        return length;
     }
 
     public static boolean isAvailable(Gob target, boolean hardMode) throws InterruptedException {

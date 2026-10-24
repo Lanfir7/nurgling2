@@ -23,7 +23,7 @@ import static nurgling.i18n.L10n.get;
  * ghost turns red when any part of it is off the loaded map and a click there does nothing. Areas
  * landing on existing ones are drawn orange: allowed, but worth seeing.
  */
-public class AreaPresetPlacer implements MapView.Grabber
+public class AreaPresetPlacer implements nurgling.PresetPlacer
 {
     private enum State { OK, OVERLAP, BAD }
 
@@ -81,7 +81,7 @@ public class AreaPresetPlacer implements MapView.Grabber
         return true;
     }
 
-    private static MCache.OverlayInfo info(Color c)
+    public static MCache.OverlayInfo info(Color c)
     {
         Material mat = new Material(new BaseColor(c), States.maskdepth);
         return new MCache.OverlayInfo() {

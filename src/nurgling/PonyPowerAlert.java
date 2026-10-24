@@ -2,7 +2,6 @@ package nurgling;
 
 import haven.Audio;
 import haven.LayerMeter;
-import haven.UI;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -54,14 +53,14 @@ public final class PonyPowerAlert {
     }
 
     static void play() {
-        NUI ui = UI.getInstance();
+        NUI ui = NUtils.getUI();
         if (ui == null)
             return;
         InputStream in = PonyPowerAlert.class.getResourceAsStream(SOUND_RESOURCE);
         if (in == null)
             return;
         try {
-            ui.sfx(Audio.PCMClip.fromwav(new BufferedInputStream(in)));
+            NAlarmManager.sfx(ui, Audio.PCMClip.fromwav(new BufferedInputStream(in)));
         } catch (IOException ignored) {
         }
     }

@@ -39,18 +39,18 @@ class FrameTunnelerGeometryTest {
                 Coord2d previewAnchor = frameAnchor(tunnel, origin);
                 double angle = angle(direction);
                 Set<Coord> preview = tiles(NMiningSupport.computeRect(previewAnchor, angle,
-                        columns.length, length, 0));
+                        columns.length, length, false));
                 Set<Coord> wanted = new HashSet<>();
                 for(int row = FRONTIER; row < FRONTIER + length; row++) {
                     for(int col : columns) wanted.add(tile(direction, row, col));
                 }
                 assertEquals(wanted, preview, direction + " " + type + " preview");
 
-                // A completed frame's server anchor is one tile behind its placement ghost.
+                // The server places a completed frame just behind the preview's tile edge.
                 Coord2d builtAnchor = previewAnchor.sub(Coord2d.of(direction.dx, direction.dy)
-                        .mul(MCache.tilesz.x));
+                        .mul(0.1));
                 Set<Coord> built = tiles(NMiningSupport.computeRect(builtAnchor, angle,
-                        columns.length, length, 1));
+                        columns.length, length, true));
                 assertEquals(preview, built, direction + " " + type + " built frame");
                 assertEquals(columns.length * length, built.size());
                 for(int col : columns) {

@@ -38,6 +38,8 @@ public class SessionTabBar extends Widget {
     /** Close button size (inside session button, top right) */
     public static final int CLOSE_BTN_SIZE = UI.scale(10);
     public static final int CLOSE_BTN_MARGIN = UI.scale(4);
+    public static final int SPEAKER_SIZE = UI.scale(12);
+    private static final int SPEAKER_GAP = UI.scale(4);
     /** Plus button dimensions */
     public static final int PLUS_BTN_SIZE = UI.scale(18);
     public static final int PLUS_BAR_HEIGHT = UI.scale(20);
@@ -88,6 +90,7 @@ public class SessionTabBar extends Widget {
     private static Tex closeNormal, closeHover, closePush;
     private static Tex addNormal, addHover, addPush;
     private static Tex tabPanel, plusPanel;
+    private static Tex speakerOn, speakerMuted;
     private static boolean resourcesLoaded = false;
 
     /** Fonts (static so shared across instances) */
@@ -112,6 +115,7 @@ public class SessionTabBar extends Widget {
     private int hoveredButton = -1;
     /** Currently hovered close button index (-1 = none) */
     private int hoveredCloseButton = -1;
+    private int hoveredSpeaker = -1;
     private Thread hoveredMacroThread;
     private int hoveredStopAllButton = -1;
     /** Vertical scroll used only when the session/macro list exceeds the screen. */
@@ -217,6 +221,8 @@ public class SessionTabBar extends Widget {
             addHover = Resource.loadtex("nurgling/hud/buttons/add_session/18x18_hover");
             addPush = Resource.loadtex("nurgling/hud/buttons/add_session/18x18_push");
             ctl = Resource.loadtex("nurgling/hud/box/tl");
+            speakerOn = new TexI(speakerImage(false));
+            speakerMuted = new TexI(speakerImage(true));
 
             // Load fonts
             Text.Foundry titleFoundry;
@@ -493,7 +499,7 @@ public class SessionTabBar extends Widget {
         for (int i = 0; i < sessions.size(); i++) {
             SessionContext ctx = sessions.get(i);
             drawTabContent(g, off.x, y, ctx, i == hoveredButton, ctx == active,
-                           canClose && (i == hoveredCloseButton), canClose);
+                           canClose && (i == hoveredCloseButton), canClose, i == hoveredSpeaker);
             y += rowHeight(ctx) + BUTTON_PADDING;
         }
 
@@ -605,7 +611,7 @@ public class SessionTabBar extends Widget {
 
     /** Portrait frame, name, subtitle, status icon and close button of one tab. */
     private void drawTabContent(GOut g, int x, int y, SessionContext ctx, boolean hovered,
-                                boolean isActive, boolean closeHovered, boolean canClose) {
+                                boolean isActive, boolean closeHovered, boolean canClose, boolean speakerHovered) {
         Color accent = accentOf(ctx, isActive);
         Color textColor = textOf(ctx, isActive);
 
@@ -616,7 +622,7 @@ public class SessionTabBar extends Widget {
         g.chcolor();
 
         int textX = x + AVA_MARGIN + AVA_SIZE + UI.scale(8);
-        int maxTextWidth = BUTTON_WIDTH - (textX - x) - UI.scale(22);
+        int maxTextWidth = speakerPosition(x, y).x - textX - SPEAKER_GAP;
 
         Tex nameTex = cached(nameCache, fit(ctx.getDisplayName(), maxTextWidth),
                              s -> nameFurnace.render(s).tex());
@@ -624,7 +630,11 @@ public class SessionTabBar extends Widget {
         g.aimage(nameTex, new Coord(textX, y + UI.scale(13)), 0, 0.5);
         g.chcolor();
 
-        Tex subTex = cached(subCache, subtitleOf(ctx, isActive), s -> subFoundry.render(s).tex());
+        int subtitleWidth = BUTTON_WIDTH - (textX - x) - STATUS_ICON_SIZE - UI.scale(8);
+        String subtitle = subtitleOf(ctx, isActive);
+        while (subFoundry.strsize(subtitle).x > subtitleWidth && subtitle.length() > 1)
+            subtitle = subtitle.substring(0, subtitle.length() - (subtitle.endsWith("…") ? 2 : 1)) + "…";
+        Tex subTex = cached(subCache, subtitle, s -> subFoundry.render(s).tex());
         g.chcolor(SUB_TEXT);
         g.aimage(subTex, new Coord(textX, y + UI.scale(29)), 0, 0.5);
         g.chcolor();
@@ -636,9 +646,51 @@ public class SessionTabBar extends Widget {
             drawCloseButton(g, x + BUTTON_WIDTH - CLOSE_BTN_SIZE - CLOSE_BTN_MARGIN,
                             y + CLOSE_BTN_MARGIN, closeHovered, !canClose);
 
+        Coord speaker = speakerPosition(x, y);
+        if (!ctx.isMuted() && !speakerHovered)
+            g.chcolor(255, 255, 255, 110);
+        g.image(ctx.isMuted() ? speakerMuted : speakerOn, speaker);
+        g.chcolor();
+
         drawMacroControls(g, x, y, ctx);
         if (!isActive && ctx.hasTimerAttention())
             nurgling.widgets.timers.TimerIcons.dot(g, new Coord(x + UI.scale(7), y + UI.scale(7)), UI.scale(8), TIMER_DOT);
+    }
+
+    /** Shares the drawing geometry with hit testing; leaves portrait and close button separate. */
+    static Coord speakerPosition(int x, int y) {
+        return new Coord(x + BUTTON_WIDTH - CLOSE_BTN_MARGIN - CLOSE_BTN_SIZE - SPEAKER_GAP - SPEAKER_SIZE,
+                         y + CLOSE_BTN_MARGIN);
+    }
+
+    private static BufferedImage speakerImage(boolean muted) {
+        BufferedImage image = new BufferedImage(SPEAKER_SIZE, SPEAKER_SIZE, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = image.createGraphics();
+        try {
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            double s = SPEAKER_SIZE;
+            g.setColor(new Color(220, 220, 220));
+            g.fill(new java.awt.geom.Rectangle2D.Double(s * .05, s * .36, s * .22, s * .28));
+            java.awt.geom.Path2D.Double cone = new java.awt.geom.Path2D.Double();
+            cone.moveTo(s * .27, s * .36);
+            cone.lineTo(s * .52, s * .12);
+            cone.lineTo(s * .52, s * .88);
+            cone.lineTo(s * .27, s * .64);
+            cone.closePath();
+            g.fill(cone);
+            g.setStroke(new java.awt.BasicStroke((float) Math.max(1, s / 9)));
+            if (muted) {
+                g.setColor(new Color(255, 100, 100));
+                g.draw(new java.awt.geom.Line2D.Double(s * .66, s * .34, s * .92, s * .66));
+                g.draw(new java.awt.geom.Line2D.Double(s * .92, s * .34, s * .66, s * .66));
+            } else {
+                g.draw(new java.awt.geom.Arc2D.Double(s * .36, s * .30, s * .40, s * .40, -50, 100, java.awt.geom.Arc2D.OPEN));
+                g.draw(new java.awt.geom.Arc2D.Double(s * .24, s * .14, s * .72, s * .72, -50, 100, java.awt.geom.Arc2D.OPEN));
+            }
+        } finally {
+            g.dispose();
+        }
+        return image;
     }
 
     private List<BotsInterruptWidget.RunningBot> runningBots(SessionContext ctx) {
@@ -988,6 +1040,16 @@ public class SessionTabBar extends Widget {
             return true;
         }
 
+        for (int i = 0; i < sessions.size(); i++) {
+            if (isSpeakerHit(ev.c, i, sessions)) {
+                SessionContext ctx = sessions.get(i);
+                ctx.setMuted(!ctx.isMuted());
+                dragStartPos = null;
+                dragStartButton = -1;
+                return true;
+            }
+        }
+
         // Check if clicking any close button first (they're separate from session buttons)
         // Only allow closing if there's more than one session
         if (sessions.size() > 1) {
@@ -1053,6 +1115,7 @@ public class SessionTabBar extends Widget {
 
     @Override
     public void mousemove(MouseMoveEvent ev) {
+        hoveredSpeaker = -1;
         boolean dragMode = ui != null && ui.core != null && ui.core.mode == NCore.Mode.DRAG;
 
         if (dragMode) {
@@ -1113,6 +1176,8 @@ public class SessionTabBar extends Widget {
                 }
                 int buttonIndex = getButtonAt(ev.c);
                 hoveredButton = buttonIndex;
+                if (isSpeakerHit(ev.c, buttonIndex, new ArrayList<>(SessionManager.getInstance().getAllSessions())))
+                    hoveredSpeaker = buttonIndex;
                 hoveredMacroThread = null;
                 hoveredStopAllButton = -1;
 
@@ -1171,6 +1236,17 @@ public class SessionTabBar extends Widget {
 
     @Override
     public Object tooltip(Coord c, Widget prev) {
+        boolean dragMode = ui != null && ui.core != null && ui.core.mode == NCore.Mode.DRAG;
+        if (btnVis.a && !dragMode) {
+            List<SessionContext> sessions = new ArrayList<>(SessionManager.getInstance().getAllSessions());
+            for (int i = 0; i < sessions.size(); i++) {
+                if (isSpeakerHit(c, i, sessions)) {
+                    SessionContext ctx = sessions.get(i);
+                    return L10n.get(ctx.isMuted() ? "sessionbar.unmute" : "sessionbar.mute") + ": " +
+                           ctx.getDisplayName() + " — " + L10n.get("sessionbar.mute_alarms");
+                }
+            }
+        }
         if (btnVis.a) {
             MacroHit macroHit = getMacroHit(c, new ArrayList<>(SessionManager.getInstance().getAllSessions()));
             if (macroHit != null) {
@@ -1230,6 +1306,16 @@ public class SessionTabBar extends Widget {
 
         return c.x >= closeX && c.x < closeX + CLOSE_BTN_SIZE &&
                c.y >= y && c.y < y + CLOSE_BTN_SIZE;
+    }
+
+    private boolean isSpeakerHit(Coord c, int index, List<SessionContext> sessions) {
+        if (!c.isect(Coord.z, sz) || index < 0 || index >= sessions.size())
+            return false;
+        Coord off = contentOffset();
+        int y = off.y;
+        for (int i = 0; i < index; i++)
+            y += rowHeight(sessions.get(i)) + BUTTON_PADDING;
+        return c.isect(speakerPosition(off.x, y), new Coord(SPEAKER_SIZE, SPEAKER_SIZE));
     }
 
     /**

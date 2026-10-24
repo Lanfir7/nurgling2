@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.function.Predicate;
 
 public class TakeItemsFromContainer implements Action
 {
@@ -25,6 +26,7 @@ public class TakeItemsFromContainer implements Action
     QualityType qualityType;
     public int minSize = Integer.MAX_VALUE;
     public boolean exactMatch = false;
+    public Predicate<NGItem> filter = null;
     public TakeItemsFromContainer(Container cont, HashSet<String> names, NAlias pattern)
     {
         this.cont = cont;
@@ -53,6 +55,7 @@ public class TakeItemsFromContainer implements Action
 
     int target_size = 0;
     boolean took = false;
+    private int movedCount = 0;
 
     // Quality comparators for sorting items (following GetItems pattern but with null safety)
     private Comparator<WItem> high = new Comparator<WItem>() {
@@ -80,6 +83,7 @@ public class TakeItemsFromContainer implements Action
     };
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
+        movedCount = 0;
         NInventory inv = gui.getInventory(cont.cap);
         int remainingToTake = minSize; // Track how many items we still need to take
         
@@ -92,7 +96,8 @@ public class TakeItemsFromContainer implements Action
             if (item != null) {
 
                 target_coord = inv.getItem(name).sz.div(Inventory.sqsz);
-                int oldSpace = gui.getInventory().getItems(name).size();
+                int oldSpace = held(gui, name);
+                int oldAll = gui.getInventory().getItems(name).size();
                 ArrayList<WItem> items = getItems(gui, name);
                 int items_size = items.size();
                 target_size = Math.min(remainingToTake, Math.min(gui.getInventory().getNumberFreeCoord(target_coord.swapXY())*StackSupporter.getFullStackSize(name), items.size()));
@@ -101,21 +106,28 @@ public class TakeItemsFromContainer implements Action
                 int temptr = target_size;
 
                 for (int i = 0; i < temptr; i++) {
-                    int left = target_size + oldSpace - gui.getInventory().getItems(name).size();
-                    TransferToContainer.transfer(items.get(i), gui.getInventory(), left);
+                    int left = target_size + oldSpace - held(gui, name);
+                    int moved = TransferToContainer.transfer(items.get(i), gui.getInventory(), left, filter != null);
+                    if (moved <= 0)
+                        break;
                     items = getItems(gui, name);
-                    if(gui.getInventory().getItems(name).size()>=target_size+oldSpace)
+                    if(held(gui, name)>=target_size+oldSpace || items.isEmpty())
                         break;
                     temptr=Math.min(remainingToTake, Math.min(gui.getInventory().getNumberFreeCoord(target_coord.swapXY())*StackSupporter.getFullStackSize(name), items.size()));
                     i = -1;
                 }
-                WaitItems wi = new WaitItems(gui.getInventory(), new NAlias(name), oldSpace + target_size);
-                NUtils.getUI().core.addTask(wi);
+                if (filter == null) {
+                    WaitItems wi = new WaitItems(gui.getInventory(), new NAlias(name), oldAll + target_size);
+                    NUtils.getUI().core.addTask(wi);
+                }
                 cont.update();
                 
                 // Reduce remainingToTake by how many we actually took
-                int actuallyTaken = gui.getInventory().getItems(name).size() - oldSpace;
+                int actuallyTaken = held(gui, name) - oldSpace;
+                movedCount += Math.max(0, actuallyTaken);
                 remainingToTake -= actuallyTaken;
+                if (filter != null && target_size > 0 && actuallyTaken <= 0)
+                    return Results.FAIL();
                 
                 if(items_size>target_size) {
                     took = false;
@@ -125,6 +137,16 @@ public class TakeItemsFromContainer implements Action
         }
         took = true;
         return Results.SUCCESS();
+    }
+
+    private int held(NGameUI gui, String name) throws InterruptedException {
+        ArrayList<WItem> items = gui.getInventory().getItems(name);
+        if (filter == null)
+            return items.size();
+        int count = 0;
+        for (WItem item : items)
+            if (filter.test((NGItem) item.item)) count++;
+        return count;
     }
 
     private ArrayList<WItem> getItems(NGameUI gui, String name) throws InterruptedException
@@ -140,6 +162,10 @@ public class TakeItemsFromContainer implements Action
                     forRemove.add(item1);
                     continue;
                 }
+            }
+            if (filter != null && !filter.test((NGItem) item1.item)) {
+                forRemove.add(item1);
+                continue;
             }
             
             if (pattern != null) {
@@ -176,5 +202,9 @@ public class TakeItemsFromContainer implements Action
 
     public int getTarget_size() {
         return target_size;
+    }
+
+    public int getMovedCount() {
+        return movedCount;
     }
 }

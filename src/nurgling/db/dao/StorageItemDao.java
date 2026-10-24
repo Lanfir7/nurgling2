@@ -142,6 +142,44 @@ public class StorageItemDao {
         return items;
     }
 
+    /** Countable exact-name records with a known container location. Bulk rows are never item fetches. */
+    public List<LocatedItem> loadLocatedCountableByExactNames(DatabaseAdapter adapter,
+                                                               Collection<String> names) throws SQLException {
+        List<LocatedItem> rows = new ArrayList<>();
+        if (names == null || names.isEmpty()) return rows;
+        List<String> unique = new ArrayList<>(new LinkedHashSet<>(names));
+        String placeholders = String.join(",", Collections.nCopies(unique.size(), "?"));
+        String sql = "SELECT si.name, si.container, c.grid_id, c.coord, si.coordinates " +
+                "FROM storageitems si JOIN containers c ON c.hash = si.container " +
+                "WHERE si.name IN (" + placeholders + ")";
+        try (ResultSet rs = adapter.executeQuery(sql, unique.toArray())) {
+            while (rs.next()) {
+                String coordinates = rs.getString("coordinates");
+                if (coordinates != null && coordinates.startsWith(nurgling.widgets.BulkStorageWindowExtension.BULK_TAG))
+                    continue;
+                Long gridId = rs.getLong("grid_id");
+                if (rs.wasNull()) continue;
+                rows.add(new LocatedItem(rs.getString("name"), rs.getString("container"), gridId,
+                        rs.getString("coord")));
+            }
+        }
+        return rows;
+    }
+
+    public static final class LocatedItem {
+        public final String name;
+        public final String container;
+        public final long gridId;
+        public final String coord;
+
+        public LocatedItem(String name, String container, long gridId, String coord) {
+            this.name = name;
+            this.container = container;
+            this.gridId = gridId;
+            this.coord = coord;
+        }
+    }
+
     /**
      * Load storage items by container
      */

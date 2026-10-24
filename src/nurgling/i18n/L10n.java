@@ -26,6 +26,7 @@ public final class L10n {
     
     private static Properties messages = new Properties();
     private static Properties fallback = new Properties();
+    private static volatile Map<String, List<String>> reverse = null;
     private static Locale currentLocale = Locale.ENGLISH;
     private static Path langDir;
     private static boolean initialized = false;
@@ -95,6 +96,7 @@ public final class L10n {
     public static void setLocale(Locale locale) {
         currentLocale = locale;
         messages = new Properties();
+        reverse = null;
         messages.putAll(fallback); // Start with fallback
         
         // Try to load from external file first (user translations)
@@ -226,6 +228,31 @@ public final class L10n {
     public static boolean hasKey(String key) {
         return messages.containsKey(key);
     }
+
+    /** Returns only keys whose current translation exactly equals visible UI text. */
+    public static List<String> keysFor(String value) {
+        if(value == null || value.trim().isEmpty())
+            return Collections.emptyList();
+        Map<String, List<String>> index = reverse;
+        if(index == null) {
+            synchronized(L10n.class) {
+                index = reverse;
+                if(index == null) {
+                    Map<String, List<String>> built = new HashMap<>();
+                    for(String key : messages.stringPropertyNames()) {
+                        String translated = messages.getProperty(key);
+                        if(translated != null && !translated.isEmpty())
+                            built.computeIfAbsent(translated.toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(key);
+                    }
+                    for(List<String> keys : built.values())
+                        Collections.sort(keys);
+                    reverse = index = built;
+                }
+            }
+        }
+        List<String> keys = index.get(value.toLowerCase(Locale.ROOT));
+        return keys == null ? Collections.emptyList() : Collections.unmodifiableList(keys);
+    }
     
     /**
      * Get current locale.
@@ -249,6 +276,7 @@ public final class L10n {
         messages = new Properties();
         messages.putAll(fallback);
         loadFromFile(messages, currentLocale);
+        reverse = null;
         System.out.println("[L10n] Translations reloaded");
     }
     

@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-tunnel-frame-coverage",
+  "priority": 7,
+  "summary": {
+    "ru": "Туннельные рамы точнее показывают безопасную для добычи область при строительстве на север и запад.",
+    "en": "Tunnel frames now show the correct safe mining area when built facing north or west."
+  },
+  "detail": {
+    "ru": "При строительстве деревянной, укреплённой или каменной туннельной рамы на север или запад область опоры после установки совпадает с предпросмотром. Это помогает боту прокладывать туннель только по поддерживаемым клеткам.",
+    "en": "When you build a Timber, Reinforced, or Stone Arch Tunnel facing north or west, its support area now matches the placement preview. The tunneling bot uses that area to avoid mining unsupported tiles."
+  }
+}

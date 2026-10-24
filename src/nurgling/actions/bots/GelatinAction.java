@@ -125,8 +125,7 @@ public class GelatinAction implements Action {
                 return Results.ERROR("Craft window not available");
             }
 
-            // Включаем авто-режим
-            mwnd.autoMode = true;
+            configureCraftMode(mwnd);
 
             // Ждем загрузки рецепта
             NUtils.addTask(new NTask() {
@@ -163,6 +162,11 @@ public class GelatinAction implements Action {
 
         gui.msg("Gelatin bot finished");
         return Results.SUCCESS();
+    }
+
+    /** Select automatic crafting through its checkbox so the UI follows the bot mode. */
+    void configureCraftMode(NMakewindow mwnd) {
+        mwnd.setAutoMode(true);
     }
 
     /**

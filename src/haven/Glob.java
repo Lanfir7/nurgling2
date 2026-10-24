@@ -333,16 +333,17 @@ public class Glob {
     public Collection<Weather> weather() {
 	synchronized(this) {
 	    ArrayList<Weather> ret = new ArrayList<>(wmap.size());
+	    boolean showRain = rainEnabled;
+	    boolean hideDrugEffects = Boolean.TRUE.equals(nurgling.NConfig.get(nurgling.NConfig.Key.disableDrugEffects));
 	    for(Map.Entry<Indir<Resource>, Object> cur : wmap.entrySet()) {
-		if(!weatherEnabled(cur.getKey()))
+		if(!weatherEnabled(cur.getKey(), showRain, hideDrugEffects))
 		    continue;
 		Object val = cur.getValue();
 		if(val instanceof Weather) {
 		    ret.add((Weather)val);
 		} else {
 		    try {
-			Weather.Factory f = cur.getKey().get().flayer(Resource.CodeEntry.class).get(Weather.Factory.class);
-			Weather w = f.weather(this, (Object[])val);
+			Weather w = instantiateWeather(cur.getKey(), (Object[])val);
 			cur.setValue(w);
 			ret.add(w);
 		    } catch(Loading l) {
@@ -351,6 +352,11 @@ public class Glob {
 	    }
 	    return(ret);
 	}
+    }
+
+    Weather instantiateWeather(Indir<Resource> res, Object[] args) {
+	Weather.Factory f = res.get().flayer(Resource.CodeEntry.class).get(Weather.Factory.class);
+	return(f.weather(this, args));
     }
 
     public synchronized boolean toggleRain() {
@@ -362,23 +368,34 @@ public class Glob {
 	return(rainEnabled);
     }
 
-    private boolean weatherEnabled(Indir<Resource> res) {
-	if(rainEnabled)
+    private boolean weatherEnabled(Indir<Resource> res, boolean rainEnabled, boolean hideDrugEffects) {
+	if(rainEnabled && !hideDrugEffects)
 	    return(true);
 	try {
-	    return(weatherEnabled(res.get().name, rainEnabled));
+	    return(weatherEnabled(res.get().name, rainEnabled, hideDrugEffects));
 	} catch(Loading l) {
-	    return(true);
+	    // Unknown resources cannot be classified safely while the drug filter is active.
+	    return(!hideDrugEffects);
 	}
     }
 
     static boolean weatherEnabled(String name, boolean rainEnabled) {
-	return(rainEnabled || !isRainWeatherResource(name));
+	return(weatherEnabled(name, rainEnabled, false));
+    }
+
+    static boolean weatherEnabled(String name, boolean rainEnabled, boolean hideDrugEffects) {
+	return((rainEnabled || !isRainWeatherResource(name)) &&
+	       (!hideDrugEffects || !isDrugWeatherResource(name)));
+    }
+
+    static boolean isDrugWeatherResource(String name) {
+	return("gfx/fx/shroomed".equals(name) || "gfx/fx/dragon".equals(name) ||
+	       "gfx/fx/lucy".equals(name) || "gfx/fx/bottle".equals(name));
     }
 
     static boolean isRainWeatherResource(String name) {
-	return(name.equals("gfx/fx/rain") || name.equals("gfx/fx/wet") ||
-	       name.equals("sfx/ambient/weather/wsound"));
+	return("gfx/fx/rain".equals(name) || "gfx/fx/wet".equals(name) ||
+	       "sfx/ambient/weather/wsound".equals(name));
     }
 
     /* XXX: This is actually quite ugly and there should be a better

@@ -291,7 +291,7 @@ public class Graph implements Runnable
                                     {
                                         Gob g = Finder.findGob(id);
                                         if(g!=null) {
-                                            if (hbd.intersects(g.ngob.hitBox.toWorld(g.rc, g.a),true)) {
+                                            if (intersectsSolid(hbd, g)) {
                                                 isFree = false;
                                                 break;
                                             }
@@ -326,6 +326,13 @@ public class Graph implements Runnable
 //                    path.remove(0);
             }
         return path;
+    }
+
+    /** Final live collision guard, using the same solids as the coarse PF grid. */
+    public static boolean intersectsSolid(NHitBoxD path, Gob gob) {
+        for (NHitBoxD solid : NHitBoxD.solid(gob))
+            if (path.intersects(solid, true)) return true;
+        return false;
     }
 
     public class Vertex extends NPFMap.Cell

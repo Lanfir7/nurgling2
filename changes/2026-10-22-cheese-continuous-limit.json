@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-cheese-continuous-limit",
+  "priority": 7,
+  "summary": {
+    "ru": "Непрерывные заказы сыра запускают лотки равномернее.",
+    "en": "Continuous cheese orders start trays more evenly."
+  },
+  "detail": {
+    "ru": "В сырном конвейере первый запуск и запуск после долгого перерыва теперь начисляют не больше одного заданного периода, максимум за сутки. Уже ожидающие лотки и вручную добавленные лотки сохраняются.",
+    "en": "In Cheese Conveyor, the first run and a run after a long gap now accrue at most one configured period, capped at one day. Queued trays and manually added trays remain in place."
+  }
+}

@@ -146,6 +146,7 @@ public class NHitBox
             put("gfx/kritter/pig/hog", new NHitBox(new Coord(-6,-4),new Coord(6,4)));
             put("gfx/kritter/orca/orcabeef", new NHitBox(new Coord2d(-1,-4),new Coord2d(1,4)));
             put("gfx/kritter/mammothskull", new NHitBox(new Coord(-10, -6), new Coord(10, 6)));
+            put("gfx/kritter/mammoth/mammothskull", new NHitBox(new Coord2d(-22.6, -12.5), new Coord2d(6.5, 12.5)));
             put("gfx/kritter/sheep/lamb", new NHitBox(new Coord(-4,-2),new Coord(5,2)));
             put("gfx/kritter/sheep/sheep", new NHitBox(new Coord(-4,-2),new Coord(5,2)));
             put("gfx/kritter/goat/billy", new NHitBox(new Coord(-4,-2),new Coord(4,2)));
@@ -181,6 +182,48 @@ public class NHitBox
     public static NHitBox fromObstacle(Coord2d[][] p)
     {
         return fromObstacle(p ,false);
+    }
+
+    private static final Set<String> PASSAGE_RESOURCES = Set.of(
+            "gfx/terobjs/timbertunnel", "gfx/terobjs/reinforcedtunnel", "gfx/terobjs/stonearchtunnel");
+
+    /** Solid posts for the three mine frames; the ordinary hitBox remains unchanged. */
+    public static NHitBox[] passageParts(Resource resource) {
+        if (resource == null || !PASSAGE_RESOURCES.contains(resource.name)) return null;
+        for (Resource.Layer layer : resource.getLayers()) {
+            if (layer instanceof Resource.Obstacle && "".equals(((Resource.Obstacle) layer).id))
+                return passageParts(resource.name, ((Resource.Obstacle) layer).id,
+                        ((Resource.Obstacle) layer).p);
+        }
+        return null;
+    }
+
+    static NHitBox[] passageParts(String name, String obstacleId, Coord2d[][] polygons) {
+        if (!"".equals(obstacleId)) return null;
+        return passageParts(name, polygons);
+    }
+
+    private static NHitBox[] passageParts(String name, Coord2d[][] polygons) {
+        if (!PASSAGE_RESOURCES.contains(name) || polygons == null || polygons.length == 0)
+            return null;
+        NHitBox[] parts = new NHitBox[polygons.length];
+        for (int i = 0; i < polygons.length; i++) {
+            Coord2d[] polygon = polygons[i];
+            if (polygon == null || polygon.length < 3) return null;
+            double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY;
+            double maxX = Double.NEGATIVE_INFINITY, maxY = Double.NEGATIVE_INFINITY;
+            for (Coord2d point : polygon) {
+                if (point == null || !Double.isFinite(point.x) || !Double.isFinite(point.y)) return null;
+                minX = Math.min(minX, point.x);
+                minY = Math.min(minY, point.y);
+                maxX = Math.max(maxX, point.x);
+                maxY = Math.max(maxY, point.y);
+            }
+            if (minX >= maxX || minY >= maxY) return null;
+            parts[i] = new NHitBox(Coord2d.of(minX, minY).floor(),
+                    Coord2d.of(maxX, maxY).ceil(), true);
+        }
+        return parts;
     }
 
     public static NHitBox fromObstacle(Coord2d[][] p, boolean force)

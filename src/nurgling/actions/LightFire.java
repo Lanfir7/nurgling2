@@ -50,6 +50,7 @@ public class LightFire implements Action {
         MenuGrid.Pagina pagina;
         String recipeName;
         boolean autoMode;
+        boolean noTransfer;
         // Map of spec index to ingredient info (name, isIgnored)
         Map<Integer, IngredientInfo> inputIngredients = new HashMap<>();
         Map<Integer, IngredientInfo> outputIngredients = new HashMap<>();
@@ -114,6 +115,7 @@ public class LightFire implements Action {
         savedState = new CraftState();
         savedState.recipeName = mw.rcpnm;
         savedState.autoMode = mw.autoMode;
+        savedState.noTransfer = mw.noTransfer != null && mw.noTransfer.a;
         
         // Save selected ingredients for inputs
         for (int i = 0; i < mw.inputs.size(); i++) {
@@ -175,10 +177,16 @@ public class LightFire implements Action {
         if (newMw == null) {
             return;
         }
-        
-        // Restore autoMode
-        newMw.autoMode = savedState.autoMode;
-        
+
+        applySavedCraftState(newMw);
+    }
+
+    /** Restore the saved selections before refreshing mode-dependent controls. */
+    void applySavedCraftState(NMakewindow newMw) {
+        if (savedState == null || newMw == null) {
+            return;
+        }
+
         // Restore input ingredients
         for (Map.Entry<Integer, CraftState.IngredientInfo> entry : savedState.inputIngredients.entrySet()) {
             int idx = entry.getKey();
@@ -198,6 +206,12 @@ public class LightFire implements Action {
                 spec.ing = newMw.new Ingredient(info.img, info.name, info.isIgnored);
             }
         }
+
+        // Restore the checkbox and mode-dependent controls after ingredient choices are back.
+        newMw.setAutoMode(savedState.autoMode);
+        if (newMw.noTransfer != null)
+            newMw.noTransfer.a = savedState.noTransfer;
+        newMw.refreshModeUi();
     }
     
     /**

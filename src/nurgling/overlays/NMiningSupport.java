@@ -87,23 +87,26 @@ public class NMiningSupport extends Sprite implements RenderTree.Node
 
     /**
      * Forward is gob facing ({@code a=0} → +X), snapped to the nearest cardinal.
-     * Positive directions start on the gob tile; negative directions start one tile ahead.
+     * A placement preview stands on the frame's tile edge: positive directions
+     * start on that tile, while negative directions start one tile ahead.
+     * A built frame sits just behind that edge, so its coverage starts one tile
+     * ahead of its own tile in every direction.
      * Even widths are biased toward the negative world coordinate of the lateral axis
      * to match vanilla's tile anchoring in every cardinal direction.
      * {@link Mask#end} is the inclusive last lit tile.
      */
     public static Mask computeRect(Coord2d rc, double angle, int widthTiles, int lengthTiles) {
-        return computeRect(rc, angle, widthTiles, lengthTiles, 0);
+        return computeRect(rc, angle, widthTiles, lengthTiles, false);
     }
 
     public static Mask computeRect(Coord2d rc, double angle, int widthTiles, int lengthTiles,
-                                    int forwardShiftTiles) {
+                                    boolean built) {
         Coord origin = rc.div(MCache.tilesz).floor();
         Coord2d localFwd = Coord2d.of(1, 0).rot(angle);
         Coord2d localRight = Coord2d.of(0, 1).rot(angle);
         Coord fwd = snapCardinal(localFwd);
         Coord right = snapCardinal(localRight);
-        int i0 = ((fwd.x < 0 || fwd.y < 0) ? 1 : 0) + forwardShiftTiles;
+        int i0 = (built || fwd.x < 0 || fwd.y < 0) ? 1 : 0;
         int i1 = i0 + lengthTiles - 1;
         int j0 = (right.x > 0 || right.y > 0)
                 ? -Math.floorDiv(widthTiles, 2)
@@ -161,10 +164,7 @@ public class NMiningSupport extends Sprite implements RenderTree.Node
     synchronized void calcData()
     {
         if (rect) {
-            // Built tunnel gobs use an anchor one tile behind the vanilla support footprint;
-            // placement ghosts already use the footprint's starting tile.
-            int forwardShiftTiles = gob.id == -1 ? 0 : 1;
-            Mask rectMask = computeRect(gob.rc, gob.a, widthTiles, lengthTiles, forwardShiftTiles);
+            Mask rectMask = computeRect(gob.rc, gob.a, widthTiles, lengthTiles, gob.id != -1);
             // NMiningOverlay iterates [begin, end) so exclusive end lights the last tunnel tile.
             publish(new SupportMask(rectMask.begin, rectMask.end.add(1, 1), rectMask.data));
             return;

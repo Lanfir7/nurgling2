@@ -20,43 +20,84 @@ import java.util.Map;
  */
 public class ConveyorOrdersManager {
     public static final String FILE_NAME = "cheese_conveyor.nurgling.json";
+    private static final Object FILE_LOCK = new Object();
 
     private final Map<Integer, ConveyorOrder> orders = new HashMap<>();
+    private final Map<Integer, Integer> loadedPriorities = new HashMap<>();
     private final String path;
 
     public ConveyorOrdersManager() {
-        this.path = NConfig.getGlobalInstance().getProfileAwarePath(FILE_NAME);
+        this(NConfig.getGlobalInstance().getProfileAwarePath(FILE_NAME));
+    }
+
+    ConveyorOrdersManager(String path) {
+        this.path = path;
         load();
     }
 
     public void load() {
-        orders.clear();
+        synchronized (FILE_LOCK) {
+            orders.clear();
+            orders.putAll(readOrders());
+            rememberPriorities();
+        }
+    }
+
+    private Map<Integer, ConveyorOrder> readOrders() {
+        Map<Integer, ConveyorOrder> loaded = new HashMap<>();
         String content = NFileUtils.readWithBackupFallback(path);
         if (content == null || content.isEmpty())
-            return;
+            return loaded;
         try {
             JSONArray array = new JSONObject(content).getJSONArray("orders");
             for (int i = 0; i < array.length(); i++) {
                 ConveyorOrder order = new ConveyorOrder(array.getJSONObject(i));
                 if (CheeseBranch.getChainToProduct(order.getCheeseType()) != null)
-                    orders.put(order.getId(), order);
+                    loaded.put(order.getId(), order);
             }
         } catch (org.json.JSONException e) {
             System.err.println("[ConveyorOrdersManager] Failed to parse orders file (corrupt JSON): " + e.getMessage());
         }
+        return loaded;
+    }
+
+    private void rememberPriorities() {
+        loadedPriorities.clear();
+        for (ConveyorOrder order : orders.values()) loadedPriorities.put(order.getId(), order.getPriority());
     }
 
     public void save() {
-        JSONArray arr = new JSONArray();
-        for (ConveyorOrder order : orders.values())
-            arr.put(order.toJson());
-        JSONObject main = new JSONObject();
-        main.put("orders", arr);
-        try {
-            NFileUtils.writeAtomically(path, main.toString());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        synchronized (FILE_LOCK) {
+            Map<Integer, ConveyorOrder> latest = readOrders();
+            Map<Integer, Integer> effectivePriorities = new HashMap<>();
+            for (ConveyorOrder order : orders.values()) {
+                Integer baseline = loadedPriorities.get(order.getId());
+                ConveyorOrder disk = latest.get(order.getId());
+                int effective = baseline != null && order.getPriority() == baseline && disk != null
+                        ? disk.getPriority() : order.getPriority();
+                effectivePriorities.put(order.getId(), effective);
+            }
+            JSONArray arr = new JSONArray();
+            List<ConveyorOrder> inSaveOrder = new ArrayList<>(orders.values());
+            inSaveOrder.sort(Comparator.comparingInt((ConveyorOrder order) -> effectivePriorities.get(order.getId()))
+                    .thenComparingInt(ConveyorOrder::getId));
+            for (ConveyorOrder order : inSaveOrder)
+                arr.put(order.toJson().put("priority", effectivePriorities.get(order.getId())));
+            JSONObject main = new JSONObject();
+            main.put("orders", arr);
+            try {
+                writeOrders(main.toString());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            for (ConveyorOrder order : orders.values())
+                order.setPriority(effectivePriorities.get(order.getId()));
+            rememberPriorities();
         }
+    }
+
+    void writeOrders(String content) throws IOException {
+        NFileUtils.writeAtomically(path, content);
     }
 
     public Map<Integer, ConveyorOrder> getOrders() {
@@ -88,6 +129,36 @@ public class ConveyorOrdersManager {
 
     public void delete(int id) {
         orders.remove(id);
+    }
+
+    /** Global serving order; equal priorities retain their id order and share rack space. */
+    public List<ConveyorOrder> sorted() {
+        List<ConveyorOrder> list = new ArrayList<>(orders.values());
+        list.sort(Comparator.comparingInt(ConveyorOrder::getPriority).thenComparingInt(ConveyorOrder::getId));
+        return list;
+    }
+
+    /** Move one order by one visible row, preserving data and refusing invalid moves. */
+    public boolean move(int id, int delta) {
+        if (delta != -1 && delta != 1) return false;
+        List<ConveyorOrder> list = sorted();
+        int from = -1;
+        for (int i = 0; i < list.size(); i++)
+            if (list.get(i).getId() == id) { from = i; break; }
+        if (from < 0 || from + delta < 0 || from + delta >= list.size()) return false;
+        java.util.Collections.swap(list, from, from + delta);
+        for (int i = 0; i < list.size(); i++) list.get(i).setPriority(i);
+        return true;
+    }
+
+    /** Reorder against current on-disk progress, so UI arrows cannot restore stale counters. */
+    public boolean moveAndSave(int id, int delta) {
+        synchronized (FILE_LOCK) {
+            load();
+            if (!move(id, delta)) return false;
+            save();
+            return true;
+        }
     }
 
     /** See {@link #orderFor(Collection, String, CheeseBranch.Place)}. */

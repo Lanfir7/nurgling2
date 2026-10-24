@@ -6,6 +6,7 @@ import haven.Window;
 import haven.res.lib.itemtex.ItemTex;
 import nurgling.*;
 import nurgling.i18n.L10n;
+import nurgling.tools.ItemVariants;
 import nurgling.tools.VSpec;
 import org.json.JSONObject;
 
@@ -36,11 +37,13 @@ public class NCatSelection extends Window {
         this.onSelect = onSelect;
         add(new Label(L10n.get("category.label")),UI.scale(5,5));
         // Инициализация категорий и элементов из VSpec
-        Set<String> categoryNames = VSpec.categories.keySet();
+        Set<String> categoryNames = new LinkedHashSet<>(VSpec.categories.keySet());
+        if (onSelect == null)
+            categoryNames.addAll(ItemVariants.catalog().keySet());
         for (String categoryName : categoryNames) {
             categories.add(new Category(categoryName));
             List<Element> elements = new ArrayList<>();
-            for (JSONObject obj : VSpec.categories.get(categoryName)) {
+            for (JSONObject obj : entries(categoryName)) {
                 String name = obj.getString("name");
                 Element element = new Element(name, obj);
                 elements.add(element);
@@ -70,6 +73,24 @@ public class NCatSelection extends Window {
             elementList.setItems(elements);
         });
         pack();
+    }
+
+    private List<JSONObject> entries(String category) {
+        List<JSONObject> own = VSpec.categories.get(category);
+        if (onSelect != null)
+            return own == null ? List.of() : own;
+        if (own == null)
+            return ItemVariants.catalog().getOrDefault(category, List.of());
+        if (!ItemVariants.catalog().containsKey(category))
+            return own;
+        List<JSONObject> entries = new ArrayList<>(own);
+        Set<String> names = new HashSet<>();
+        for (JSONObject entry : own)
+            names.add(entry.optString("name"));
+        for (JSONObject entry : ItemVariants.catalog().get(category))
+            if (names.add(entry.optString("name")))
+                entries.add(entry);
+        return entries;
     }
 
     // Метод для обновления списка элементов справа
@@ -212,7 +233,7 @@ public class NCatSelection extends Window {
                 IButton addAll = add(new IButton(NStyle.toTake[0].back,NStyle.toTake[1].back,NStyle.toTake[2].back){
                     @Override
                     public void click() {
-                        for (JSONObject obj : VSpec.categories.get(category.getName())) {
+                        for (JSONObject obj : entries(category.getName())) {
                             onSelect.accept(new Element(obj.getString("name"), obj));
                         }
                     }
@@ -245,14 +266,14 @@ public class NCatSelection extends Window {
         }
         // Метод для добавления в IN
         private void addToInput() {
-            for (JSONObject obj : VSpec.categories.get(category.getName())) {
+            for (JSONObject obj : entries(category.getName())) {
                 NUtils.getGameUI().areas.in_items.addItem(obj.getString("name"), new JSONObject(obj.toString()));
             }
         }
 
         // Метод для добавления в OUT
         private void addToOutput() {
-            for (JSONObject obj : VSpec.categories.get(category.getName())) {
+            for (JSONObject obj : entries(category.getName())) {
                 NUtils.getGameUI().areas.out_items.addItem(obj.getString("name"), new JSONObject(obj.toString()));
             }
         }

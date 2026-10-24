@@ -103,11 +103,27 @@ public class ActAudio extends State {
     }
 
     public static class RootChannel implements Channel {
+	/* The mixer thread reads gain without taking the channel lock. */
+	private static class ChannelGain extends Audio.VolAdjust {
+	    private volatile double gain;
+
+	    ChannelGain(CS clip, double gain) {
+		super(clip, gain);
+		this.gain = gain;
+	    }
+
+	    public int get(double[][] dst, int ns) {
+		vol = gain;
+		return(super.get(dst, ns));
+	    }
+	}
+
 	public final String name;
 	public final Audio.Mixer rootmixer;
-	public double volume;
-	private Audio.VolAdjust volc = null;
-	private Audio.Mixer mixer = null;
+	public volatile double volume;
+	private boolean muted = false;
+	private ChannelGain volc = null;
+	private volatile Audio.Mixer mixer = null;
 
 	private RootChannel(String name, Audio.Mixer rootmixer) {
 	    this.name = name;
@@ -120,8 +136,7 @@ public class ActAudio extends State {
 	    if(ret == null) {
 		synchronized(this) {
 		    if((ret = this.mixer) == null) {
-			this.volc = new Audio.VolAdjust(ret = this.mixer = new Audio.Mixer(true));
-			this.volc.vol = volume;
+			this.volc = new ChannelGain(ret = this.mixer = new Audio.Mixer(true), muted ? 0 : volume);
 			rootmixer.add(this.volc);
 		    }
 		}
@@ -130,22 +145,26 @@ public class ActAudio extends State {
 	}
 
 	public void setvolume(double volume) {
-	    if(volc != null)
-		volc.vol = volume;
-	    this.volume = volume;
+	    synchronized(this) {
+		this.volume = volume;
+		if(volc != null)
+		    volc.gain = muted ? 0 : volume;
+	    }
 	    Utils.setpref("sfxvol-" + name, Double.toString(volume));
+	}
+
+	public synchronized void setmuted(boolean muted) {
+	    this.muted = muted;
+	    if(volc != null)
+		volc.gain = muted ? 0 : volume;
 	}
 
 	public void clear() {
 	    synchronized(this) {
 		if(mixer != null) {
 		    rootmixer.stop(volc);
-		    /* XXX? clear() should only be called once, so
-		     * ensure mixer isn't later mistakenly re-added
-		     * due to racy code still using this channel.
 		    mixer = null;
 		    volc = null;
-		    */
 		}
 	    }
 	}
@@ -173,6 +192,7 @@ public class ActAudio extends State {
 	public final RootChannel aui;
 	public final RootChannel pos;
 	public final RootChannel amb;
+	private volatile boolean muted = false;
 
 	public Root(Audio.Root sys) {
 	    this.sys = sys;
@@ -184,6 +204,18 @@ public class ActAudio extends State {
 	public void clear() {
 	    pos.clear();
 	    amb.clear();
+	}
+
+	public boolean muted() {
+	    return(muted);
+	}
+
+	/** Silence only this UI's ordinary sounds; the saved channel volumes are unchanged. */
+	public synchronized void setmuted(boolean muted) {
+	    this.muted = muted;
+	    aui.setmuted(muted);
+	    pos.setmuted(muted);
+	    amb.setmuted(muted);
 	}
 
 	public String stats() {

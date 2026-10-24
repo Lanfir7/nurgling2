@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-blueprint-builder",
+  "priority": 7,
+  "summary": {
+    "ru": "Планировщик базы сохраняет шаблоны построек и помогает возводить запланированные здания.",
+    "en": "The base planner can save building templates and help construct planned buildings."
+  },
+  "detail": {
+    "ru": "В планировщике сохраните участок как шаблон, поверните или отразите его при размещении либо захватите видимые постройки мира. Выбранные призрачные постройки можно возвести через «Стройка по плану». Бот проверяет каждый знак и перенос материала; при неясном результате останавливается и оставляет остальные постройки и вещи нетронутыми.",
+    "en": "Save an area as a template in the base planner, rotate or mirror it when placing, or capture visible buildings from the world. Build selected ghosts with Blueprint Builder. It checks each construction sign and material transfer, stopping on uncertain results while leaving remaining plans and items untouched."
+  }
+}

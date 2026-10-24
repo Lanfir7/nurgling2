@@ -1,7 +1,6 @@
 package nurgling.actions.bots;
 
 import haven.*;
-import static haven.OCache.posres;
 import nurgling.*;
 import nurgling.actions.*;
 import nurgling.areas.NContext;
@@ -10,7 +9,6 @@ import nurgling.db.StockpileStoragePolicy;
 import nurgling.db.dao.StorageItemDao;
 import nurgling.db.dao.ContainerDao;
 import nurgling.i18n.L10n;
-import nurgling.navigation.ChunkNavManager;
 import nurgling.tasks.*;
 import nurgling.tools.*;
 import nurgling.tools.NSearchItem;
@@ -141,47 +139,32 @@ public class FetchStorageItemBot implements Action {
         int beforeCount = countItemsInInventory(gui, itemName);
 
         // First try to find the container Gob in visible area
-        Gob containerGob = Finder.findStorageGob(containerHash);
+        Gob containerGob = StorageNav.findVisible(gui, containerHash);
 
         if (containerGob == null) {
             // Container not visible - try to find its position from database and navigate
             ContainerDao.ContainerData containerData = loadContainerData(gui, containerHash);
             if (containerData == null) {
                 removeContainerItemsFromDb(containerHash);
-                gui.msg("[DBG] container data not in DB for hash=" + containerHash.substring(0, 8), java.awt.Color.ORANGE);
+                gui.msg("[DBG] container data not in DB for hash=" + containerHash, java.awt.Color.ORANGE);
                 return 0;
             }
 
-            // Parse local coordinates and navigate using gridId
-            Coord localCoord = parseLocalCoordinates(containerData.getCoord());
-            if (localCoord == null) {
+            if (StorageNav.parseCoord(containerData.getCoord()) == null) {
                 removeContainerItemsFromDb(containerHash);
                 gui.msg("[DBG] bad coords: " + containerData.getCoord(), java.awt.Color.ORANGE);
                 return 0;
             }
 
-            gui.msg("[DBG] grid=" + containerData.getGridId() + " coord=" + localCoord, java.awt.Color.CYAN);
-
-            // Navigate to container position using chunk navigation with gridId
-            if (!navigateToContainer(gui, containerData.getGridId(), localCoord)) {
+            containerGob = StorageNav.reach(gui, containerHash, containerData.getGridId(),
+                    containerData.getCoord(), stop::get);
+            if (containerGob == null) {
                 gui.msg("[DBG] navigation failed to grid=" + containerData.getGridId(), java.awt.Color.ORANGE);
                 return 0;
             }
-
-            // Try to find container again after navigation (gobs may take time to load)
-            containerGob = Finder.findStorageGob(containerHash);
-            if (containerGob == null) {
-                WaitForGobWithHash waitGob = new WaitForGobWithHash(containerHash);
-                NUtils.addTask(waitGob);
-                if (!waitGob.criticalExit) {
-                    containerGob = Finder.findGob(containerHash);
-                }
-            }
-            if (containerGob == null) {
-                gui.msg("[DBG] gob not found after navigation", java.awt.Color.ORANGE);
-                return 0;
-            }
         }
+
+        if (stop.get() || StorageNav.findVisible(gui, containerHash) != containerGob) return 0;
 
         // Approach via PF. With a hitbox, hardMode+skipDN walks around baskets
         // to a free cell beside the gob. Map objects without a hitbox (until a
@@ -195,6 +178,7 @@ public class FetchStorageItemBot implements Action {
             gui.msg("[DBG] pathfinder failed", java.awt.Color.ORANGE);
             return 0;
         }
+        if (stop.get() || StorageNav.findVisible(gui, containerHash) != containerGob) return 0;
 
         if (containerGob.ngob != null && StockpileStoragePolicy.isStockpileRes(containerGob.ngob.name)) {
             return fetchFromStockpile(gui, containerGob, requestedItems);
@@ -701,81 +685,6 @@ public class FetchStorageItemBot implements Action {
             NSearchItem.notifyContainerDataChanged();
         } catch (Exception ignored) {
         }
-    }
-
-    /**
-     * Parse local coordinates string "(x, y)" to Coord (in posres units, as stored by ContainerWatcher)
-     */
-    private Coord parseLocalCoordinates(String coords) {
-        if (coords == null) return null;
-        try {
-            // Format: "(x, y)" or "(x,y)"
-            String clean = coords.replace("(", "").replace(")", "").replace(" ", "");
-            String[] parts = clean.split(",");
-            if (parts.length == 2) {
-                int x = (int) Double.parseDouble(parts[0]);
-                int y = (int) Double.parseDouble(parts[1]);
-                return new Coord(x, y);
-            }
-        } catch (Exception e) {
-            // Parse error
-        }
-        return null;
-    }
-
-    /**
-     * Navigate to a container using gridId + local coordinates via chunk navigation.
-     * Uses planToGridCoord for cross-layer navigation.
-     */
-    private boolean navigateToContainer(NGameUI gui, long gridId, Coord localCoord) throws InterruptedException {
-        ChunkNavManager chunkNav = ((NMapView) gui.map).getChunkNavManager();
-        if (chunkNav == null || !chunkNav.isInitialized()) {
-            return false;
-        }
-
-        // Check if the grid is currently loaded (container might be nearby on the same layer)
-        boolean gridLoaded = false;
-        try {
-            MCache mcache = gui.map.glob.map;
-            MCache.Grid grid = null;
-            synchronized (mcache.grids) {
-                for (MCache.Grid g : mcache.grids.values()) {
-                    if (g.id == gridId) {
-                        grid = g;
-                        break;
-                    }
-                }
-            }
-            if (grid != null) {
-                gridLoaded = true;
-                // Grid is loaded - try local pathfinding first (works if same layer/instance)
-                Coord2d gridOrigin = new Coord2d(grid.ul.x * MCache.tilesz.x, grid.ul.y * MCache.tilesz.y);
-                Coord2d worldPos = gridOrigin.add(new Coord2d(localCoord.x * posres.x, localCoord.y * posres.y));
-                if (new PathFinder(worldPos).run(gui).IsSuccess()) {
-                    return true;
-                }
-                gui.msg("[DBG] grid loaded but PF failed, trying ChunkNav", java.awt.Color.YELLOW);
-            }
-        } catch (Exception e) {
-            // Fall through to chunk navigation
-        }
-
-        // Use chunk navigation (handles cross-layer portal traversal)
-        Coord2d offsetWorld = new Coord2d(localCoord.x * posres.x, localCoord.y * posres.y);
-        Coord tileCoord = offsetWorld.floor(MCache.tilesz);
-
-        // Check if ChunkNav even knows this grid
-        boolean chunkExists = chunkNav.getGraph().getChunk(gridId) != null;
-        gui.msg("[DBG] gridLoaded=" + gridLoaded + " chunkInGraph=" + chunkExists + " tile=" + tileCoord, java.awt.Color.CYAN);
-
-        nurgling.navigation.ChunkPath path = chunkNav.planToGridCoord(gridId, tileCoord);
-        if (path != null) {
-            gui.msg("[DBG] path found, segments=" + path.segments.size(), java.awt.Color.GREEN);
-            return chunkNav.navigateWithPath(path, null, gui).IsSuccess();
-        }
-
-        gui.msg("[DBG] planToGridCoord returned null", java.awt.Color.RED);
-        return false;
     }
 
     /**

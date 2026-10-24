@@ -3,35 +3,27 @@ package nurgling;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.Collection;
+import java.util.EnumMap;
+import java.util.Map;
+import nurgling.conf.NCombatData;
+import nurgling.conf.NCooldown;
 
 final class CombatSchoolUi {
     enum Category {
         ALL("char.fight.category.all", Icon.ALL),
         ATTACKS("char.fight.category.attacks", Icon.ATTACK),
-        DEFENCES("char.fight.category.defences", Icon.DEFENCE,
-                "paginae/atk/regain", "paginae/atk/dash", "paginae/atk/zigzag",
-                "paginae/atk/yieldground", "paginae/atk/watchmoves", "paginae/atk/sidestep",
-                "paginae/atk/qdodge", "paginae/atk/jump", "paginae/atk/fdodge",
-                "paginae/atk/artevade", "paginae/atk/flex"),
-        MANEUVERS("char.fight.category.maneuvers", Icon.MANEUVER,
-                "paginae/atk/toarms", "paginae/atk/shield", "paginae/atk/parry",
-                "paginae/atk/oakstance", "paginae/atk/dorg", "paginae/atk/chinup",
-                "paginae/atk/bloodlust", "paginae/atk/combmed"),
-        MOVES("char.fight.category.moves", Icon.MOVE,
-                "paginae/atk/think", "paginae/atk/takeaim", "paginae/atk/dash",
-                "paginae/atk/oppknock"),
+        DEFENCES("char.fight.category.defences", Icon.DEFENCE),
+        MANEUVERS("char.fight.category.maneuvers", Icon.MANEUVER),
+        MOVES("char.fight.category.moves", Icon.MOVE),
         OTHER("char.fight.category.other", Icon.OTHER);
 
         static {
-            ATTACKS.names.addAll(Arrays.asList(
-                    "paginae/atk/pow", "paginae/atk/lefthook", "paginae/atk/lowblow",
-                    "paginae/atk/oppknock", "paginae/atk/ripapart", "paginae/atk/fullcircle",
-                    "paginae/atk/cleave", "paginae/atk/barrage", "paginae/atk/sideswipe",
-                    "paginae/atk/sting", "paginae/atk/sos", "paginae/atk/knockteeth",
-                    "paginae/atk/kick", "paginae/atk/haymaker", "paginae/atk/chop",
-                    "paginae/atk/gojug", "paginae/atk/uppercut", "paginae/atk/punchboth",
-                    "paginae/atk/stealthunder", "paginae/atk/ravenbite", "paginae/atk/takedown",
-                    "paginae/atk/flex"));
+            Map<Category, Set<String>> classified = classify(NCombatData.ATTACKS.keySet(),
+                    NCombatData.MANEUVERS, NCooldown.data.keySet(),
+                    NCooldown.fixeddata.keySet(), NCooldown.vardata.keySet());
+            for (Category category : values())
+                category.names.addAll(classified.get(category));
         }
 
         final String labelKey;
@@ -47,6 +39,8 @@ final class CombatSchoolUi {
         boolean matches(String resourceName) {
             if(this == ALL)
                 return true;
+            if(resourceName == null)
+                return false;
             if(this == OTHER)
                 return !listed(resourceName);
             return names.contains(resourceName);
@@ -62,6 +56,33 @@ final class CombatSchoolUi {
     }
 
     enum Icon {ALL, ATTACK, DEFENCE, MANEUVER, MOVE, OTHER}
+
+    /** Derive filters from the same move definitions as the combat HUD. */
+    static Map<Category, Set<String>> classify(Collection<String> attacks,
+            Collection<String> maneuvers, Collection<String> cooldowns,
+            Collection<String> fixedCooldowns, Collection<String> variableCooldowns) {
+        Map<Category, Set<String>> result = new EnumMap<>(Category.class);
+        for (Category category : Category.values())
+            result.put(category, new HashSet<>());
+        Set<String> attackSet = result.get(Category.ATTACKS);
+        for (String name : attacks)
+            attackSet.add("paginae/atk/" + name);
+        attackSet.addAll(Arrays.asList("paginae/atk/flex", "paginae/atk/oppknock", "paginae/atk/stealthunder"));
+        result.get(Category.MANEUVERS).addAll(maneuvers);
+        Set<String> moves = result.get(Category.MOVES);
+        moves.addAll(variableCooldowns);
+        moves.add("paginae/atk/oppknock");
+        Set<String> known = new HashSet<>(cooldowns);
+        known.addAll(fixedCooldowns);
+        known.addAll(variableCooldowns);
+        Set<String> defences = result.get(Category.DEFENCES);
+        for (String name : known)
+            if (!attackSet.contains(name) && !result.get(Category.MANEUVERS).contains(name)
+                    && !moves.contains(name))
+                defences.add(name);
+        defences.addAll(Arrays.asList("paginae/atk/flex", "paginae/atk/dash"));
+        return result;
+    }
 
     private CombatSchoolUi() {}
 

@@ -548,19 +548,32 @@ public class NSettingsWindow extends Widget {
 
     private void addItemHits(List<BoundHit> catalog, Set<String> seen, SettingsItem item) {
         String cat = item.parent == null ? item.getName() : item.parent.getName();
-        catalog.add(new BoundHit(SettingsSearch.tab(cat, item.getName()), item, null));
+        catalog.add(new BoundHit(SettingsSearch.tab(cat, item.getName(), searchKeys(cat, item.getName())), item, null));
         if(item.panel == null)
             return;
-        for(Widget w : item.panel.children(Widget.class)) {
+        addWidgetHits(catalog, seen, item, cat, item.panel);
+    }
+
+    private void addWidgetHits(List<BoundHit> catalog, Set<String> seen, SettingsItem item,
+                               String cat, Widget parent) {
+        for(Widget w : parent.children()) {
+            // A result must be reachable after openHit selects the panel.
+            if(!w.visible || w instanceof SListWidget || w instanceof ListWidget || w instanceof Listbox)
+                continue;
             String label = labelOf(w);
-            if(!SettingsSearch.isSearchableLabel(label))
-                continue;
-            if(label.equalsIgnoreCase(item.getName()))
-                continue;
-            if(!seen.add(item.getName() + "\0" + label))
-                continue;
-            catalog.add(new BoundHit(SettingsSearch.setting(cat, item.getName(), label.trim()), item, w));
+            if(SettingsSearch.isSearchableLabel(label) && !label.equalsIgnoreCase(item.getName())
+                    && seen.add(cat + "\0" + item.getName() + "\0" + label))
+                catalog.add(new BoundHit(SettingsSearch.setting(cat, item.getName(), label.trim(),
+                        searchKeys(cat, item.getName(), label)), item, w));
+            addWidgetHits(catalog, seen, item, cat, w);
         }
+    }
+
+    private static String[] searchKeys(String... visibleTexts) {
+        List<String> keys = new ArrayList<>();
+        for(String text : visibleTexts)
+            keys.addAll(L10n.keysFor(text));
+        return keys.toArray(new String[0]);
     }
 
     private static String labelOf(Widget w) {

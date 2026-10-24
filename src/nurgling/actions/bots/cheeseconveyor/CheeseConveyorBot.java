@@ -57,32 +57,58 @@ public class CheeseConveyorBot implements Action {
     }
 
     private void startNewTrays(NGameUI gui, ConveyorOrdersManager orders, Map<CheeseBranch.Place, Integer> rackCapacity) throws InterruptedException {
-        Map<CheeseBranch.Place, List<ConveyorOrder>> byFirstPlace = new EnumMap<>(CheeseBranch.Place.class);
-        for (ConveyorOrder order : orders.getOrders().values()) {
+        startByPriority(orders.sorted(), rackCapacity, (order, allotted) -> {
+            ConveyorStartCurds start = new ConveyorStartCurds(order, allotted, orders);
+            if (!start.run(gui).IsSuccess())
+                gui.error("Failed to start " + order.getCheeseType() + " curd trays");
+            return start.getPlaced();
+        });
+    }
+
+    @FunctionalInterface
+    interface TrayStarter {
+        int start(ConveyorOrder order, int allotted) throws InterruptedException;
+    }
+
+    /** Serve complete priority tiers; only physically placed trays consume rack capacity. */
+    static void startByPriority(List<ConveyorOrder> orders, Map<CheeseBranch.Place, Integer> rackCapacity,
+                                TrayStarter starter) throws InterruptedException {
+        List<ConveyorOrder> waiting = new ArrayList<>();
+        Map<ConveyorOrder, CheeseBranch.Place> firstPlace = new HashMap<>();
+        for (ConveyorOrder order : orders) {
             if (order.startStep().left <= 0)
                 continue;
             List<CheeseBranch.Cheese> chain = CheeseBranch.getChainToProduct(order.getCheeseType());
             if (chain == null || chain.size() < 2)
                 continue;
-            byFirstPlace.computeIfAbsent(chain.get(1).place, k -> new ArrayList<>()).add(order);
+            waiting.add(order);
+            firstPlace.put(order, chain.get(1).place);
         }
+        waiting.sort(Comparator.comparingInt(ConveyorOrder::getPriority).thenComparingInt(ConveyorOrder::getId));
 
-        for (Map.Entry<CheeseBranch.Place, List<ConveyorOrder>> entry : byFirstPlace.entrySet()) {
-            CheeseBranch.Place place = entry.getKey();
-            List<ConveyorOrder> starting = entry.getValue();
-            starting.sort(Comparator.comparingInt(ConveyorOrder::getId));
-            int[] demand = new int[starting.size()];
-            for (int i = 0; i < demand.length; i++)
-                demand[i] = starting.get(i).startStep().left;
-            int[] share = shareSlots(rackCapacity.getOrDefault(place, 0), demand);
-
-            for (int i = 0; i < starting.size(); i++) {
-                if (share[i] <= 0)
+        for (int from = 0; from < waiting.size(); ) {
+            int to = from + 1;
+            while (to < waiting.size() && waiting.get(to).getPriority() == waiting.get(from).getPriority()) to++;
+            List<ConveyorOrder> tier = waiting.subList(from, to);
+            from = to;
+            Map<CheeseBranch.Place, List<ConveyorOrder>> byPlace = new EnumMap<>(CheeseBranch.Place.class);
+            for (ConveyorOrder order : tier)
+                byPlace.computeIfAbsent(firstPlace.get(order), k -> new ArrayList<>()).add(order);
+            Map<ConveyorOrder, Integer> allotted = new HashMap<>();
+            for (Map.Entry<CheeseBranch.Place, List<ConveyorOrder>> entry : byPlace.entrySet()) {
+                List<ConveyorOrder> here = entry.getValue();
+                int[] demand = new int[here.size()];
+                for (int i = 0; i < here.size(); i++) demand[i] = here.get(i).startStep().left;
+                int[] share = shareSlots(rackCapacity.getOrDefault(entry.getKey(), 0), demand);
+                for (int i = 0; i < here.size(); i++) allotted.put(here.get(i), share[i]);
+            }
+            for (ConveyorOrder order : tier) {
+                int amount = allotted.getOrDefault(order, 0);
+                if (amount <= 0)
                     continue;
-                ConveyorStartCurds start = new ConveyorStartCurds(starting.get(i), share[i], orders);
-                if (!start.run(gui).IsSuccess())
-                    gui.error("Failed to start " + starting.get(i).getCheeseType() + " curd trays");
-                rackCapacity.put(place, Math.max(0, rackCapacity.getOrDefault(place, 0) - start.getPlaced()));
+                CheeseBranch.Place place = firstPlace.get(order);
+                int placed = Math.max(0, Math.min(amount, starter.start(order, amount)));
+                rackCapacity.put(place, Math.max(0, rackCapacity.getOrDefault(place, 0) - placed));
             }
         }
     }

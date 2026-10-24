@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-session-mute",
+  "priority": 6,
+  "summary": {
+    "ru": "На панели сессий можно отдельно отключать обычные звуки каждого персонажа, сохраняя громкость тревог.",
+    "en": "Mute each character's ordinary sounds from the session bar while keeping alarms at their configured volume."
+  },
+  "detail": {
+    "ru": "Нажмите динамик рядом с крестиком нужной сессии, чтобы выключить или вернуть её обычные звуки. Другие сессии продолжают звучать. Тревоги сохраняют настроенную громкость, а уровни звука не сбрасываются. Отключение действует до закрытия сессии.",
+    "en": "Click the speaker beside a session's close button to mute or restore its ordinary sounds. Other sessions keep playing. Alarms retain their configured volume and sound levels are preserved. Mute lasts until that session closes."
+  }
+}

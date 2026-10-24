@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-herd-preview",
+  "priority": 7,
+  "summary": {
+    "ru": "В списке стада можно заранее увидеть возможный отбор животных и влияние настроек ранга.",
+    "en": "The herd roster can preview possible culling and show how rank settings affect each animal."
+  },
+  "detail": {
+    "ru": "В списке коров, коз, овец, свиней, лошадей и оленей включите «Прогноз отбора». Рядом с настройками стада показаны изменения ранга и возможной судьбы животных до сохранения. При неполных данных или отсутствующем сохранённом ранге исход отмечается как неизвестный.",
+    "en": "In the cattle, goat, sheep, pig, horse, or deer roster, enable Culling preview. The herd settings panel shows rank effects and possible changes before you save. Missing or incomplete data is shown as uncertain."
+  }
+}

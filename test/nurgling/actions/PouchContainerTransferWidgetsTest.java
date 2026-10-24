@@ -10,6 +10,7 @@ import haven.WItem;
 import haven.Widget;
 import haven.res.ui.stackinv.ItemStack;
 import haven.res.ui.tt.cn.CustomName;
+import haven.res.ui.tt.ingred.Ingredient;
 import nurgling.NGItem;
 import nurgling.NConfig;
 import nurgling.NInventory;
@@ -20,6 +21,7 @@ import sun.misc.Unsafe;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Paths;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -78,6 +80,29 @@ class PouchContainerTransferWidgetsTest {
         assertSame(root, stack.window.parent);
         assertSame(main, PouchContainerTransfer.sourceInventory(stack.leaf));
         assertFalse(PouchContainerTransfer.isNestedInventory(main));
+        NInventory destination = inventory();
+        place(root, destination);
+        assertTrue(TransferToContainer.useSelectedStackTransfer(stack.leaf, true));
+        assertTrue(PouchContainerTransfer.liveSelected(stack.leaf, destination, "Apple", null).isPouchItem());
+        assertFalse(PouchContainerTransfer.live(stack.leaf, destination, "Apple").isPouchItem());
+        assertFalse(TransferToContainer.useSelectedStackTransfer(stack.leaf, false));
+    }
+
+    @Test
+    void kindSpecificDestinationDoesNotMergeIntoOtherButterKindOrMixedStack() throws Exception {
+        NGItem cow = butter("Cowsmilk");
+        NGItem goat = butter("Goatsmilk");
+        WItem cowRow = witem(cow);
+        WItem goatRow = witem(goat);
+        assertTrue(PouchContainerTransfer.kindCompatible(cowRow, "Butter (Cowsmilk)"));
+        assertFalse(PouchContainerTransfer.kindCompatible(goatRow, "Butter (Cowsmilk)"));
+
+        NGItem owner = named("Butter");
+        ItemStack mixed = new ItemStack();
+        mixed.wmap.put(cow, cowRow);
+        mixed.wmap.put(goat, goatRow);
+        owner.contents = mixed;
+        assertFalse(PouchContainerTransfer.kindCompatible(witem(owner), "Butter (Cowsmilk)"));
     }
 
     @Test
@@ -383,6 +408,13 @@ class PouchContainerTransferWidgetsTest {
         NGItem item = (NGItem) unsafe().allocateInstance(NGItem.class);
         set(item, "name", name);
         item.quality = 1f;
+        return item;
+    }
+
+    private static NGItem butter(String milk) throws Exception {
+        NGItem item = named("Butter");
+        item.infoseq = 1;
+        set(item, "info", List.of(new Ingredient(item, milk)));
         return item;
     }
 

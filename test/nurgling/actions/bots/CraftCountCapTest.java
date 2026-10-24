@@ -26,4 +26,12 @@ class CraftCountCapTest {
         assertEquals(80, CraftTarget.capIterations(craft.count, 80));
         assertFalse(CraftTarget.reachedCap(80, craft.count));
     }
+
+    @Test
+    void indexedCraftAllNeverDispatchesASecondMakeAfterCauldronUpdate() {
+        assertEquals(0, Craft.cauldronRetry(CraftTarget.ALL, true, 1, 1));
+        assertEquals(0, Craft.cauldronRetry(3, true, 1, 1));
+        assertEquals(-1, Craft.cauldronRetry(CraftTarget.ALL, false, 1, 1));
+        assertEquals(1, Craft.cauldronRetry(3, false, 0, 1));
+    }
 }

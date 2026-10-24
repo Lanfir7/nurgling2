@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-24-settings-search",
+  "priority": 5,
+  "summary": {
+    "ru": "Поиск настроек находит пункты по сокращённому названию и английским словам при русском интерфейсе.",
+    "en": "Settings search finds options by shortened names and English words in the Russian interface."
+  },
+  "detail": {
+    "ru": "В поиске окна настроек можно набрать несколько букв названия по порядку, например «нчзр» для «Ночного зрения», или английские слова из названия. Результат открывает нужный раздел и подсвечивает найденный пункт.",
+    "en": "In the Settings window search, type a few letters of an option's name in order, or English words from its name while using the Russian interface. Selecting a result opens the section and highlights the option."
+  }
+}

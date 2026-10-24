@@ -14,11 +14,15 @@ import nurgling.widgets.TunnelingDialog.SupportType;
 import nurgling.widgets.TunnelingDialog.WingOption;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 import static haven.MCache.tilesz;
 import static haven.OCache.posres;
 
 public class TunnelingBot implements Action {
+    private OreWatch oreWatch;
 
     // All support types that can be used as a starting point
     private static final NAlias ALL_SUPPORTS = new NAlias(
@@ -30,6 +34,8 @@ public class TunnelingBot implements Action {
 
     // Tile size in world units
     private static final double TILE_SIZE = 11.0;
+    private static final NAlias ROAD_SPOT_IGNORED = new NAlias("bumlings", "terobjs/items");
+    private static final int ROAD_ATTEMPTS = 3;
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
@@ -43,11 +49,17 @@ public class TunnelingBot implements Action {
         boolean[] confirmRef = new boolean[]{false};
         boolean[] cancelRef = new boolean[]{false};
         boolean[] doubleTunnelRef = new boolean[]{false};
+        boolean[] stopAtOreRef = new boolean[]{false};
+        Set<String> stopOresRef = new HashSet<>();
+        boolean[] roadRef = new boolean[]{false};
+        int[] roadSpacingRef = new int[]{TunnelRoad.MAX_SPACING_TILES};
 
         TunnelingDialog dialog = new TunnelingDialog();
         dialog.setReferences(directionRef, tunnelSideRef, supportTypeRef, wingOptionRef, wingSideRef, maxLateralRef, confirmRef, cancelRef, doubleTunnelRef);
         boolean[] centreLineRef = new boolean[]{false};
         dialog.setFrameReferences(centreLineRef);
+        dialog.setOreReferences(stopAtOreRef, stopOresRef);
+        dialog.setRoadReferences(roadRef, roadSpacingRef);
         NUtils.addCentered(gui, dialog);
 
         // Wait for user input
@@ -63,20 +75,23 @@ public class TunnelingBot implements Action {
         if (cancelRef[0]) {
             return Results.SUCCESS();
         }
+        oreWatch = stopAtOreRef[0] ? new OreWatch(stopOresRef) : null;
 
         // Get configuration
         Direction direction = TunnelingDialog.getDirection(directionRef[0]);
         SupportType supportType = TunnelingDialog.getSupportType(supportTypeRef[0]);
+        TunnelRoad road = roadRef[0] && supportType.supportsRoad()
+                ? new TunnelRoad(direction, roadSpacingRef[0]) : null;
 
         // Dispatch to MinesweeperMiner if no support selected
         if (supportType == SupportType.NONE) {
-            return new MinesweeperMiner(direction, maxLateralRef[0]).run(gui);
+            return new MinesweeperMiner(direction, maxLateralRef[0], oreWatch).run(gui);
         }
 
         // Tunnel frames are dug through rather than beside, so they get their own loop
         if (supportType.isFrame()) {
             return new FrameTunneler(direction, supportType,
-                    TunnelingDialog.getTunnelSide(directionRef[0], tunnelSideRef[0]), centreLineRef[0]).run(gui);
+                    TunnelingDialog.getTunnelSide(directionRef[0], tunnelSideRef[0]), centreLineRef[0], oreWatch, road).run(gui);
         }
 
         TunnelSide tunnelSide = TunnelingDialog.getTunnelSide(directionRef[0], tunnelSideRef[0]);
@@ -95,6 +110,10 @@ public class TunnelingBot implements Action {
         }
 
         gui.msg("Starting from support at: " + startSupport.rc);
+        if (road != null) {
+            Results started = road.start(gui);
+            if (!started.IsSuccess()) return started;
+        }
 
         // Main tunneling loop
         Coord2d currentSupportPos = startSupport.rc;
@@ -142,6 +161,8 @@ public class TunnelingBot implements Action {
             handleBumlings(gui);
 
             // Place the new support
+            Results oreStop = checkOre(gui, nextSupportTileCoord);
+            if (oreStop != null) return oreStop;
             Results buildResult = placeSupport(gui, nextSupportPos, supportType);
             if (!buildResult.IsSuccess()) {
                 return buildResult;
@@ -155,14 +176,21 @@ public class TunnelingBot implements Action {
                 // First, mine connector from tunnel to wing start area
                 Results connectorResult = mineWingConnector(gui, nextSupportPos, direction, tunnelSide, wingSide);
                 if (!connectorResult.IsSuccess()) {
+                    if (oreWatch != null && oreWatch.found() != null) return connectorResult;
                     gui.msg("Wing connector mining had issues, skipping wings");
                 } else {
                     Results wingResult = mineWings(gui, nextSupportPos, direction, wingOption, wingSide, supportType.radius);
                     if (!wingResult.IsSuccess()) {
+                        if (oreWatch != null && oreWatch.found() != null) return wingResult;
                         gui.msg("Wing mining had issues, continuing anyway");
                         // Continue anyway, wings are optional
                     }
                 }
+            }
+
+            if (road != null) {
+                Results roadResult = layRoad(gui, road, nextSupportPos, direction, supportType, tunnelSide);
+                if (!roadResult.IsSuccess()) return roadResult;
             }
 
             // Update current support position for next iteration
@@ -175,7 +203,122 @@ public class TunnelingBot implements Action {
             }
         }
 
+        if (road != null) {
+            Coord last = roadSpot(currentSupportPos.div(tilesz).floor(), direction, tunnelSide);
+            if (last == null) return Results.ERROR("Road: no free milestone spot at the tunnel end");
+            if (road.worthFinishing(last)) return buildRoadPost(gui, road, last, tunnelSide);
+        }
         return Results.SUCCESS();
+    }
+
+    private Coord2d nextRoadSupport(Coord2d current, Direction direction, SupportType type) {
+        Coord2d next = current.add(new Coord2d(direction.dx, direction.dy).mul(type.radius));
+        return tileCenter(next.div(tilesz).floor());
+    }
+
+    private Coord roadSpot(Coord supportTile, Direction direction, TunnelSide side) {
+        Coord corridor = supportTile.add(side.dx, side.dy);
+        for (int step : new int[]{0, -1, 1}) {
+            Coord tile = corridor.add(direction.dx * step, direction.dy * step);
+            boolean blocked = false;
+            for (Gob gob : Finder.findGobs(tile))
+                if (gob.ngob == null || gob.ngob.name == null
+                        || !NParser.checkName(gob.ngob.name, ROAD_SPOT_IGNORED)) blocked = true;
+            if (!blocked) return tile;
+        }
+        return null;
+    }
+
+    private Results layRoad(NGameUI gui, TunnelRoad road, Coord2d supportPos, Direction direction,
+                            SupportType type, TunnelSide side) throws InterruptedException {
+        Coord spot = roadSpot(supportPos.div(tilesz).floor(), direction, side);
+        Coord next = roadSpot(nextRoadSupport(supportPos, direction, type).div(tilesz).floor(), direction, side);
+        if (spot == null || next == null)
+            return Results.ERROR("Road: no free milestone spot in the next tunnel stretch");
+        if (!road.due(spot, next)) return Results.SUCCESS();
+        return buildRoadPost(gui, road, spot, side);
+    }
+
+    private Results buildRoadPost(NGameUI gui, TunnelRoad road, Coord spot, TunnelSide side)
+            throws InterruptedException {
+        for (int i = 0; !road.reaches(spot).IsSuccess() && i < TunnelRoad.MAX_CATCHUP_POSTS; i++) {
+            Coord step = road.stepToward(spot);
+            double before = road.distanceTo(spot);
+            if (step.equals(spot)) return Results.ERROR("Road: catch-up milestone cannot advance");
+            Results added = buildOneRoadPost(gui, road, step, side);
+            if (!added.IsSuccess()) return added;
+            if (road.distanceTo(spot) >= before - TILE_SIZE * 0.25)
+                return Results.ERROR("Road: catch-up milestone made no progress");
+        }
+        if (!road.reaches(spot).IsSuccess())
+            return Results.ERROR("Road: too many catch-up milestones required");
+        return buildOneRoadPost(gui, road, spot, side);
+    }
+
+    private Results buildOneRoadPost(NGameUI gui, TunnelRoad road, Coord spot, TunnelSide side)
+            throws InterruptedException {
+        Results hand = ExtendRoad.emptyHand(gui);
+        if (!hand.IsSuccess()) return hand;
+        Coord outward = Coord.of(side.dx, side.dy);
+        Results mined = mineRoadTile(gui, spot.add(outward));
+        if (!mined.IsSuccess()) return mined;
+        mined = mineRoadTile(gui, spot);
+        if (!mined.IsSuccess()) return mined;
+        for (int attempt = 0; attempt < ROAD_ATTEMPTS; attempt++) {
+            Results oreStop = checkOre(gui, spot);
+            if (oreStop != null) return oreStop;
+            oreStop = checkOre(gui, spot.add(outward));
+            if (oreStop != null) return oreStop;
+            hand = ExtendRoad.emptyHand(gui);
+            if (!hand.IsSuccess()) return hand;
+            Results chipped = handleBumlings(gui, true);
+            if (!chipped.IsSuccess()) return chipped;
+            Results built = road.extendTo(gui, spot, outward);
+            if (built.IsSuccess() || road.rockInTheWay().isEmpty()) return built;
+            Results cleared = clearRoadRock(gui, road.rockInTheWay());
+            if (!cleared.IsSuccess()) return cleared;
+        }
+        return Results.ERROR("Road: milestone placement still blocked after retries");
+    }
+
+    private Results mineRoadTile(NGameUI gui, Coord tile) throws InterruptedException {
+        Results oreStop = checkOre(gui, tile);
+        if (oreStop != null) return oreStop;
+        Results hand = ExtendRoad.emptyHand(gui);
+        if (!hand.IsSuccess()) return hand;
+        if (!knownRoadTile(gui, tile)) return Results.ERROR("Road: milestone terrain is not loaded");
+        return mineTileIfNeeded(gui, tile, true);
+    }
+
+    private Results clearRoadRock(NGameUI gui, List<Coord> tiles) throws InterruptedException {
+        List<Coord> pending = new ArrayList<>(tiles);
+        if (pending.size() > TunnelRoad.MAX_LINE_ROCK)
+            return Results.ERROR("Road: too many rock tiles between milestones");
+        while (!pending.isEmpty()) {
+            Coord next = null;
+            for (Coord tile : pending) if (bordersOpenGround(gui, tile)) { next = tile; break; }
+            if (next == null) return Results.ERROR("Road: no safe open edge for mining the route");
+            Results mined = mineRoadTile(gui, next);
+            if (!mined.IsSuccess()) return mined;
+            pending.remove(next);
+        }
+        return Results.SUCCESS();
+    }
+
+    private boolean knownRoadTile(NGameUI gui, Coord tile) {
+        try { return gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(tile)) != null; }
+        catch (Loading unavailable) { return false; }
+    }
+
+    private boolean bordersOpenGround(NGameUI gui, Coord tile) {
+        for (Coord delta : Coord.uecw) {
+            Coord neighbor = tile.add(delta);
+            try {
+                Resource res = gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(neighbor));
+                if (res != null && !isMineableTileName(res.name)) return true;
+            } catch (Loading unavailable) { /* Unknown is not open. */ }
+        }
+        return false;
     }
 
     private Coord2d tileCenter(Coord tile) {
@@ -275,6 +418,8 @@ public class TunnelingBot implements Action {
 
     Results mineTileIfNeeded(NGameUI gui, Coord tilePos, boolean requireSupport)
             throws InterruptedException {
+        Results oreStop = checkOre(gui, tilePos);
+        if (oreStop != null) return oreStop;
         // Check if tile needs mining
         if (!needsMining(gui, tilePos)) {
             return Results.SUCCESS(); // Already open, skip
@@ -301,19 +446,28 @@ public class TunnelingBot implements Action {
 
         // Mine the tile
         Resource resBefore = gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(tilePos));
+        boolean miningSelectionActive = false;
 
         while (needsMining(gui, tilePos)) {
+            oreStop = checkOre(gui, tilePos, miningSelectionActive);
+            if (oreStop != null) return oreStop;
             if (!isSafeToMine(gui, tilePos, requireSupport)) {
                 return Results.ERROR("Unsafe to mine - check support coverage, health or loose rocks");
             }
             // Clear any stones that may have fallen during previous mining
-            handleBumlings(gui);
+            if (requireSupport) {
+                Results chipped = handleBumlings(gui, true);
+                if (!chipped.IsSuccess()) return chipped;
+            } else {
+                handleBumlings(gui);
+            }
             if (!isSafeToMine(gui, tilePos, requireSupport)) {
                 return Results.ERROR("Unsafe to mine - check support coverage, health or loose rocks");
             }
 
             NUtils.mine(worldPos);
             gui.map.wdgmsg("sel", tilePos, tilePos, 0);
+            miningSelectionActive = true;
 
             // Wait for tile to change
             if (NUtils.getStamina() > 0.4) {
@@ -331,6 +485,8 @@ public class TunnelingBot implements Action {
 
             // Update resource reference
             resBefore = gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(tilePos));
+            oreStop = checkOre(gui, tilePos, miningSelectionActive);
+            if (oreStop != null) return oreStop;
 
             // Check stamina/energy
             if (!new RestoreResources().run(gui).IsSuccess()) {
@@ -339,7 +495,24 @@ public class TunnelingBot implements Action {
         }
 
         NUtils.getDefaultCur();
+        oreStop = checkOre(gui, tilePos, miningSelectionActive);
+        if (oreStop != null) return oreStop;
         return Results.SUCCESS();
+    }
+
+    private Results checkOre(NGameUI gui, Coord tile) {
+        return checkOre(gui, tile, false);
+    }
+
+    private Results checkOre(NGameUI gui, Coord tile, boolean cancelMiningSelection) {
+        if (oreWatch == null) return null;
+        String found = oreWatch.look(gui, tile);
+        if (found != null && cancelMiningSelection) {
+            Gob player = NUtils.player();
+            if (player != null)
+                gui.map.wdgmsg("click", Coord.z, player.rc.floor(posres), 3, 0);
+        }
+        return found == null ? null : Results.ERROR(found);
     }
 
     private boolean needsMining(NGameUI gui, Coord tilePos) {
@@ -500,6 +673,10 @@ public class TunnelingBot implements Action {
     }
 
     private void handleBumlings(NGameUI gui) throws InterruptedException {
+        handleBumlings(gui, false);
+    }
+
+    private Results handleBumlings(NGameUI gui, boolean preserveHand) throws InterruptedException {
         Gob bumling = Finder.findGob(new NAlias("bumlings"));
 
         if (bumling != null && bumling.rc.dist(NUtils.player().rc) <= 20) {
@@ -511,7 +688,10 @@ public class TunnelingBot implements Action {
             while (bumling != null && Finder.findGob(bumling.id) != null && attempts < maxAttempts) {
                 attempts++;
 
-                if(NUtils.getGameUI().vhand != null) {
+                if (preserveHand) {
+                    Results hand = ExtendRoad.emptyHand(gui);
+                    if (!hand.IsSuccess()) return hand;
+                } else if(NUtils.getGameUI().vhand != null) {
                     NUtils.drop(NUtils.getGameUI().vhand);
                 }
 
@@ -530,7 +710,7 @@ public class TunnelingBot implements Action {
                         break;
                     case DANGER:
                         gui.msg("Warning: Low energy while chipping stones");
-                        return;
+                        return Results.SUCCESS();
                 }
 
                 // Re-check if bumling still exists
@@ -539,6 +719,7 @@ public class TunnelingBot implements Action {
                 }
             }
         }
+        return Results.SUCCESS();
     }
 
     /**
@@ -596,6 +777,8 @@ public class TunnelingBot implements Action {
     private Results mineWings(NGameUI gui, Coord2d supportPos, Direction mainDirection,
                               WingOption wingOption, TunnelSide wingSide, int supportRadius)
             throws InterruptedException {
+        if (oreWatch != null && oreWatch.found() != null)
+            return Results.ERROR(oreWatch.found());
 
         if (wingOption == WingOption.NONE) {
             return Results.SUCCESS();
@@ -644,6 +827,7 @@ public class TunnelingBot implements Action {
                 Coord wingTile = new Coord(wingStartTile.x + i, wingStartTile.y);
                 Results result = mineTileIfNeeded(gui, wingTile);
                 if (!result.IsSuccess()) {
+                    if (oreWatch != null && oreWatch.found() != null) return result;
                     break; // Stop this wing but continue with others
                 }
             }
@@ -655,6 +839,7 @@ public class TunnelingBot implements Action {
                 Coord wingTile = new Coord(wingStartTile.x - i, wingStartTile.y);
                 Results result = mineTileIfNeeded(gui, wingTile);
                 if (!result.IsSuccess()) {
+                    if (oreWatch != null && oreWatch.found() != null) return result;
                     break;
                 }
             }
@@ -666,6 +851,7 @@ public class TunnelingBot implements Action {
                 Coord wingTile = new Coord(wingStartTile.x, wingStartTile.y - i);
                 Results result = mineTileIfNeeded(gui, wingTile);
                 if (!result.IsSuccess()) {
+                    if (oreWatch != null && oreWatch.found() != null) return result;
                     break;
                 }
             }
@@ -677,6 +863,7 @@ public class TunnelingBot implements Action {
                 Coord wingTile = new Coord(wingStartTile.x, wingStartTile.y + i);
                 Results result = mineTileIfNeeded(gui, wingTile);
                 if (!result.IsSuccess()) {
+                    if (oreWatch != null && oreWatch.found() != null) return result;
                     break;
                 }
             }

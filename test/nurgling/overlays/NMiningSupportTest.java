@@ -6,6 +6,7 @@ import haven.Gob;
 import haven.res.lib.tree.TreeScale;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -160,27 +161,50 @@ class NMiningSupportTest {
     }
 
     @Test
-    void constructedTunnelStartsOneTileAheadOfPlacementGhostInEveryDirection() {
-        assertOverlay(newTunnelOverlay(-1, 0), new Coord(0, 0), new Coord(5, 1));
-        assertOverlay(newTunnelOverlay(-1, Math.PI / 2), new Coord(0, 0), new Coord(1, 5));
-        assertOverlay(newTunnelOverlay(-1, Math.PI), new Coord(-5, 0), new Coord(0, 1));
-        assertOverlay(newTunnelOverlay(-1, -Math.PI / 2), new Coord(0, -5), new Coord(1, 0));
+    void builtTunnelPropsTheSameTilesAsItsPreviewAtNegativeCoordinates() {
+        int[][] sizes = {{1, 5}, {2, 8}, {3, 15}};
+        double[] angles = {0, Math.PI / 2, Math.PI, -Math.PI / 2};
+        Coord[] forwards = {new Coord(1, 0), new Coord(0, 1),
+                new Coord(-1, 0), new Coord(0, -1)};
+        for (int[] size : sizes) {
+            int width = size[0], length = size[1];
+            for (int direction = 0; direction < angles.length; direction++) {
+                Coord fwd = forwards[direction];
+                Coord lateral = new Coord(Math.abs(fwd.y), Math.abs(fwd.x));
+                Coord2d line = Coord2d.of(-22, -22);
+                if (width % 2 == 1) {
+                    line = line.add(Coord2d.of(lateral).mul(5.5));
+                }
+                Coord2d builtPosition = line.sub(Coord2d.of(fwd).mul(0.1));
+                String label = width + "x" + length + " facing " + fwd;
 
-        assertOverlay(newTunnelOverlay(1, 0), new Coord(1, 0), new Coord(6, 1));
-        assertOverlay(newTunnelOverlay(1, Math.PI / 2), new Coord(0, 1), new Coord(1, 6));
-        assertOverlay(newTunnelOverlay(1, Math.PI), new Coord(-6, 0), new Coord(-1, 1));
-        assertOverlay(newTunnelOverlay(1, -Math.PI / 2), new Coord(0, -6), new Coord(1, -1));
+                NMiningSupport.Mask preview = NMiningSupport.computeRect(
+                        line, angles[direction], width, length);
+                NMiningSupport.Mask built = NMiningSupport.computeRect(
+                        builtPosition, angles[direction], width, length, true);
+                assertEquals(width * length, count(preview), label);
+                assertEquals(preview.begin, built.begin, label + " first tile");
+                assertEquals(preview.end, built.end, label + " last tile");
+                assertTrue(Arrays.deepEquals(preview.data, built.data), label + " pixels");
+
+                NMiningSupport.SupportMask previewOverlay = newTunnelOverlay(
+                        -1, line, angles[direction], width, length).getMask();
+                NMiningSupport.SupportMask builtOverlay = newTunnelOverlay(
+                        1, builtPosition, angles[direction], width, length).getMask();
+                assertEquals(preview.begin, builtOverlay.begin, label + " overlay begin");
+                assertEquals(preview.end.add(1, 1), builtOverlay.end, label + " exclusive end");
+                assertEquals(previewOverlay.begin, builtOverlay.begin, label + " overlay first tile");
+                assertEquals(previewOverlay.end, builtOverlay.end, label + " overlay last tile");
+                assertTrue(Arrays.deepEquals(previewOverlay.data, builtOverlay.data), label + " overlay pixels");
+            }
+        }
     }
 
-    private static NMiningSupport newTunnelOverlay(long gobId, double angle) {
-        Gob gob = new Gob(null, Coord2d.of(5.5, 5.5), gobId);
+    private static NMiningSupport newTunnelOverlay(long gobId, Coord2d position, double angle,
+                                                   int width, int length) {
+        Gob gob = new Gob(null, position, gobId);
         gob.a = angle;
-        return new NMiningSupport(gob, 1, 5);
-    }
-
-    private static void assertOverlay(NMiningSupport overlay, Coord expectedBegin, Coord expectedEnd) {
-        assertEquals(expectedBegin, overlay.begin);
-        assertEquals(expectedEnd, overlay.end);
+        return new NMiningSupport(gob, width, length);
     }
 
     private static void assertMask(NMiningSupport.Mask mask, int expectedCount,

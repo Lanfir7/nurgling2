@@ -129,6 +129,7 @@ class PrepareTaskQueueTest {
     @Test void completionDuringRegistrationRunsCallbackAfterRegistration() throws Exception {
         CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
         CountDownLatch registering = new CountDownLatch(1), allowRegistration = new CountDownLatch(1);
+        CountDownLatch callbackDone = new CountDownLatch(1);
         try(PrepareTaskQueue queue = new PrepareTaskQueue("race", 1)) {
             PrepareTaskQueue.Job<Integer> job = queue.submit(() -> {
                 entered.countDown();
@@ -143,6 +144,7 @@ class PrepareTaskQueueTest {
                     assertEquals(0, registering.getCount());
                     assertEquals(0, allowRegistration.getCount());
                     called.incrementAndGet();
+                    callbackDone.countDown();
                 }, wait -> {
                     registering.countDown();
                     await(allowRegistration);
@@ -155,6 +157,7 @@ class PrepareTaskQueueTest {
             assertEquals(Integer.valueOf(9), Loading.waitfor(job));
             allowRegistration.countDown();
             registration.get(5, TimeUnit.SECONDS);
+            await(callbackDone);
             assertEquals(1, called.get());
         }
     }

@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-fire-no-transfer-restore",
+  "priority": 5,
+  "summary": {
+    "ru": "После розжига огня настройка «Без переноса» восстанавливается в исходном рецепте.",
+    "en": "The No transfer setting is restored in your original recipe after lighting a fire."
+  },
+  "detail": {
+    "ru": "Если розжиг временно открывает другой рецепт, при возврате восстанавливается прежнее значение «Без переноса» в окне крафта. Выбор сохраняется в автоматическом и ручном режимах.",
+    "en": "If lighting a fire temporarily opens another recipe, the craft window restores the previous No transfer choice when your recipe returns, in both Auto and manual modes."
+  }
+}

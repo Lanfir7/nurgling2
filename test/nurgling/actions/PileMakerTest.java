@@ -23,6 +23,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PileMakerTest {
     @Test
+    void selectedKindPileActionRejectsAnExistingHandBeforeAnyDepositOrPlacement() {
+        assertFalse(PileMaker.mayStartFiltered(true, true));
+        assertTrue(PileMaker.mayStartFiltered(true, false));
+        assertTrue(PileMaker.mayStartFiltered(false, true));
+    }
+
+    @Test
     void soilHitboxWorksWithoutLoadedPlobGhost() {
         NHitBox box = PileMaker.resolveHitbox(null, new NAlias("gfx/terobjs/stockpile-soil"));
         assertNotNull(box);

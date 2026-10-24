@@ -60,6 +60,11 @@ public final class Variations {
             }
             return false;
         }
+
+        /** Stock names for this one option, without exposing the mutable backing set. */
+        public Set<String> stockKeys() {
+            return Collections.unmodifiableSet(new HashSet<>(stock));
+        }
     }
 
     /** One "Any ..." input of the dish. */

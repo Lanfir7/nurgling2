@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-tunneler-centre-line",
+  "priority": 7,
+  "summary": {
+    "ru": "Проходчик запоминает выбор «Только центральная линия» для каждого персонажа.",
+    "en": "The tunneler remembers “Centre line only” separately for each character."
+  },
+  "detail": {
+    "ru": "Выбор «Только центральная линия» в окне проходчика сохраняется для текущего персонажа после запуска прохода. При отмене окна настройка не меняется.",
+    "en": "The “Centre line only” choice in the tunneler window is saved for the current character when you start tunneling. Canceling the window leaves the saved choice unchanged."
+  }
+}

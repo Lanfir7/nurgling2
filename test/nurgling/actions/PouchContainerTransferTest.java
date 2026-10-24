@@ -43,6 +43,22 @@ class PouchContainerTransferTest {
     }
 
     @Test
+    void selectedStackMemberAtNonStackableDestinationIsRestoredAfterRejectedReceipt() throws Exception {
+        Fake ops = new Fake();
+        ops.fromStack = true;
+        ops.stackable = false;
+        ops.received = false;
+        ops.handAfterPlace = true;
+
+        PouchContainerTransfer.Outcome outcome = PouchContainerTransfer.moveOne(ops, 1);
+
+        assertEquals(Collections.singletonList(PouchContainerTransfer.Place.FREE_SLOT), ops.places);
+        assertEquals(0, outcome.moved);
+        assertEquals(1, ops.pouchRestores);
+        assertEquals(0, ops.backpackRestores);
+    }
+
+    @Test
     void noSpaceDoesNotTakeAndDoesNotCount() throws Exception {
         Fake ops = new Fake();
         ops.freeSpace = false;

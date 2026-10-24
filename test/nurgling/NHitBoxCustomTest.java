@@ -1,6 +1,10 @@
 package nurgling;
 
 import haven.Coord2d;
+import haven.Coord;
+import nurgling.pf.CellsArray;
+import nurgling.pf.NHitBoxD;
+import nurgling.pf.Utils;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,12 +41,45 @@ class NHitBoxCustomTest {
     }
 
     @Test
-    void mammothSkullHitboxMatchesNestedResourceName() {
-        NHitBox exact = NHitBox.findCustom("gfx/kritter/mammothskull");
-        NHitBox nested = NHitBox.findCustom("gfx/kritter/mammothskull/mammothskull");
-        assertNotNull(nested);
-        assertEquals(exact.end.x - exact.begin.x, nested.end.x - nested.begin.x, 0.01);
-        assertEquals(exact.end.y - exact.begin.y, nested.end.y - nested.begin.y, 0.01);
+    void mammothCarcassSkullUsesItsResourceHitboxWithoutChangingLegacyAlias() {
+        NHitBox carcass = NHitBox.findCustom("gfx/kritter/mammoth/mammothskull");
+        assertNotNull(carcass);
+        assertEquals(-22.6, carcass.begin.x, 1e-9);
+        assertEquals(-12.5, carcass.begin.y, 1e-9);
+        assertEquals(6.5, carcass.end.x, 1e-9);
+        assertEquals(12.5, carcass.end.y, 1e-9);
+        assertTrue(carcass.mirrorAsymmetric);
+
+        NHitBox legacyAlias = NHitBox.findCustom("gfx/kritter/mammothskull/mammothskull");
+        assertNotNull(legacyAlias);
+        assertEquals(-10.0, legacyAlias.begin.x, 1e-9);
+        assertEquals(-6.0, legacyAlias.begin.y, 1e-9);
+        assertEquals(10.0, legacyAlias.end.x, 1e-9);
+        assertEquals(6.0, legacyAlias.end.y, 1e-9);
+    }
+
+    @Test
+    void mammothCarcassHitboxBlocksCoveredCellsAcrossCardinalFacingsAtNegativeCoordinates() {
+        NHitBox box = NHitBox.findCustom("gfx/kritter/mammoth/mammothskull");
+        Coord2d centre = Coord2d.of(-110, -110);
+        for (int quarterTurn = 0; quarterTurn < 4; quarterTurn++) {
+            double angle = quarterTurn * Math.PI / 2;
+            Coord2d covered = centre.add(Coord2d.of(18, 0).rot(angle));
+            Coord2d clear = centre.add(Coord2d.of(25, 0).rot(angle));
+            NHitBoxD world = box.toWorld(centre, angle);
+            NHitBoxD coveredCell = new NHitBoxD(covered.sub(0.5, 0.5), covered.add(0.5, 0.5));
+            NHitBoxD clearCell = new NHitBoxD(clear.sub(0.5, 0.5), clear.add(0.5, 0.5));
+            assertTrue(coveredCell.intersects(world, true), "covered at quarter turn " + quarterTurn);
+            assertFalse(clearCell.intersects(world, true), "clear at quarter turn " + quarterTurn);
+
+            CellsArray cells = new CellsArray(box, angle, centre);
+            assertEquals(1, cellAt(cells, covered), "pathfinding blocks covered cell at " + quarterTurn);
+        }
+    }
+
+    private static int cellAt(CellsArray cells, Coord2d point) {
+        Coord cell = Utils.toPfGrid(point).sub(cells.begin);
+        return cells.cells[cell.x][cell.y];
     }
 
     @Test

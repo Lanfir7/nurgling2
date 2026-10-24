@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-stack-item-support",
+  "priority": 5,
+  "summary": {
+    "ru": "Автоматическая укладка точнее учитывает размер стопок ещё шести предметов.",
+    "en": "Automatic stacking now uses the correct stack sizes for six more items."
+  },
+  "detail": {
+    "ru": "При сортировке и переносе вещей клиент правильно укладывает скелеты гадюки, индиговые грибы, лапки пещерной мокрицы, жала жестокой пчелы, трутовики и жемчужные устрицы. Эдельвейс снова находится по своему имени в категории цветов.",
+    "en": "When sorting or moving items, the client now sizes stacks of Adder Skeleton, Indigo Cap, Cave Louse Leg, Cruel Bee Stinger, Tinder Conk, and Pearl Oyster correctly. Edelweiß is also listed by its proper name among flowers."
+  }
+}

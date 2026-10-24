@@ -1,10 +1,12 @@
 package nurgling.widgets;
 
+import nurgling.tools.NFuzzy;
+
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 
 public final class SettingsSearch {
     public static final int LIMIT = 12;
@@ -16,12 +18,14 @@ public final class SettingsSearch {
         public final String tab;
         public final String label;
         public final boolean tabOnly;
+        public final List<String> keywords;
 
-        Entry(String category, String tab, String label, boolean tabOnly) {
+        Entry(String category, String tab, String label, boolean tabOnly, String... keywords) {
             this.category = category;
             this.tab = tab;
             this.label = label;
             this.tabOnly = tabOnly;
+            this.keywords = Collections.unmodifiableList(Arrays.asList(keywords.clone()));
         }
 
         public String display() {
@@ -43,12 +47,12 @@ public final class SettingsSearch {
         }
     }
 
-    public static Entry tab(String category, String tab) {
-        return new Entry(category, tab, tab, true);
+    public static Entry tab(String category, String tab, String... keywords) {
+        return new Entry(category, tab, tab, true, keywords);
     }
 
-    public static Entry setting(String category, String tab, String label) {
-        return new Entry(category, tab, label, false);
+    public static Entry setting(String category, String tab, String label, String... keywords) {
+        return new Entry(category, tab, label, false, keywords);
     }
 
     public static boolean isSearchableLabel(String text) {
@@ -63,7 +67,7 @@ public final class SettingsSearch {
     public static List<Match> query(List<Entry> catalog, String raw) {
         if (catalog == null || raw == null)
             return Collections.emptyList();
-        String q = raw.trim().toLowerCase(Locale.ROOT);
+        String q = NFuzzy.fold(raw).replaceAll("[^\\p{L}\\p{N}]+", " ").trim();
         if (q.isEmpty())
             return Collections.emptyList();
         String[] tokens = q.split("\\s+");
@@ -87,47 +91,63 @@ public final class SettingsSearch {
             if (!matchesToken(e, token))
                 return 0;
         }
-        String lab = e.label.toLowerCase(Locale.ROOT);
-        String tab = e.tab.toLowerCase(Locale.ROOT);
+        String lab = NFuzzy.fold(e.label);
+        String tab = NFuzzy.fold(e.tab);
         int s = 0;
         if (lab.equals(q))
-            s += 1000;
+            s += 3000;
         else if (lab.startsWith(q))
-            s += 500;
+            s += 2200;
         else if (lab.contains(q))
-            s += 200;
+            s += 1500;
         else if (acronym(e.label).equals(q))
-            s += 450;
+            s += 1800;
         if (tab.equals(q))
-            s += 400;
+            s += 1000;
         else if (tab.startsWith(q))
-            s += 200;
+            s += 700;
         else if (tab.contains(q))
-            s += 80;
+            s += 400;
         else if (acronym(e.tab).equals(q))
-            s += 350;
+            s += 650;
+        for(String token : tokens)
+            s += tokenScore(e, token);
         if (e.tabOnly)
             s += 40;
-        return Math.max(s, 1);
+        return s;
     }
 
     private static boolean matchesToken(Entry e, String token) {
-        return contains(e.label, token)
-                || contains(e.tab, token)
-                || contains(e.category, token)
-                || acronym(e.label).equals(token)
-                || acronym(e.tab).equals(token)
-                || compact(e.label).contains(token)
-                || compact(e.tab).contains(token);
+        return tokenScore(e, token) > 0;
     }
 
-    private static boolean contains(String hay, String needle) {
-        return hay.toLowerCase(Locale.ROOT).contains(needle);
+    private static int tokenScore(Entry e, String token) {
+        int best = Math.max(fieldScore(e.label, token),
+                Math.max((int)(fieldScore(e.tab, token) * 0.7),
+                         (int)(fieldScore(e.category, token) * 0.4)));
+        for(String keyword : e.keywords)
+            best = Math.max(best, (int)(fieldScore(keyword, token) * 0.75));
+        return best;
+    }
+
+    private static int fieldScore(String text, String token) {
+        String hay = NFuzzy.fold(text);
+        if(hay.isEmpty())
+            return 0;
+        if(acronym(text).equals(token))
+            return 720;
+        if(compact(text).contains(token) && !hay.contains(token))
+            return 520;
+        // One or two scattered letters create far too many unrelated results.
+        if(token.length() < 3 && !hay.contains(token))
+            return 0;
+        double score = NFuzzy.score(hay, token);
+        return score == NFuzzy.NO_MATCH ? 0 : Math.max(1, (int)score);
     }
 
     private static String acronym(String s) {
         StringBuilder b = new StringBuilder();
-        for (String w : s.toLowerCase(Locale.ROOT).split("[\\s/_-]+")) {
+        for (String w : NFuzzy.fold(s).split("[\\s/_-]+")) {
             if (!w.isEmpty())
                 b.append(w.charAt(0));
         }
@@ -135,6 +155,6 @@ public final class SettingsSearch {
     }
 
     private static String compact(String s) {
-        return s.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]", "");
+        return NFuzzy.fold(s).replaceAll("[^\\p{L}\\p{N}]", "");
     }
 }

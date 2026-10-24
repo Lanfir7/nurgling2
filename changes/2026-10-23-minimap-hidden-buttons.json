@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-minimap-hidden-buttons",
+  "priority": 4,
+  "summary": {
+    "ru": "Скрытые кнопки мини-карты больше не перехватывают щелчки по карте.",
+    "en": "Hidden minimap buttons no longer intercept clicks on the map."
+  },
+  "detail": {
+    "ru": "Когда панель значков мини-карты скрыта, щелчки и подсказки в её области относятся к самой карте. Видимые значки реагируют только там, где они показаны, а при увеличении сохраняют подсветку под курсором.",
+    "en": "When the minimap icon dock is hidden, clicks and tooltips in its area go to the map. Revealed icons respond only where they are shown and stay highlighted under the cursor when enlarged."
+  }
+}

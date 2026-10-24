@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-mammoth-skull-hitbox",
+  "priority": 6,
+  "summary": {
+    "ru": "Поиск пути учитывает череп мамонта вместе с бивнями.",
+    "en": "Routes account for mammoth skulls and tusks."
+  },
+  "detail": {
+    "ru": "Персонаж обходит череп мамонта и бивни при прокладке пути рядом с останками.",
+    "en": "Your character routes around the mammoth skull and tusks when moving nearby."
+  }
+}

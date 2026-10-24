@@ -49,11 +49,15 @@ public class SilkProductionBot implements Action {
         // Step 2: Collect all ready silkworm cocoons and drop them off at silkmoth breeding area.
         gui.msg("Collecting ready silkworm cocoons to breeding area.");
         // 1 OPEN ALL SILKMOTH BREEDING CONTAINERS
-        DepositItemsToSpecArea depositItemsActionCacoons = new DepositItemsToSpecArea(context, new NAlias(moth, cacoons), Specialisation.SpecName.silkmothBreeding, Specialisation.SpecName.silkwormFeeding, 16);
-        depositItemsActionCacoons.run(gui);
-
-        gui.msg("Killing and dropping off remaining silkworm cocoons to storage area.");
-        new CollectAndKillRemainingCocoons().run(gui);
+        DepositItemsToSpecArea depositItemsActionCacoons = new DepositItemsToSpecArea(context,
+                new NAlias(moth, cacoons), Specialisation.SpecName.silkmothBreeding,
+                Specialisation.SpecName.silkwormFeeding, 16).setFetchAlias(new NAlias(cacoons));
+        Results cocoonStage = depositThenCull(gui, depositItemsActionCacoons, game -> {
+            game.msg("Killing and dropping off remaining silkworm cocoons to storage area.");
+            return new CollectAndKillRemainingCocoons().run(game);
+        });
+        if (cocoonStage == null || !cocoonStage.IsSuccess())
+            return cocoonStage != null ? cocoonStage : Results.FAIL();
 
         // Step 3: Ensure feeding cupboards have sufficient mulberry leaves (32 per cabinet).
         gui.msg("Refilling mulberry leafs.");
@@ -84,8 +88,10 @@ public class SilkProductionBot implements Action {
         gui.msg("Filling herbalist tables with eggs.");
         if (totalEggsNeeded > 0) {
             context.addInItem(eggs, null);
-            new FillContainers2(htableContainers, eggs, context, QualityType.High,
-                    Specialisation.SpecName.htable, "Silkworm Egg").run(gui);
+            Results eggsFilled = new FillContainers2(htableContainers, eggs, context,
+                    QualityType.High, Specialisation.SpecName.htable, "Silkworm Egg").run(gui);
+            if (eggsFilled == null || !eggsFilled.IsSuccess())
+                return eggsFilled != null ? eggsFilled : Results.FAIL();
         }
 
         NContext freshContext = new NContext(gui);
@@ -99,6 +105,15 @@ public class SilkProductionBot implements Action {
         new ArrangeSilkmothPairs().run(gui);
 
         return Results.SUCCESS();
+    }
+
+    /** Never cull the remaining cocoons unless the breeding fill completed. */
+    static Results depositThenCull(NGameUI gui, Action deposit, Action cull)
+            throws InterruptedException {
+        Results deposited = deposit.run(gui);
+        if (deposited == null || !deposited.IsSuccess())
+            return deposited != null ? deposited : Results.FAIL();
+        return cull.run(gui);
     }
 
     private boolean validateRequiredAreas(NGameUI gui, NContext context) {

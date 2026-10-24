@@ -35,6 +35,8 @@ public class FrameTunneler implements Action {
     );
 
     private static final NAlias MINEABLE_TILES = new NAlias("rock", "tiles/cave");
+    private static final NAlias ROAD_SPOT_IGNORED = new NAlias("bumlings", "terobjs/items");
+    private static final int ROAD_ATTEMPTS = 3;
 
     // How far ahead to look for the end of the propped ground
     private static final int MAX_SCAN_ROWS = 64;
@@ -47,6 +49,8 @@ public class FrameTunneler implements Action {
     private final boolean centreLine;
     private final int width, length;
     private final NAlias frameAlias;
+    private final OreWatch oreWatch;
+    private final TunnelRoad road;
 
     // Tile steps along the dig direction, and across it (East digging N/S, South digging E/W)
     private final Coord fwd, lat;
@@ -57,6 +61,18 @@ public class FrameTunneler implements Action {
     private int[] frameCols, digCols;
 
     public FrameTunneler(Direction direction, SupportType frameType, TunnelSide extraSide, boolean centreLine) {
+        this(direction, frameType, extraSide, centreLine, null);
+    }
+
+    public FrameTunneler(Direction direction, SupportType frameType, TunnelSide extraSide,
+                         boolean centreLine, OreWatch oreWatch) {
+        this(direction, frameType, extraSide, centreLine, oreWatch, null);
+    }
+
+    public FrameTunneler(Direction direction, SupportType frameType, TunnelSide extraSide,
+                         boolean centreLine, OreWatch oreWatch, TunnelRoad road) {
+        this.oreWatch = oreWatch;
+        this.road = road;
         this.direction = direction;
         this.frameType = frameType;
         this.extraSide = extraSide;
@@ -98,6 +114,13 @@ public class FrameTunneler implements Action {
                 (centreLine && width > 1 ? ", centre line only" : ""));
 
         int row = rowOf(playerTile);
+        if (road != null) {
+            if (frameCols.length < 2)
+                return Results.ERROR("Road: no side column is available for a milestone");
+            Results started = road.start(gui);
+            if (!started.IsSuccess()) return started;
+        }
+        Coord lastRoadSpot = null;
         while (true) {
             int frontier = findFrontier(row);
             if (frontier == NO_FRONTIER) {
@@ -116,12 +139,30 @@ public class FrameTunneler implements Action {
                 return mined;
             }
 
+            if (road != null) {
+                Coord spot = roadSpot(row, frontier);
+                int nextRow = frontier + (length - 1) / 2;
+                if (spot != null) {
+                    lastRoadSpot = spot;
+                    if (road.due(spot, tileAt(nextRow, latOf(spot)))) {
+                        Results posted = buildRoadPost(gui, spot);
+                        if (!posted.IsSuccess()) return posted;
+                    }
+                } else if (!road.reaches(tileAt(nextRow, centreCol)).IsSuccess()) {
+                    return Results.ERROR("Road: no free milestone spot before the next stretch exceeds range");
+                }
+            }
+
             String blocked = blockedAhead(gui, frontier);
             if (blocked != null) {
                 gui.msg("Tunneling stopped: " + blocked);
+                if (road != null && lastRoadSpot != null && road.worthFinishing(lastRoadSpot))
+                    return buildRoadPost(gui, lastRoadSpot);
                 return Results.SUCCESS();
             }
 
+            Results oreStop = checkOre(gui, tileAt(frontier - 1, frameCols[0]));
+            if (oreStop != null) return oreStop;
             Results placed = placeFrame(gui, frontier);
             if (!placed.IsSuccess()) {
                 return placed;
@@ -233,7 +274,7 @@ public class FrameTunneler implements Action {
         for (int dr = -1; dr <= 1; dr++) {
             for (int dc = -1; dc <= 1; dc++) {
                 Coord origin = tileAt(frontier + dr, centreCol + dc);
-                NMiningSupport.Mask mask = NMiningSupport.computeRect(frameAnchor(origin), angle, width, length, 0);
+                NMiningSupport.Mask mask = NMiningSupport.computeRect(frameAnchor(origin), angle, width, length, false);
                 if (new HashSet<>(tilesOf(mask)).equals(wanted)) {
                     return origin;
                 }
@@ -294,7 +335,7 @@ public class FrameTunneler implements Action {
             return null;
         }
         if (spec.isRect()) {
-            return NMiningSupport.computeRect(support.rc, support.a, spec.widthTiles, spec.lengthTiles, 1);
+            return NMiningSupport.computeRect(support.rc, support.a, spec.widthTiles, spec.lengthTiles, true);
         }
         for (Gob.Overlay ol : support.ols) {
             if (ol.spr instanceof NMiningSupport) {
@@ -356,6 +397,12 @@ public class FrameTunneler implements Action {
     }
 
     private Results mineTileIfNeeded(NGameUI gui, Coord tilePos) throws InterruptedException {
+        return mineTileIfNeeded(gui, tilePos, false);
+    }
+
+    private Results mineTileIfNeeded(NGameUI gui, Coord tilePos, boolean roadMining) throws InterruptedException {
+        Results oreStop = checkOre(gui, tilePos);
+        if (oreStop != null) return oreStop;
         if (!needsMining(gui, tilePos)) {
             return Results.SUCCESS();
         }
@@ -376,15 +423,24 @@ public class FrameTunneler implements Action {
             return Results.ERROR("Cannot restore resources");
 
         Resource resBefore = gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(tilePos));
+        boolean miningSelectionActive = false;
 
         while (needsMining(gui, tilePos)) {
-            handleBumlings(gui);
+            oreStop = checkOre(gui, tilePos, miningSelectionActive);
+            if (oreStop != null) return oreStop;
+            if (roadMining) {
+                Results chipped = handleBumlings(gui, true);
+                if (!chipped.IsSuccess()) return chipped;
+            } else {
+                handleBumlings(gui);
+            }
 
             // Pathing, resource restoration and earlier attempts may outlive a support.
             if(!isSafeToMine(tilePos))
                 return Results.ERROR("Unsafe to mine - check support health or loose rocks");
             NUtils.mine(worldPos);
             gui.map.wdgmsg("sel", tilePos, tilePos, 0);
+            miningSelectionActive = true;
 
             if (NUtils.getStamina() > 0.4) {
                 Resource finalResBefore = resBefore;
@@ -399,6 +455,8 @@ public class FrameTunneler implements Action {
             }
 
             resBefore = gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(tilePos));
+            oreStop = checkOre(gui, tilePos, miningSelectionActive);
+            if (oreStop != null) return oreStop;
 
             if (!new RestoreResources().run(gui).IsSuccess()) {
                 return Results.ERROR("Cannot restore resources");
@@ -406,7 +464,24 @@ public class FrameTunneler implements Action {
         }
 
         NUtils.getDefaultCur();
+        oreStop = checkOre(gui, tilePos, miningSelectionActive);
+        if (oreStop != null) return oreStop;
         return Results.SUCCESS();
+    }
+
+    private Results checkOre(NGameUI gui, Coord tile) {
+        return checkOre(gui, tile, false);
+    }
+
+    private Results checkOre(NGameUI gui, Coord tile, boolean cancelMiningSelection) {
+        if (oreWatch == null) return null;
+        String found = oreWatch.look(gui, tile);
+        if (found != null && cancelMiningSelection) {
+            Gob player = NUtils.player();
+            if (player != null)
+                gui.map.wdgmsg("click", Coord.z, player.rc.floor(posres), 3, 0);
+        }
+        return found == null ? null : Results.ERROR(found);
     }
 
     private boolean needsMining(NGameUI gui, Coord tilePos) {
@@ -426,6 +501,10 @@ public class FrameTunneler implements Action {
     }
 
     private void handleBumlings(NGameUI gui) throws InterruptedException {
+        handleBumlings(gui, false);
+    }
+
+    private Results handleBumlings(NGameUI gui, boolean preserveHand) throws InterruptedException {
         Gob bumling = Finder.findGob(new NAlias("bumlings"));
 
         if (bumling != null && bumling.rc.dist(NUtils.player().rc) <= 20) {
@@ -437,7 +516,10 @@ public class FrameTunneler implements Action {
             while (bumling != null && Finder.findGob(bumling.id) != null && attempts < maxAttempts) {
                 attempts++;
 
-                if (NUtils.getGameUI().vhand != null) {
+                if (preserveHand) {
+                    Results hand = ExtendRoad.emptyHand(gui);
+                    if (!hand.IsSuccess()) return hand;
+                } else if (NUtils.getGameUI().vhand != null) {
                     NUtils.drop(NUtils.getGameUI().vhand);
                 }
 
@@ -456,7 +538,7 @@ public class FrameTunneler implements Action {
                         break;
                     case DANGER:
                         gui.msg("Warning: Low energy while chipping stones");
-                        return;
+                        return Results.SUCCESS();
                 }
 
                 if (bumling != null) {
@@ -464,6 +546,7 @@ public class FrameTunneler implements Action {
                 }
             }
         }
+        return Results.SUCCESS();
     }
 
     /* Why the next frame's rectangle can't be dug, or null if it can. */
@@ -489,6 +572,98 @@ public class FrameTunneler implements Action {
             }
         }
         return null;
+    }
+
+    // --- Optional road through the mined corridor ---
+
+    private Coord roadSpot(int fromRow, int frontier) {
+        int postRow = Math.floorDiv(fromRow + frontier - 1, 2);
+        if (postRow - fromRow < 2 || frontier - 1 - postRow < 2) return null;
+        Coord tile = tileAt(postRow, centreCol);
+        for (Gob gob : Finder.findGobs(tile))
+            if (gob.ngob == null || gob.ngob.name == null
+                    || !NParser.checkName(gob.ngob.name, ROAD_SPOT_IGNORED)) return null;
+        return tile;
+    }
+
+    private Results buildRoadPost(NGameUI gui, Coord spot) throws InterruptedException {
+        for (int i = 0; !road.reaches(spot).IsSuccess() && i < TunnelRoad.MAX_CATCHUP_POSTS; i++) {
+            Coord step = road.stepToward(spot);
+            double before = road.distanceTo(spot);
+            if (step.equals(spot)) return Results.ERROR("Road: catch-up milestone cannot advance");
+            Results added = buildOneRoadPost(gui, step);
+            if (!added.IsSuccess()) return added;
+            if (road.distanceTo(spot) >= before - tilesz.x * 0.25)
+                return Results.ERROR("Road: catch-up milestone made no progress");
+        }
+        if (!road.reaches(spot).IsSuccess())
+            return Results.ERROR("Road: too many catch-up milestones required");
+        return buildOneRoadPost(gui, spot);
+    }
+
+    private Results buildOneRoadPost(NGameUI gui, Coord spot) throws InterruptedException {
+        Results hand = ExtendRoad.emptyHand(gui);
+        if (!hand.IsSuccess()) return hand;
+        Coord outward = lat.mul(Integer.signum(frameCols[frameCols.length - 1] - centreCol));
+        Results mined = mineRoadTile(gui, spot.add(outward));
+        if (!mined.IsSuccess()) return mined;
+        mined = mineRoadTile(gui, spot);
+        if (!mined.IsSuccess()) return mined;
+        for (int attempt = 0; attempt < ROAD_ATTEMPTS; attempt++) {
+            Results oreStop = checkOre(gui, spot);
+            if (oreStop != null) return oreStop;
+            oreStop = checkOre(gui, spot.add(outward));
+            if (oreStop != null) return oreStop;
+            hand = ExtendRoad.emptyHand(gui);
+            if (!hand.IsSuccess()) return hand;
+            Results chipped = handleBumlings(gui, true);
+            if (!chipped.IsSuccess()) return chipped;
+            Results built = road.extendTo(gui, spot, outward);
+            if (built.IsSuccess() || road.rockInTheWay().isEmpty()) return built;
+            Results cleared = clearRoadRock(gui, road.rockInTheWay());
+            if (!cleared.IsSuccess()) return cleared;
+        }
+        return Results.ERROR("Road: milestone placement still blocked after retries");
+    }
+
+    private Results mineRoadTile(NGameUI gui, Coord tile) throws InterruptedException {
+        Results oreStop = checkOre(gui, tile);
+        if (oreStop != null) return oreStop;
+        Results hand = ExtendRoad.emptyHand(gui);
+        if (!hand.IsSuccess()) return hand;
+        try {
+            if (gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(tile)) == null)
+                return Results.ERROR("Road: milestone terrain is not loaded");
+        } catch (Loading unavailable) {
+            return Results.ERROR("Road: milestone terrain is not loaded");
+        }
+        return mineTileIfNeeded(gui, tile, true);
+    }
+
+    private Results clearRoadRock(NGameUI gui, List<Coord> tiles) throws InterruptedException {
+        List<Coord> pending = new ArrayList<>(tiles);
+        if (pending.size() > TunnelRoad.MAX_LINE_ROCK)
+            return Results.ERROR("Road: too many rock tiles between milestones");
+        while (!pending.isEmpty()) {
+            Coord next = null;
+            for (Coord tile : pending) if (bordersOpenGround(gui, tile)) { next = tile; break; }
+            if (next == null) return Results.ERROR("Road: no safe open edge for mining the route");
+            Results mined = mineRoadTile(gui, next);
+            if (!mined.IsSuccess()) return mined;
+            pending.remove(next);
+        }
+        return Results.SUCCESS();
+    }
+
+    private boolean bordersOpenGround(NGameUI gui, Coord tile) {
+        for (Coord delta : Coord.uecw) {
+            Coord neighbor = tile.add(delta);
+            try {
+                Resource res = gui.ui.sess.glob.map.tilesetr(gui.ui.sess.glob.map.gettile(neighbor));
+                if (res != null && !NParser.checkName(res.name, MINEABLE_TILES)) return true;
+            } catch (Loading unavailable) { /* Unknown is not open. */ }
+        }
+        return false;
     }
 
     // --- Building ---

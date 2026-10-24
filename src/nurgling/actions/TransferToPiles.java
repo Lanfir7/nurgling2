@@ -18,8 +18,10 @@ import nurgling.tools.VSpec;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.Predicate;
 
 public class TransferToPiles implements Action{
+    public Predicate<NGItem> filter = null;
 
     static final int GOB_SHIFT_RETRY_DELAY_TICKS = 15;
 
@@ -269,6 +271,8 @@ public class TransferToPiles implements Action{
 
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
+        if (!PileMaker.mayStartFiltered(filter != null, gui.vhand != null || !gui.hand.isEmpty()))
+            return Results.ERROR("Place the held item back before moving a selected Butter kind.");
         ArrayList<WItem> witems;
         NAlias pileName;
         if (!(witems = getMatchingItems(gui)).isEmpty() ) {
@@ -339,6 +343,7 @@ public class TransferToPiles implements Action{
                     } else {
                         pm = PileMaker.forTransferToPiles(out, items, pileName, th);
                     }
+                    pm.filter = filter;
                     if(!pm.run(gui).IsSuccess())
                         return Results.FAIL();
                     Gob pile = pm.getPile();
@@ -416,12 +421,12 @@ public class TransferToPiles implements Action{
                 allCategoryItemsInCurrentArea);
         // Gem sizes and cuts share a resource. Server-side bulk transfers may select
         // another variant even when the selected inventory row has an exact name.
-        if (requiresExactItemTransfer(exactName)) {
+        if (filter != null || requiresExactItemTransfer(exactName)) {
             mode = PileMode.ONE_BY_ONE;
         }
         boolean accepted = true;
         if (mode == PileMode.ONE_BY_ONE) {
-            transferOneByOne(gui, target_size);
+            accepted = transferOneByOne(gui, target_size);
         } else if (mode == PileMode.TYPE_BULK) {
             accepted = transferTypeBulk(gui, target_size);
         } else {
@@ -434,7 +439,7 @@ public class TransferToPiles implements Action{
         return true;
     }
 
-    private void transferOneByOne(NGameUI gui, int target_size) throws InterruptedException {
+    private boolean transferOneByOne(NGameUI gui, int target_size) throws InterruptedException {
         for (int i = 0; i < target_size; i++) {
             ArrayList<WItem> witems = getMatchingItems(gui);
             witems.sort(new Comparator<WItem>() {
@@ -450,12 +455,35 @@ public class TransferToPiles implements Action{
             if (witems.isEmpty()) {
                 break;
             }
-            NUtils.takeItemToHand(witems.get(0));
+            WItem selected = witems.get(0);
+            NInventory source = filter == null ? null : PouchContainerTransfer.sourceInventory(selected);
+            WItem hand = filter == null ? NUtils.takeItemToHand(selected)
+                    : NUtils.takeItemToHand(selected, WaitItemInHand.withSoftTimeout(selected, 200));
+            if (filter != null && (hand == null || !(hand.item instanceof NGItem)
+                    || !filter.test((NGItem) hand.item))) {
+                PouchContainerTransfer.recoverHeldToSource(selected, source);
+                return false;
+            }
             NISBox pile = gui.getStockpile();
+            if (pile == null) {
+                if (filter != null) PouchContainerTransfer.recoverHeldToSource(selected, source);
+                return false;
+            }
+            int before = pile.stockpileCount();
             pile.beginDepositTracking();
             pile.wdgmsg("drop");
-            NUtils.addTask(new WaitFreeHand());
+            NUtils.addTask(filter == null ? new WaitFreeHand() : new WaitFreeHand(200, false));
+            if (filter != null) {
+                PouchContainerTransfer.Confirmation receipt = new PouchContainerTransfer.Confirmation(
+                        () -> gui.vhand == null && pile.stockpileCount() > before);
+                NUtils.addTask(receipt);
+                if (!receipt.reached) {
+                    PouchContainerTransfer.recoverHeldToSource(selected, source);
+                    return false;
+                }
+            }
         }
+        return true;
     }
 
     /** Mixed types cannot use Stockpile.put or gob-shift (server/vanilla pick any sibling). */
@@ -743,7 +771,7 @@ public class TransferToPiles implements Action{
             NGItem item = (NGItem)witem.item;
             double quality = item.quality != null ? item.quality : 1.0;
             boolean nameMatches = exactName == null || item.name().equals(exactName);
-            if (nameMatches && TransferItems2.matchesQuality(
+            if (nameMatches && (filter == null || filter.test(item)) && TransferItems2.matchesQuality(
                     quality, Math.max(th, 1), maxQualityExclusive)) {
                 exactMatches.add(witem);
             }

@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-tunneler-selected-ore-stop",
+  "priority": 8,
+  "summary": {
+    "ru": "Проходчик может остановиться, когда вскрыта выбранная руда.",
+    "en": "The tunneler can stop when selected ore is revealed."
+  },
+  "detail": {
+    "ru": "В окне проходчика включите остановку при обнаружении руды и выберите нужные руды. Добыча остановится после появления новой выбранной жилы; уже видимая руда не прерывает работу.",
+    "en": "In the tunneler dialog, enable ore stopping and choose the ores to watch. Mining stops when it reveals a selected vein; ore already visible does not interrupt the run."
+  }
+}

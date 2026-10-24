@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-storage-index-autocraft",
+  "priority": 7,
+  "summary": {
+    "ru": "Автокрафт может брать точные ингредиенты из учтённых деревенских сундуков.",
+    "en": "Autocraft can fetch exact ingredients from indexed village chests."
+  },
+  "detail": {
+    "ru": "В окне рецепта включите «Брать из хранилища». Для обычных штучных ингредиентов без зоны ВЗЯТЬ будут использованы учтённые сундуки вашей деревни. Готовые вещи остаются в инвентаре; бочки, кучи и масло по-прежнему используют настроенные зоны. При неподтверждённом переносе крафт останавливается.",
+    "en": "Enable “Fetch from storage index” in the recipe window. Countable ingredients without a TAKE area can come from indexed chests in your village. Crafted items stay in your inventory; barrels, piles, and butter keep their configured areas. Crafting stops if a transfer cannot be confirmed."
+  }
+}

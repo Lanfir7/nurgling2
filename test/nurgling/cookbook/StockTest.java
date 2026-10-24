@@ -23,4 +23,19 @@ class StockTest {
                 new StorageItemDao.StorageItemData("empty", "Milk", 12, "#bulk:0 l", "barrel", 1L)))
                 .amount(Collections.singletonList("Milk")));
     }
+
+    @Test
+    void countableKeysNeverOfferBulkOnlyRowsAsFetchableItems() {
+        Stock stock = new Stock(Arrays.asList(
+                new StorageItemDao.StorageItemData("milk-barrel", "Milk", 10, "#bulk:12 l", "barrel", 1L),
+                new StorageItemDao.StorageItemData("seed-barrel", "Barley Seed", 0, "#bulk:50 seeds", "barrel", 1L),
+                new StorageItemDao.StorageItemData("seed-item", "Barley Seed", 15, "(1, 1)", "cupboard", 1L),
+                new StorageItemDao.StorageItemData("carrot", "Carrot", 5, "(2, 1)", "cupboard", 1L)));
+
+        assertFalse(stock.countableKeys().contains(GenericTypes.stockKey("Milk")));
+        assertTrue(stock.countableKeys().contains(GenericTypes.stockKey("Barley Seed")));
+        assertTrue(stock.countableKeys().contains(GenericTypes.stockKey("Carrot")));
+        assertThrows(UnsupportedOperationException.class,
+                () -> stock.countableKeys().add(GenericTypes.stockKey("Apple")));
+    }
 }

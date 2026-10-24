@@ -8,6 +8,7 @@ import haven.ResDrawable;
 import haven.Resource;
 import haven.Sprite;
 import haven.TexI;
+import haven.UI;
 import nurgling.NConfig;
 import nurgling.NGameUI;
 import nurgling.NUtils;
@@ -21,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
@@ -214,11 +216,11 @@ public class LpExplorer {
         return new UndiscoveredCategories(seed, leaf, bough, bark);
     }
 
-    private static boolean isLeafProduct(String product) {
+    public static boolean isLeafProduct(String product) {
         return product.contains("Leaf") || product.contains("Leaves");
     }
 
-    private static boolean isBoughProduct(String product) {
+    public static boolean isBoughProduct(String product) {
         return product.contains("Bough");
     }
 
@@ -311,8 +313,11 @@ public class LpExplorer {
     // Whether this exact product is still undiscovered for this gob - package-visible so
     // ProductListHarvestSpec (the log/stone always-on overlay) can tint individual icons the same
     // way the tree/bush categories already do.
-    static boolean isProductUndiscovered(String gobResName, String product) {
-        NCharacterInfo info = charInfo();
+    public static boolean isProductUndiscovered(String gobResName, String product) {
+        return isProductUndiscovered(charInfo(), gobResName, product);
+    }
+
+    public static boolean isProductUndiscovered(NCharacterInfo info, String gobResName, String product) {
         if (info == null || gobResName == null || product == null)
             return false;
         return isCurrentSeasonProduct(gobResName, product) && !isProductDiscovered(info, gobResName, product);
@@ -402,7 +407,7 @@ public class LpExplorer {
         if (gobName == null)
             return;
 
-        if (!recentHarvestClick(gui.map))
+        if (!recentHarvestClick(gui.map) && !consumeBotHarvest(gui.ui, info.chrid, gobName, name, System.currentTimeMillis()))
             return;
 
         if (!info.IsLpExplorerContains(gobName, name)) {
@@ -414,6 +419,53 @@ public class LpExplorer {
     // How long after clicking a harvestable gob a resolving item name is still attributed to that
     // harvest. Only needs to cover a server round-trip plus the item's own resource load.
     private static final long HARVEST_CLICK_WINDOW = 10_000;
+    private static final long BOT_HARVEST_WINDOW = 70_000;
+
+    /** A bot may credit only the one product it has just chosen from its own gob menu. */
+    public static final class BotHarvest {
+        private final String character, resource, product;
+        private final long expires;
+
+        private BotHarvest(String character, String resource, String product, long expires) {
+            this.character = character;
+            this.resource = resource;
+            this.product = product;
+            this.expires = expires;
+        }
+    }
+
+    private static final Map<UI, BotHarvest> botHarvests = Collections.synchronizedMap(new WeakHashMap<>());
+
+    public static BotHarvest armBotHarvest(UI ui, String character, String resource, String product, long now) {
+        if (ui == null || character == null || resource == null || product == null)
+            return null;
+        BotHarvest token = new BotHarvest(character, resource, product, now + BOT_HARVEST_WINDOW);
+        botHarvests.put(ui, token);
+        return token;
+    }
+
+    public static void clearBotHarvest(UI ui, BotHarvest token) {
+        if (ui != null && token != null)
+            botHarvests.remove(ui, token);
+    }
+
+    static boolean consumeBotHarvest(UI ui, String character, String resource, String product, long now) {
+        if (ui == null)
+            return false;
+        synchronized (botHarvests) {
+            BotHarvest token = botHarvests.get(ui);
+            if (token == null)
+                return false;
+            if (now > token.expires) {
+                botHarvests.remove(ui, token);
+                return false;
+            }
+            if (!token.character.equals(character) || !token.resource.equals(resource) || !token.product.equals(product))
+                return false;
+            botHarvests.remove(ui, token);
+            return true;
+        }
+    }
 
     // MapView hands out a new ClickedGob instance per click, so identity is what tells us a click
     // is a *new* one rather than the same one we already timed.

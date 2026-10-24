@@ -8,6 +8,7 @@ import nurgling.NUtils;
 import nurgling.areas.NContext;
 import nurgling.tasks.GetItems;
 import nurgling.tasks.NTask;
+import nurgling.tools.ItemVariants;
 import nurgling.widgets.DropContainer;
 
 import java.util.ArrayList;
@@ -74,6 +75,8 @@ public class FreeInventory2 implements Action
         }while (fordrop !=null);
         
         ArrayList<WItem> items = gui.getInventory().getItems();
+        if (!ItemVariants.awaitKnown(items))
+            return Results.ERROR("Butter kind is still loading; inventory items were kept.");
         items.sort(new Comparator<WItem>() {
             @Override
             public int compare(WItem o1, WItem o2) {
@@ -90,8 +93,10 @@ public class FreeInventory2 implements Action
         });
         for(WItem item : items)
         {
-            String name = ((NGItem)item.item).name();
             double quality = ((NGItem)item.item).quality!=null?((NGItem)item.item).quality:1;
+            String name = context.outKey((NGItem)item.item, quality);
+            if (name == null)
+                return Results.ERROR("Butter kind is unknown; inventory items were kept.");
             if(context.addOutItem(name, null, quality)) {
                 targets.add(name);
             } else {

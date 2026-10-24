@@ -72,6 +72,10 @@ public class StorageItemService {
         return databaseManager.executeOperation(adapter -> storageItemDao.loadStorageItemsByNames(adapter, names));
     }
 
+    public List<StorageItemDao.LocatedItem> loadLocatedCountableByExactNames(Collection<String> names) throws SQLException {
+        return databaseManager.executeOperation(adapter -> storageItemDao.loadLocatedCountableByExactNames(adapter, names));
+    }
+
     /**
      * Load storage items by container asynchronously
      */

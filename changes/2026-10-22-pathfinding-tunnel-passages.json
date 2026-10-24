@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-pathfinding-tunnel-passages",
+  "priority": 8,
+  "summary": {
+    "ru": "Маршруты проходят через проёмы шахтных рам.",
+    "en": "Routes can pass through mine-frame openings."
+  },
+  "detail": {
+    "ru": "При прокладке маршрута через шахту клиент учитывает стойки деревянных, усиленных и каменных рам, оставляя свободным проход между ними.",
+    "en": "When planning a route through a mine, the client avoids the posts of timber, reinforced, and stone-arch frames while using the opening between them."
+  }
+}

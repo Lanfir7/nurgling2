@@ -53,11 +53,14 @@ public class NGob
     public volatile GobHide.HideCategory hideCat = null;
     private volatile int hideVersion = 0;
     public NHitBox hitBox = null;
+    /** Separate solid posts used only by pathfinding; published as a whole after parsing. */
+    private volatile NHitBox[] hitBoxParts = null;
+    private boolean pendingPathfindingRetirement = false;
     public String name = null;
     public boolean isQuested = true;
     public boolean customMask = false;
     public int mask = -1;
-    private CellsArray ca = null;
+    private volatile CellsArray ca = null;
     boolean isDynamic = false;
     private boolean isGate = false;
     protected long modelAttribute = -1;
@@ -742,6 +745,7 @@ public class NGob
      */
     private void processDrawable(Drawable drawable)
     {
+        beginPathfindingDrawable();
         boolean explicitCustomHitBox = false;
         if (drawable.getres() != null)
         {
@@ -766,6 +770,7 @@ public class NGob
                 }
                 if (name.startsWith("gfx/terobjs/arch/cellardoor") || name.startsWith("gfx/terobjs/herbs/standinggrass"))
                 {
+                    finishPathfindingParts(null);
                     return;
                 }
 
@@ -1097,6 +1102,8 @@ public class NGob
                 }
             }
 
+            finishPathfindingParts(NHitBox.passageParts(drawable.getres()));
+
             // Now that name and hitBox are both settled, reconcile the gob's visibility. This also
             // covers drawable changes that move a gob between categories (a felled tree becoming a
             // log), where the render node was dropped under the old category's rules.
@@ -1183,6 +1190,46 @@ public class NGob
             }
         }
         return ca;
+    }
+
+    public NHitBox[] hitBoxParts() {
+        NHitBox[] parts = hitBoxParts;
+        return copyPathfindingParts(parts);
+    }
+
+    /** Retire stale passage geometry on drawable changes and refresh only affected PF cells. */
+    void setPathfindingParts(NHitBox[] parts) {
+        NHitBox[] old = hitBoxParts;
+        if (old == null && parts == null) return;
+        hitBoxParts = copyPathfindingParts(parts);
+        if (!isDynamic)
+            ca = hitBox == null ? null : new CellsArray(parent);
+    }
+
+    /** Retire the old parts immediately, including while the new drawable is loading. */
+    void beginPathfindingDrawable() {
+        if (hitBoxParts != null)
+            pendingPathfindingRetirement = true;
+        setPathfindingParts(null);
+    }
+
+    /** Complete a drawable transition after its ordinary hitbox has been resolved. */
+    void finishPathfindingParts(NHitBox[] parts) {
+        setPathfindingParts(parts);
+        if (pendingPathfindingRetirement && parts == null && !isDynamic)
+            ca = hitBox == null ? null : new CellsArray(parent);
+        pendingPathfindingRetirement = false;
+    }
+
+    private static NHitBox[] copyPathfindingParts(NHitBox[] parts) {
+        if (parts == null) return null;
+        NHitBox[] copy = new NHitBox[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            if (parts[i] == null) return null;
+            copy[i] = new NHitBox(parts[i].begin, parts[i].end, true);
+            copy[i].mirrorAsymmetric = parts[i].mirrorAsymmetric;
+        }
+        return copy;
     }
 
     public CellsArray getTrueCA()

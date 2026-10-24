@@ -16,6 +16,7 @@ import nurgling.tasks.NTask;
 import nurgling.tasks.WaitFreeHand;
 import nurgling.tasks.WaitItemInHand;
 import nurgling.tools.StackSupporter;
+import nurgling.tools.ItemVariants;
 import java.util.function.BooleanSupplier;
 
 /** Pouch transfers must name their destination: the server's transfer shortcut goes to the backpack. */
@@ -103,6 +104,18 @@ final class PouchContainerTransfer {
         return new Live(item, target, name);
     }
 
+    /** Carry one explicitly selected stack member from any inventory, with receipt and recovery. */
+    static Ops liveSelected(WItem item, NInventory target, String name, String kindKey) {
+        return new Live(item, target, name, kindKey, true);
+    }
+
+    static boolean recoverHeldToSource(WItem selected, NInventory source) throws InterruptedException {
+        if (selected == null || source == null || !(selected.item instanceof NGItem))
+            return false;
+        Live worker = new Live(selected, source, ((NGItem) selected.item).name());
+        return worker.restore(source);
+    }
+
     enum Room { READY, NO_ROOM, FAILED }
 
     /** Check the real destination shape before taking the source item. */
@@ -165,17 +178,25 @@ final class PouchContainerTransfer {
         final NInventory target;
         final String name;
         final NGameUI gui;
+        final String kindKey;
+        final boolean selected;
         int before;
         boolean roomPreparationFailed;
 
         Live(WItem item, NInventory target, String name) {
+            this(item, target, name, null, false);
+        }
+
+        Live(WItem item, NInventory target, String name, String kindKey, boolean selected) {
             this.item = item;
             this.target = target;
             this.name = name;
             this.source = sourceInventory(item);
             this.gui = NUtils.getGameUI();
+            this.kindKey = kindKey;
+            this.selected = selected;
         }
-        public boolean isPouchItem() { return source != target && isNestedInventory(source); }
+        public boolean isPouchItem() { return source != target && source != null && (selected || isNestedInventory(source)); }
         public boolean fromStack() { return item.item.parent instanceof ItemStack; }
         public boolean stackable() { return StackSupporter.isStackable(target, name); }
         public boolean handOccupied() { return gui.vhand != null; }
@@ -234,11 +255,16 @@ final class PouchContainerTransfer {
                 synchronized (gui.ui) { return (before = unitsNamed(target, name)) >= 0; }
             })) return false;
             WItem hand = NUtils.takeItemToHand(item, WaitItemInHand.withSoftTimeout(item, WAIT_TICKS));
-            return hand != null && name.equals(itemName(hand.item));
+            return hand != null && name.equals(itemName(hand.item)) && matchesKind(hand);
+        }
+
+        private boolean matchesKind(WItem hand) {
+            return kindKey == null || (hand != null && hand.item instanceof NGItem
+                    && ItemVariants.matches((NGItem) hand.item, kindKey));
         }
 
         public boolean place(Place place) throws InterruptedException {
-            if (!handOccupied() || !name.equals(itemName(gui.vhand.item))) return false;
+            if (!handOccupied() || !name.equals(itemName(gui.vhand.item)) || !matchesKind(gui.vhand)) return false;
             if (place == Place.FREE_SLOT) return drop(target);
             WItem merge = mergeTarget(target, place == Place.NOT_FULL_STACK);
             if (merge == null) return false;
@@ -263,8 +289,8 @@ final class PouchContainerTransfer {
             if (!handOccupied()) return true;
             if (inventory == null || inventory.parent == null) return false;
             if (StackSupporter.isStackable(inventory, name)) {
-                WItem merge = mergeTarget(inventory, true);
-                if (merge == null) merge = mergeTarget(inventory, false);
+                WItem merge = mergeTarget(inventory, true, inventory != source);
+                if (merge == null) merge = mergeTarget(inventory, false, inventory != source);
                 if (merge != null) {
                     NUtils.itemact(merge);
                     if (waitFreeHand()) return true;
@@ -288,11 +314,15 @@ final class PouchContainerTransfer {
             synchronized (gui.ui) { return inventory.findFreeCoord(held); }
         }
         private WItem mergeTarget(NInventory inventory, boolean stack) {
+            return mergeTarget(inventory, stack, true);
+        }
+        private WItem mergeTarget(NInventory inventory, boolean stack, boolean enforceKind) {
             synchronized (gui.ui) {
                 for (Widget ch = inventory.child; ch != null; ch = ch.next) {
                     if (!(ch instanceof WItem)) continue;
                     WItem candidate = (WItem) ch;
                     if (!name.equals(itemName(candidate.item))) continue;
+                    if (enforceKind && !kindCompatible(candidate, kindKey)) continue;
                     if (stack && candidate.item.contents instanceof ItemStack) {
                         int size = ((ItemStack) candidate.item.contents).wmap.size();
                         if (size > 0 && size < StackSupporter.getFullStackSize(name)) return candidate;
@@ -303,6 +333,22 @@ final class PouchContainerTransfer {
                 return null;
             }
         }
+
+    }
+
+    static boolean kindCompatible(WItem candidate, String kindKey) {
+        if (kindKey == null)
+            return true;
+        if (!(candidate.item instanceof NGItem))
+            return false;
+        if (candidate.item.contents instanceof ItemStack) {
+            for (WItem member : ((ItemStack) candidate.item.contents).wmap.values()) {
+                if (!(member.item instanceof NGItem) || !ItemVariants.matches((NGItem) member.item, kindKey))
+                    return false;
+            }
+            return true;
+        }
+        return ItemVariants.matches((NGItem) candidate.item, kindKey);
     }
 
     /** Count only this inventory, including stack leaves, never augmented backpack/pouch listings. */

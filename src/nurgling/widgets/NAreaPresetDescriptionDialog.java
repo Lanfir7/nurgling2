@@ -18,11 +18,16 @@ public class NAreaPresetDescriptionDialog extends Window
 
     private NAreaPresetDescriptionDialog(AreaPreset preset, Consumer<String> onSave)
     {
-        super(UI.scale(new Coord(380, 260)), get("area.preset.description_title", preset.name));
+        this(get("area.preset.description_title", preset.name), get("area.preset.description_hint"),
+                preset.description.isEmpty() ? template(preset) : preset.description, onSave);
+    }
+
+    private NAreaPresetDescriptionDialog(String title, String hint, String initial, Consumer<String> onSave)
+    {
+        super(UI.scale(new Coord(380, 260)), title);
         this.onSave = onSave;
-        Widget prev = add(new Label(get("area.preset.description_hint")), Coord.z);
-        text = add(new NTextArea(UI.scale(new Coord(380, 230)),
-                                 preset.description.isEmpty() ? template(preset) : preset.description),
+        Widget prev = add(new Label(hint), Coord.z);
+        text = add(new NTextArea(UI.scale(new Coord(380, 230)), initial),
                    prev.pos("bl").adds(0, 4));
         Button ok = add(new Button(UI.scale(80), get("edit.save")) {
             @Override
@@ -42,6 +47,16 @@ public class NAreaPresetDescriptionDialog extends Window
     public static void open(UI ui, AreaPreset preset, Consumer<String> onSave)
     {
         NAreaPresetDescriptionDialog dlg = new NAreaPresetDescriptionDialog(preset, onSave);
+        place(ui, dlg);
+    }
+
+    public static void open(UI ui, String title, String hint, String initial, Consumer<String> onSave)
+    {
+        place(ui, new NAreaPresetDescriptionDialog(title, hint, initial, onSave));
+    }
+
+    private static void place(UI ui, NAreaPresetDescriptionDialog dlg)
+    {
         ui.gui.add(dlg, ui.gui.sz.div(2).sub(dlg.sz.div(2)));
         dlg.setfocus(dlg.text);
         dlg.raise();

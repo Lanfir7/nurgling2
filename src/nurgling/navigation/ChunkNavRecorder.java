@@ -51,6 +51,7 @@ public class ChunkNavRecorder {
         final Coord2d rc;
         final double angle;
         final NHitBox hitBox;
+        final NHitBox[] hitBoxParts;
         final String name;
         final boolean isFollowing;
 
@@ -59,6 +60,7 @@ public class ChunkNavRecorder {
             this.rc = gob.rc;
             this.angle = gob.a;
             this.hitBox = (gob.ngob != null) ? gob.ngob.hitBox : null;
+            this.hitBoxParts = (gob.ngob != null) ? gob.ngob.hitBoxParts() : null;
             this.name = (gob.ngob != null) ? gob.ngob.name : null;
             this.isFollowing = gob.getattr(Following.class) != null;
         }
@@ -408,6 +410,14 @@ public class ChunkNavRecorder {
                     continue;
                 }
 
+                if (!gate && snap.hitBoxParts != null) {
+                    nurgling.pf.NHitBoxD[] parts = nurgling.pf.NHitBoxD.parts(snap.hitBoxParts, snap.rc, snap.angle);
+                    if (parts != null) {
+                        marks.blocked.addAll(partBlockedCells(parts, gridCellOrigin));
+                        continue;
+                    }
+                }
+
                 // Compute hitbox in world space with rotation
                 nurgling.pf.NHitBoxD worldHitBox = new nurgling.pf.NHitBoxD(
                     snap.hitBox.begin, snap.hitBox.end, snap.rc, snap.angle
@@ -476,6 +486,28 @@ public class ChunkNavRecorder {
         }
 
         return marks;
+    }
+
+    /** Coarse saved-route marks for the actual posts, sampled at half-tile cell centres. */
+    static Set<Long> partBlockedCells(nurgling.pf.NHitBoxD[] parts, Coord gridCellOrigin) {
+        Set<Long> blocked = new HashSet<>();
+        for (nurgling.pf.NHitBoxD part : parts) {
+            Coord2d ul = part.getCircumscribedUL();
+            Coord2d br = part.getCircumscribedBR();
+            int minX = Math.max(0, (int) Math.floor(ul.x / MCache.tilehsz.x) - gridCellOrigin.x);
+            int minY = Math.max(0, (int) Math.floor(ul.y / MCache.tilehsz.y) - gridCellOrigin.y);
+            int maxX = Math.min(CELLS_PER_EDGE - 1, (int) Math.floor(br.x / MCache.tilehsz.x) - gridCellOrigin.x);
+            int maxY = Math.min(CELLS_PER_EDGE - 1, (int) Math.floor(br.y / MCache.tilehsz.y) - gridCellOrigin.y);
+            for (int x = minX; x <= maxX; x++) {
+                for (int y = minY; y <= maxY; y++) {
+                    Coord2d centre = Coord2d.of((gridCellOrigin.x + x + 0.5) * MCache.tilehsz.x,
+                                                (gridCellOrigin.y + y + 0.5) * MCache.tilehsz.y);
+                    if (part.contains(centre, true))
+                        blocked.add(((long) x << 32) | (y & 0xFFFFFFFFL));
+                }
+            }
+        }
+        return blocked;
     }
 
     /**

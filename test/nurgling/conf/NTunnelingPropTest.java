@@ -51,5 +51,34 @@ class NTunnelingPropTest {
         assertFalse(loaded.doubleTunnel);
         assertEquals(5, loaded.maxLateral);
         assertEquals(2, loaded.supportType);
+        assertFalse(loaded.centreLine);
+    }
+
+    @Test
+    void centreLineRoundTripsAndDefaultsSafelyForOldOrMalformedValues() {
+        NTunnelingProp original = new NTunnelingProp("bob", "chr2");
+        original.centreLine = true;
+        NTunnelingProp loaded = new NTunnelingProp(new HashMap<>(original.toJson().toMap()));
+        assertTrue(loaded.centreLine);
+
+        HashMap<String, Object> legacy = new HashMap<>();
+        legacy.put("username", "bob");
+        legacy.put("chrid", "chr2");
+        assertFalse(new NTunnelingProp(legacy).centreLine);
+
+        legacy.put("centreLine", "true");
+        assertFalse(new NTunnelingProp(legacy).centreLine);
+    }
+
+    @Test
+    void centreLineFalseRoundTripsPerStoredProfile() {
+        NTunnelingProp first = new NTunnelingProp("alice", "chr1");
+        NTunnelingProp second = new NTunnelingProp("alice", "chr2");
+        NTunnelingProp third = new NTunnelingProp("bob", "chr1");
+        first.centreLine = true;
+
+        assertTrue(new NTunnelingProp(new HashMap<>(first.toJson().toMap())).centreLine);
+        assertFalse(new NTunnelingProp(new HashMap<>(second.toJson().toMap())).centreLine);
+        assertFalse(new NTunnelingProp(new HashMap<>(third.toJson().toMap())).centreLine);
     }
 }

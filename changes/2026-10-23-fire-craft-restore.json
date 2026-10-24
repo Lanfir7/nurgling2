@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-fire-craft-restore",
+  "priority": 5,
+  "summary": {
+    "ru": "После разжигания костра переключатель «Авто» снова соответствует выбранному режиму крафта.",
+    "en": "After lighting a fire, the Auto checkbox again matches the selected crafting mode."
+  },
+  "detail": {
+    "ru": "Когда разжигание временно открывает другой рецепт, после возврата переключатель Auto и связанные с режимом элементы управления показывают сохранённое состояние. Выбранные ингредиенты при этом остаются на месте.",
+    "en": "When lighting temporarily opens another recipe, the Auto checkbox and related controls reflect the saved mode when your recipe returns. Its selected ingredients remain in place."
+  }
+}

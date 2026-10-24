@@ -9,6 +9,8 @@ import nurgling.*;
 import nurgling.areas.*;
 import nurgling.i18n.L10n;
 import nurgling.overlays.NAreaLabel;
+import nurgling.tools.ItemVariants;
+import nurgling.actions.bots.drinker.Vessels;
 import org.json.*;
 
 import java.awt.*;
@@ -256,7 +258,7 @@ public class IngredientContainer extends BaseIngredientContainer {
             }
             if(!find) {
                 res.put("name", name);
-                res.put("type", NArea.Ingredient.Type.CONTAINER.toString());
+                res.put("type", (ItemVariants.liquidOf(name) != null || Vessels.isDrink(name) ? NArea.Ingredient.Type.BARREL : NArea.Ingredient.Type.CONTAINER).toString());
                 addIcon(res);
                 data.put(res);
                 
@@ -317,7 +319,11 @@ public class IngredientContainer extends BaseIngredientContainer {
     @Override
     public boolean drop(Drop ev) {
         if(id != -1) {
-            String name = ((NGItem) ev.src.item).name();
+            NGItem item = (NGItem) ev.src.item;
+            if (ItemVariants.unread(item))
+                return false;
+            String key = ItemVariants.keyOf(item);
+            String name = key != null ? key : item.name();
             JSONObject res = ItemTex.save(((NGItem) ev.src.item).spr);
             addItem(name, res);
         }

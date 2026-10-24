@@ -17,6 +17,8 @@ import nurgling.tasks.WaitTicks;
 import nurgling.tasks.WindowIsClosed;
 import nurgling.tools.Container;
 import nurgling.tools.Finder;
+import nurgling.tools.ItemVariants;
+import nurgling.NGItem;
 import nurgling.tools.NAlias;
 import nurgling.tools.StackSupporter;
 import nurgling.widgets.Specialisation;
@@ -151,7 +153,7 @@ public class TakeItems2 implements Action
             return false;
         int freeCells = inventory.getNumberFreeCoord(new Coord(1, 1));
         boolean partialStackAvailable = freeCells <= 0 && item != null
-                && inventory.findNotFullStack(item) != null;
+                && inventory.findNotFullStack(ItemVariants.base(item)) != null;
         return inventoryCannotAcceptItem(freeCells, partialStackAvailable);
     }
 
@@ -183,9 +185,9 @@ public class TakeItems2 implements Action
         {
             if(noRoomLeft(gui))
                 return Results.SUCCESS();
-            if(input instanceof NContext.Barter)
+            if(input instanceof NContext.Barter && !ItemVariants.isKey(item))
                 takeFromBarter(left,gui, (NContext.Barter)input);
-            else if (input instanceof NContext.Pile)
+            else if (input instanceof NContext.Pile && !ItemVariants.isKey(item))
             {
                 takeFromPile(left, gui,(NContext.Pile) input);
             }
@@ -193,14 +195,17 @@ public class TakeItems2 implements Action
             {
                 takeFromContainer(left, gui, (Container) input);
             }
-            if(NUtils.getGameUI().getInventory().getItems(new NAlias(item)).size() >= count) {
+            int held = held(gui);
+            if(held >= count) {
                 return Results.SUCCESS();
             }
             else
             {
-                left.set(count - NUtils.getGameUI().getInventory().getItems(new NAlias(item)).size());
+                left.set(count - held);
             }
         }
+        if (ItemVariants.isKey(item) && held(gui) < count)
+            return Results.ERROR("Selected butter kind was not available in a container.");
         return Results.SUCCESS();
     }
 
@@ -412,11 +417,26 @@ public class TakeItems2 implements Action
             return Results.SUCCESS();
         new PathFinder(contgob).run(gui);
         new OpenTargetContainer(cont).run(gui);
-        TakeItemsFromContainer tifc = new TakeItemsFromContainer(cont,new HashSet<>(Arrays.asList(item)), null, qualityType);
+        TakeItemsFromContainer tifc = new TakeItemsFromContainer(cont,
+                new HashSet<>(Arrays.asList(ItemVariants.base(item))), null, qualityType);
+        if (ItemVariants.isKey(item))
+            tifc.filter = candidate -> ItemVariants.matches(candidate, item);
         tifc.minSize = left.get();
         tifc.exactMatch = this.exactMatch;
-        tifc.run(gui);
+        Results taken = tifc.run(gui);
         new CloseTargetContainer(cont).run(gui);
+        if (ItemVariants.isKey(item) && !taken.IsSuccess())
+            return taken;
         return Results.SUCCESS();
+    }
+
+    private int held(NGameUI gui) throws InterruptedException {
+        ArrayList<WItem> items = gui.getInventory().getItems(new NAlias(ItemVariants.base(item)));
+        if (!ItemVariants.isKey(item))
+            return items.size();
+        int count = 0;
+        for (WItem candidate : items)
+            if (ItemVariants.matches((NGItem) candidate.item, item)) count++;
+        return count;
     }
 }

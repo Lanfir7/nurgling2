@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-session-timer-deadlock",
+  "priority": 4,
+  "summary": {
+    "ru": "Переключение между персонажами больше не зависает из-за таймеров в фоне.",
+    "en": "Switching characters no longer freezes while background timers tick."
+  },
+  "detail": {
+    "ru": "Если открыто несколько персонажей, переход между их вкладками остаётся отзывчивым, пока таймеры продолжают работать в фоне. Уведомления о таймерах по-прежнему ждут окончания боя, если включена соответствующая настройка.",
+    "en": "When several characters are open, switching between their tabs stays responsive while timers keep running in the background. Timer alerts still wait until combat ends when that setting is enabled."
+  }
+}

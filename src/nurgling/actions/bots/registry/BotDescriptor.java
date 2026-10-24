@@ -1,6 +1,8 @@
 package nurgling.actions.bots.registry;
 
 import nurgling.actions.Action;
+import nurgling.actions.bots.drinker.DrinkerBot;
+import nurgling.actions.bots.blueprint.BlueprintBuilder;
 import nurgling.i18n.L10n;
 
 import java.util.Map;
@@ -98,6 +100,15 @@ public class BotDescriptor {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    /** Scenario execution cannot open an interactive bot configuration window. */
+    public Action instantiateForScenario(Map<String, Object> settings) {
+        if ("drinker".equals(id))
+            return new DrinkerBot(mergeSettings(settings), true);
+        if ("blueprint_builder".equals(id))
+            return new BlueprintBuilder(mergeSettings(settings), true);
+        return instantiate(settings);
     }
 
     private Map<String, Object> mergeSettings(Map<String, Object> callerSettings) {

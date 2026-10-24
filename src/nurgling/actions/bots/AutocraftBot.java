@@ -10,12 +10,14 @@ import nurgling.scenarios.CraftPresetManager;
 import nurgling.areas.NArea;
 import nurgling.areas.NContext;
 import nurgling.tasks.NTask;
-import nurgling.tools.VSpec;
+import nurgling.tools.ItemVariants;
+import nurgling.tools.VariantCraftOptions;
 import nurgling.widgets.NMakewindow;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * AutocraftBot executes crafting based on a saved preset.
@@ -137,7 +139,9 @@ public class AutocraftBot implements Action {
         }
 
         // Configure ingredients from preset
-        configureIngredients(mwnd, preset);
+        Results configured = configureIngredients(mwnd, preset);
+        if (!configured.IsSuccess())
+            return configured;
 
         // Run the craft
         Craft craft = new Craft(mwnd, quantity);
@@ -150,7 +154,7 @@ public class AutocraftBot implements Action {
     /**
      * Configures the NMakewindow ingredients based on preset preferences.
      */
-    private void configureIngredients(NMakewindow mwnd, CraftPreset preset) {
+    private Results configureIngredients(NMakewindow mwnd, CraftPreset preset) {
         for (CraftPreset.InputSpec presetInput : preset.getInputs()) {
             for (NMakewindow.Spec spec : mwnd.inputs) {
                 if (spec.name != null && spec.name.equals(presetInput.getName())) {
@@ -174,7 +178,8 @@ public class AutocraftBot implements Action {
                                 true
                             );
                         } else if (presetInput.getPreferredIngredient() != null) {
-                            setPreferredIngredient(mwnd, spec, presetInput.getPreferredIngredient());
+                            if (!setPreferredIngredient(mwnd, spec, presetInput.getPreferredIngredient()))
+                                return Results.ERROR("Preferred ingredient is unavailable: " + presetInput.getPreferredIngredient());
                         }
                     }
                     break;
@@ -195,6 +200,7 @@ public class AutocraftBot implements Action {
                 }
             }
         }
+        return Results.SUCCESS();
     }
 
     private NArea findAreaById(int areaId) {
@@ -211,13 +217,26 @@ public class AutocraftBot implements Action {
 
     /**
      * Sets the preferred ingredient for a category spec.
-     * Only sets the ingredient if an area is defined for it, otherwise leaves it
-     * for Craft.java to auto-select an ingredient that has an area.
+     * An explicit preset choice must resolve exactly; otherwise crafting stops before fetching.
      */
-    private void setPreferredIngredient(NMakewindow mwnd, NMakewindow.Spec spec, String preferredName) {
-        ArrayList<JSONObject> categoryItems = VSpec.categories.get(spec.name);
-        if (categoryItems == null) {
-            return;
+    private boolean setPreferredIngredient(NMakewindow mwnd, NMakewindow.Spec spec, String preferredName) {
+        boolean hasDedicatedSource = hasDedicatedSource(spec.selectedZone != null, spec.isLocalZone, spec.isSubCraft);
+        JSONObject choice = preferredOption(spec.name, preferredName, hasDedicatedSource,
+                name -> NContext.findIn(name) != null || NContext.findInGlobal(name) != null);
+        if (choice == null)
+            return false;
+        spec.ing = mwnd.new Ingredient(choice);
+        spec.useCategory = false;
+        return true;
+    }
+
+    static JSONObject preferredOption(String category, String preferredName,
+                                      boolean hasDedicatedSource, Predicate<String> hasArea) {
+        if (preferredName == null)
+            return null;
+        ArrayList<JSONObject> categoryItems = VariantCraftOptions.options(category);
+        if (categoryItems.isEmpty()) {
+            return null;
         }
 
         for (JSONObject obj : categoryItems) {
@@ -228,14 +247,14 @@ public class AutocraftBot implements Action {
                 continue;
             }
             String itemName = obj.getString("name");
-            if (itemName != null && itemName.equals(preferredName)) {
-                // Only set the ingredient if an area exists for it
-                if (NContext.findIn(itemName) != null || NContext.findInGlobal(itemName) != null) {
-                    spec.ing = mwnd.new Ingredient(obj);
-                }
-                // If no area, leave spec.ing null so Craft.java can auto-select
-                return;
-            }
+            if (preferredName.equals(itemName))
+                return hasDedicatedSource || hasArea.test(itemName) || (ItemVariants.isKey(itemName)
+                        && hasArea.test(ItemVariants.base(itemName))) ? obj : null;
         }
+        return null;
+    }
+
+    static boolean hasDedicatedSource(boolean selectedZone, boolean localZone, boolean subCraft) {
+        return selectedZone || localZone || subCraft;
     }
 }

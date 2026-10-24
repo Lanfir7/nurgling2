@@ -56,6 +56,32 @@ class SettingsSearchTest {
         assertEquals(SettingsSearch.LIMIT, SettingsSearch.query(many, "night").size());
     }
 
+    @Test
+    void orderedLettersFindTranslatedSetting() {
+        SettingsSearch.Entry vision = SettingsSearch.setting("Общие", "Удобство", "Ночное зрение", "qol.night_vision");
+        assertEquals(vision, SettingsSearch.query(Arrays.asList(vision), "нчзр").get(0).entry);
+        assertTrue(SettingsSearch.query(Arrays.asList(vision), "зрнч").isEmpty());
+        assertEquals(vision, SettingsSearch.query(Arrays.asList(vision), "night vision").get(0).entry);
+    }
+
+    @Test
+    void exactAndPrefixStayAheadOfFuzzyMatches() {
+        SettingsSearch.Entry fuzzy = SettingsSearch.setting("General", "Other", "Nightly Screen");
+        SettingsSearch.Entry prefix = SettingsSearch.setting("General", "Other", "Night Vision");
+        SettingsSearch.Entry exact = SettingsSearch.setting("General", "Other", "Night");
+        assertEquals(Arrays.asList(exact, prefix, fuzzy),
+                SettingsSearch.query(Arrays.asList(fuzzy, prefix, exact), "night").stream()
+                        .map(m -> m.entry).collect(Collectors.toList()));
+    }
+
+    @Test
+    void punctuationAndMixedTokensAreSafe() {
+        SettingsSearch.Entry vision = SettingsSearch.setting("Общие", "Удобство", "Ночное зрение", "qol.night_vision");
+        assertTrue(SettingsSearch.query(Arrays.asList(vision), "---").isEmpty());
+        assertEquals(vision, SettingsSearch.query(Arrays.asList(vision), "night-vision").get(0).entry);
+        assertTrue(SettingsSearch.query(Arrays.asList(vision), "night drink").isEmpty());
+    }
+
     private static List<String> names(List<SettingsSearch.Match> matches) {
         return matches.stream().map(SettingsSearch.Match::display).collect(Collectors.toList());
     }

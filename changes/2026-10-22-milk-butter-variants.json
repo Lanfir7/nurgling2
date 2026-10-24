@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-milk-butter-variants",
+  "priority": 7,
+  "summary": {
+    "ru": "Автокрафт различает молоко и масло коровы, козы и овцы.",
+    "en": "Autocrafting distinguishes cow, goat, and sheep milk and butter."
+  },
+  "detail": {
+    "ru": "В выборе ингредиента рецепта и списке предметов области можно указать вид молока или масла. Автокрафт проверяет содержимое бочек и не подменяет выбранное масло другим видом; обычные записи «Milk» и «Butter» по-прежнему подходят для любого вида.",
+    "en": "Choose a milk or butter kind in a recipe ingredient or area item list. Autocrafting checks barrel contents and keeps a selected butter kind from being replaced by another; plain Milk and Butter entries still accept any kind."
+  }
+}

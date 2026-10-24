@@ -39,6 +39,11 @@ public final class CraftMake {
      * @return {@code false} if the recipe window closed or the make failed
      */
     public static boolean waitOne(NGameUI gui, NMakewindow mwnd) throws InterruptedException {
+        return waitOne(gui, mwnd, false);
+    }
+
+    /** Storage-index crafts use a bounded completion wait; the legacy policy remains unchanged. */
+    public static boolean waitOne(NGameUI gui, NMakewindow mwnd, boolean bounded) throws InterruptedException {
         if (!windowOpen(mwnd) || gui == null)
             return false;
 
@@ -75,8 +80,24 @@ public final class CraftMake {
         if (instantSuccess(progAppeared[0], windowClosed[0], makeFailed[0]))
             return true;
 
-        NUtils.addTask(new NTask() {
+        final boolean[] completed = {false};
+        NUtils.addTask(completionTask(gui, mwnd, windowClosed, makeFailed, completed, bounded));
+
+        return !shouldStop(windowClosed[0], makeFailed[0]) && (!bounded || completed[0]);
+    }
+
+    static NTask completionTask(NGameUI gui, NMakewindow mwnd, boolean[] windowClosed,
+                                boolean[] makeFailed, boolean[] completed, boolean bounded) {
+        return new NTask() {
             private int ticksAfterProgGone = 0;
+
+            {
+                if (bounded) {
+                    infinite = false;
+                    criticalOnTimeout = false;
+                    maxCounter = 300;
+                }
+            }
 
             @Override
             public boolean check() {
@@ -93,10 +114,12 @@ public final class CraftMake {
                     return false;
                 }
                 ticksAfterProgGone++;
-                return ticksAfterProgGone >= MAX_TICKS_AFTER_PROG;
+                if (ticksAfterProgGone >= MAX_TICKS_AFTER_PROG) {
+                    completed[0] = true;
+                    return true;
+                }
+                return false;
             }
-        });
-
-        return !shouldStop(windowClosed[0], makeFailed[0]);
+        };
     }
 }

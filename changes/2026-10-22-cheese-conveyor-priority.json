@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-cheese-conveyor-priority",
+  "priority": 7,
+  "summary": {
+    "ru": "Заказы сырного конвейера можно расставить по приоритету.",
+    "en": "Cheese Conveyor orders can now be prioritized."
+  },
+  "detail": {
+    "ru": "В настройках сырного конвейера используйте стрелки рядом с заказами, чтобы задать очерёдность. Заказы с более высоким приоритетом первыми получают творог и места на стеллажах первой стадии; заказы одного приоритета делят места пропорционально потребности.",
+    "en": "Use the arrows beside orders in Cheese Conveyor settings to set their serving priority. Higher-priority orders receive curds and first-stage rack space first; orders sharing a priority divide space in proportion to demand."
+  }
+}

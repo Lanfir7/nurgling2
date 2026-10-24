@@ -20,6 +20,7 @@ import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
 import haven.WItem;
 import java.util.ArrayList;
+import java.util.function.Predicate;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
@@ -35,6 +36,7 @@ public class PileMaker implements Action{
 
     // When set, use exact name matching instead of NAlias substring matching
     String exactName = null;
+    public Predicate<NGItem> filter = null;
 
     public Gob getPile() {
         return pile;
@@ -101,8 +103,14 @@ public class PileMaker implements Action{
         return alexandrCreationFlow;
     }
 
+    static boolean mayStartFiltered(boolean filtered, boolean handOccupied) {
+        return !filtered || !handOccupied;
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
+        if (!mayStartFiltered(filter != null, gui.vhand != null || !gui.hand.isEmpty()))
+            return Results.ERROR("Place the held item back before moving a selected Butter kind.");
         if (alexandrCreationFlow) {
             return runAlexandrCreationFlow(gui);
         }
@@ -156,7 +164,8 @@ public class PileMaker implements Action{
         ensurePlacementAreaVisible(gui, out);
         if (gui.hand.isEmpty()) {
             ArrayList<WItem> witems = getMatchingItems(gui);
-            if (witems.isEmpty() || NUtils.takeItemToHand(witems.get(0)) == null) {
+            if (witems.isEmpty() || (filter == null ? NUtils.takeItemToHand(witems.get(0))
+                    : NUtils.takeItemToHand(witems.get(0), takeToHandWait(witems.get(0)))) == null) {
                 return Results.FAIL();
             }
         }
@@ -312,12 +321,13 @@ public class PileMaker implements Action{
      */
     private ArrayList<WItem> getMatchingItems(NGameUI gui) throws InterruptedException {
         ArrayList<WItem> allItems = NUtils.getGameUI().getInventory().getItems(items, th);
-        if (exactName == null) {
+        if (exactName == null && filter == null) {
             return allItems;
         }
         ArrayList<WItem> exactMatches = new ArrayList<>();
         for (WItem witem : allItems) {
-            if (((NGItem) witem.item).name().equals(exactName)) {
+            if ((exactName == null || ((NGItem) witem.item).name().equals(exactName))
+                    && (filter == null || filter.test((NGItem) witem.item))) {
                 exactMatches.add(witem);
             }
         }

@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-tunneler-road",
+  "priority": 8,
+  "summary": {
+    "ru": "Проходчик может продлевать дорогу из вех по мере добычи тоннеля.",
+    "en": "The tunneler can extend a milestone road as it digs."
+  },
+  "detail": {
+    "ru": "В окне проходчика включите «Строить дорогу из вех» и задайте шаг. Нужна доступная крайняя веха и камни для новых вех; при нехватке материалов или небезопасном участке проходчик остановится.",
+    "en": "In the tunneler dialog, enable “Build a milestone road” and choose the spacing. An extendable end milestone and stones are required; the tunneler stops if materials are missing or the route is unsafe."
+  }
+}

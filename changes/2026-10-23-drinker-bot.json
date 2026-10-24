@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-drinker-bot",
+  "priority": 7,
+  "summary": {
+    "ru": "Новый бот питья делает выбранное число глотков и бережно обращается с чашами персонажа.",
+    "en": "The new Drinker bot takes the chosen number of sips while protecting your cups."
+  },
+  "detail": {
+    "ru": "В разделе служебных ботов выберите «Бот питья», настройте напитки и чаши и укажите области TAKE. Чаши, которые бот взял из хранилищ, он возвращает после работы; при неизвестном содержимом или неподтверждённом действии останавливается и оставляет предметы у персонажа. Настройки можно сохранить в шаге сценария.",
+    "en": "Choose Drinker under utility bots, set drinks and cups, and provide TAKE areas. It returns cups fetched from storage; if a liquid or action cannot be confirmed, it stops and leaves the items with your character. You can also save the choices in a scenario step."
+  }
+}

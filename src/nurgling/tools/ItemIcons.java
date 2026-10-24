@@ -25,6 +25,10 @@ public final class ItemIcons {
             }
             JSONObject archive=ItemResources.names();
             for(String name:archive.keySet())names.putIfAbsent(normalize(name),archive.getJSONObject(name));
+            // In-game seed names absent from the item archive; preserve descriptors already registered.
+            for(Map.Entry<String,String> seed:Map.of("barley seeds","barley","wheat seeds","wheat",
+                    "millet seeds","millet","green kale seeds","greenkale").entrySet())
+                names.putIfAbsent(seed.getKey(),new JSONObject().put("static","gfx/invobjs/seed-"+seed.getValue()));
         }
     }
     private static String normalize(String name) {

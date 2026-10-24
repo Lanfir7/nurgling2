@@ -40,9 +40,28 @@ public class FillContainers2 implements Action
         if (area == null)
             return Results.ERROR("NO area for: " + transferedItems);
         context.addInItem(transferedItems, null);
+        boolean selectEggQuality = qualityType == QualityType.High
+                && "Silkworm Egg".equals(transferedItems);
         for (Container cont : conts) {
             while(!isReady(cont)) {
-                if (gui.getInventory().getItems(transferedItems).isEmpty()) {
+                Float cutoff = null;
+                if (selectEggQuality) {
+                    int targetSize = calculateTargetSize();
+                    FindQualityThreshold selected = new FindQualityThreshold(context,
+                            transferedItems, targetSize);
+                    Results scanned = selected.run(gui);
+                    if (scanned == null || !scanned.IsSuccess())
+                        return scanned != null ? scanned : Results.FAIL();
+                    cutoff = selected.getThreshold();
+                    int carried = selected.eligibleCarried(gui);
+                    if (carried < 0) return Results.FAIL();
+                    int need = Math.max(0, targetSize - carried);
+                    int room = StackSupporter.getOptimalItemCapacity(gui.getInventory(),
+                            transferedItems, targetCoord, need);
+                    Results fetched = selected.fetchUpTo(gui, Math.min(need, room));
+                    if (fetched == null || !fetched.IsSuccess())
+                        return fetched != null ? fetched : Results.FAIL();
+                } else if (gui.getInventory().getItems(transferedItems).isEmpty()) {
                     int target_size = calculateTargetSize();
                     int optimalCapacity = StackSupporter.getOptimalItemCapacity(NUtils.getGameUI().getInventory(), transferedItems, targetCoord, target_size);
                     new TakeItems2(context, transferedItems, optimalCapacity, qualityType).run(gui);
@@ -57,6 +76,12 @@ public class FillContainers2 implements Action
                 NAlias matching = new NAlias(transferedItems);
                 int before = gui.getInventory().getItems(matching).size();
                 TransferToContainer ttc = new TransferToContainer(cont, new NAlias(transferedItems));
+                final Float selectedCutoff = cutoff;
+                if (selectedCutoff != null) {
+                    ttc.filter = candidate -> FindQualityThreshold.eligible(candidate.quality,
+                            selectedCutoff);
+                    ttc.qualityFirst = true;
+                }
                 Results transferred = ttc.run(gui);
                 Results closed = new CloseTargetContainer(cont).run(gui);
                 if (transferred == null || !transferred.IsSuccess())

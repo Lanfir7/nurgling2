@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-craft-mode-switch",
+  "priority": 4,
+  "summary": {
+    "ru": "В окне рецепта появился явный выбор «Вручную / Автокрафт».",
+    "en": "Recipe windows now have an explicit Manual / Autocraft selector."
+  },
+  "detail": {
+    "ru": "Переключатель под рецептом показывает текущий режим и позволяет выбрать ручной крафт или автокрафт. Выбранные ингредиенты и флаг «Без переноса» сохраняются при переключении.",
+    "en": "The selector below the recipe shows the current mode and lets you choose manual crafting or autocrafting. Switching keeps your selected ingredients and No transfer choice."
+  }
+}

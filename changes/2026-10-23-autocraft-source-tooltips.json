@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-autocraft-source-tooltips",
+  "priority": 5,
+  "summary": {
+    "ru": "Подсказки ингредиентов автокрафта показывают выбранный источник.",
+    "en": "Autocraft ingredient tooltips show their selected source."
+  },
+  "detail": {
+    "ru": "Включите автокрафт и наведите курсор на входной ингредиент рецепта: подсказка покажет область TAKE, инвентарь, подкрафт или учтённый склад. Если источник ещё проверяется или не настроен, это тоже видно в подсказке.",
+    "en": "Enable autocraft and hover over a recipe input to see its TAKE area, inventory, subcraft or indexed storage source. The tooltip also shows when storage is still being checked or no source is configured."
+  }
+}

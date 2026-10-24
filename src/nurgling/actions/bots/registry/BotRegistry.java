@@ -7,6 +7,8 @@ import nurgling.actions.bots.farmers.WatermelonFarmer;
 import nurgling.actions.bots.farmers.WhiteOnionFarmer;
 import nurgling.actions.bots.*;
 import nurgling.actions.bots.cheeseconveyor.CheeseConveyorBot;
+import nurgling.actions.bots.drinker.DrinkerBot;
+import nurgling.actions.bots.blueprint.BlueprintBuilder;
 import nurgling.actions.bots.CarrotFarmerQ;
 import nurgling.actions.bots.silk.RefillSilkwormFeedingCupboards;
 import nurgling.actions.bots.silk.SilkProductionBot;
@@ -113,6 +115,7 @@ public class BotRegistry {
         bots.add(new BotDescriptor("bark", BotDescriptor.BotType.RESOURCES, "bot.bark.title", "bot.bark.desc", false, true, CollectBark.class, "bark", false));
         bots.add(new BotDescriptor("bough", BotDescriptor.BotType.RESOURCES, "bot.bough.title", "bot.bough.desc", false, true, CollectBough.class, "bough", false));
         bots.add(new BotDescriptor("leaf", BotDescriptor.BotType.RESOURCES, "bot.leaf.title", "bot.leaf.desc", false, true, CollectLeaf.class, "leaf", false));
+        bots.add(new BotDescriptor("lp_gatherer", BotDescriptor.BotType.RESOURCES, "bot.lp_gatherer.title", "bot.lp_gatherer.desc", true, true, LpGatherer.class, "lp_gatherer", false));
         bots.add(new BotDescriptor("leaf_zone", BotDescriptor.BotType.RESOURCES, "bot.leaf_zone.title", "bot.leaf_zone.desc", true, true, CollectLeafZone.class, "leaf_zone", false));
         bots.add(new BotDescriptor("fisher", BotDescriptor.BotType.RESOURCES, "bot.fisher.title", "bot.fisher.desc", false, true, Fishing.class, "fisher", true));
         bots.add(new BotDescriptor("plower", BotDescriptor.BotType.RESOURCES, "bot.plower.title", "bot.plower.desc", false, true, Plower.class, "plower", true));
@@ -268,6 +271,7 @@ public class BotRegistry {
         bots.add(new BotDescriptor("eater", BotDescriptor.BotType.UTILS, "bot.eater.title", "bot.eater.desc", true, true, Eater.class, "eater", false));
         bots.add(new BotDescriptor("emptytea", BotDescriptor.BotType.UTILS, "Empty Tea", "Empties all teapots with tea into barrels.", true, true, EmptyTeapots.class, "emptytea", false));
         bots.add(new BotDescriptor("waterfiller", BotDescriptor.BotType.UTILS, "bot.waterfiller.title", "bot.waterfiller.desc", false, true, WaterFiller.class, "waterfiller", false));
+        bots.add(new BotDescriptor("drinker", BotDescriptor.BotType.UTILS, "bot.drinker.title", "bot.drinker.desc", true, true, DrinkerBot.class, "drinker", false));
         bots.add(new BotDescriptor("zoneminer", BotDescriptor.BotType.UTILS, "Mine in area", "Mine rocks in the area.", false, true, MineAction.class, "zoneminer", true));
         bots.add(new BotDescriptor("bed", BotDescriptor.BotType.UTILS, "Go to bed", "Go to any free bed in a bed area nearby.", true, false, Sleep.class, "bed", false));
         bots.add(new BotDescriptor("soil", BotDescriptor.BotType.UTILS, "Create piles with soil", "Create piles with soil in area.", false, true, CreateSoilPiles.class, "soil", false));
@@ -309,6 +313,7 @@ public class BotRegistry {
         bots.add(new BotDescriptor("ttub", BotDescriptor.BotType.BUILD, "Build Tub", "Builds tub.", false, true, BuildTtub.class, "ttub", false));
         bots.add(new BotDescriptor("cupboard", BotDescriptor.BotType.BUILD, "Build Cupboard", "Builds cupboard.", false, true, BuildCupboard.class, "cupboard", false));
         bots.add(new BotDescriptor("road_builder", BotDescriptor.BotType.BUILD, "bot.road_builder.title", "bot.road_builder.desc", false, true, RoadBuilderBot.class, "paver", false));
+        bots.add(new BotDescriptor("blueprint_builder", BotDescriptor.BotType.BUILD, "bot.blueprint_builder.title", "bot.blueprint_builder.desc", true, true, BlueprintBuilder.class, "blueprint", false));
         bots.add(new BotDescriptor("cheese_rack", BotDescriptor.BotType.BUILD, "Build Cheese Rack", "Builds cheese rack.", false, true, BuildCheeseRack.class, "cheese_rack", false));
         bots.add(new BotDescriptor("kiln", BotDescriptor.BotType.BUILD, "Build Kiln", "Builds kiln.", false, true, BuildKiln.class, "kiln", false));
         bots.add(new BotDescriptor("barrel", BotDescriptor.BotType.BUILD, "Build Barrel", "Builds barrel.", false, true, BuildBarrel.class, "barrel", false));

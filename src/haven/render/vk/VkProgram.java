@@ -159,8 +159,12 @@ public class VkProgram extends VkObject {
     }
 
     private static void putfv(ByteBuffer buf, int off, float[] v, int n) {
+	putfv(buf, off, v, 0, n);
+    }
+
+    private static void putfv(ByteBuffer buf, int off, float[] v, int from, int n) {
 	for(int i = 0; i < n; i++)
-	    buf.putFloat(off + (i * 4), v[i]);
+	    buf.putFloat(off + (i * 4), v[from + i]);
     }
 
     /* name is only used for error messages; it is not stringified
@@ -245,8 +249,9 @@ public class VkProgram extends VkObject {
 			pack(buf, off + (i * stride), ary.el, Arrays.copyOfRange(v, i * 9, (i + 1) * 9), name);
 		    return;
 		}
+		/* Pack flat uniform arrays directly from their source. */
 		for(int i = 0; (i < ary.sz) && (((i + 1) * n) <= v.length); i++)
-		    putfv(buf, off + (i * stride), Arrays.copyOfRange(v, i * n, (i + 1) * n), n);
+		    putfv(buf, off + (i * stride), v, i * n, n);
 		return;
 	    }
 	    if(val instanceof int[]) {

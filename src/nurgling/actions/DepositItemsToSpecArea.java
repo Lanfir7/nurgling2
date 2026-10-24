@@ -1,7 +1,9 @@
 package nurgling.actions;
 
+import haven.Coord;
 import haven.Gob;
 import haven.WItem;
+import nurgling.NGItem;
 import nurgling.NGameUI;
 import nurgling.NInventory;
 import nurgling.areas.NArea;
@@ -34,6 +36,7 @@ public class DepositItemsToSpecArea implements Action {
     private final Specialisation.SpecName destinationSpec;
     private final int maxPerContainer;
     private Specialisation.SpecName originSpec = null;
+    private NAlias fetchAlias = null;
 
     private Map<Long, Integer> containerFreeSpaceMap = new HashMap<>();
     private Map<Long, Integer> containerStackDepth = new HashMap<>();
@@ -80,6 +83,12 @@ public class DepositItemsToSpecArea implements Action {
         this.originSpec = originSpec;
     }
 
+    /** Count all destination occupants, but fetch only the kinds found at the source. */
+    public DepositItemsToSpecArea setFetchAlias(NAlias fetchAlias) {
+        this.fetchAlias = fetchAlias;
+        return this;
+    }
+
     @Override
     public Results run(NGameUI gui) throws InterruptedException {
         gui.msg("DepositItems: Starting. Item=" + itemAlias + ", maxPerContainer=" + maxPerContainer);
@@ -110,8 +119,19 @@ public class DepositItemsToSpecArea implements Action {
 
         for (Container container : containers) {
             containerIndex++;
-            new PathFinder(Finder.findGob(container.gobid)).run(gui);
-            new OpenTargetContainer(container).run(gui);
+            Gob destinationGob = Finder.findGob(container.gobid);
+            if (fetchAlias != null && destinationGob == null)
+                return Results.ERROR("Breeding cupboard disappeared while scanning");
+            Results path = new PathFinder(destinationGob).run(gui);
+            if (fetchAlias != null && (path == null || !path.IsSuccess())) return Results.FAIL();
+            Results opened = new OpenTargetContainer(container).run(gui);
+            if (fetchAlias != null && (opened == null || !opened.IsSuccess())) return Results.FAIL();
+            if (fetchAlias != null && (gui.getInventory(container.cap) == null
+                    || gui.getInventory(container.cap).parentGob == null
+                    || gui.getInventory(container.cap).parentGob.id != container.gobid)) {
+                new CloseTargetContainer(container).run(gui);
+                return Results.ERROR("Breeding cupboard window did not match its source");
+            }
 
             // Update the ItemCount updater (counts specific items)
             Container.ItemCount itemCount = container.getattr(Container.ItemCount.class);
@@ -153,7 +173,8 @@ public class DepositItemsToSpecArea implements Action {
         }
 
         // Step 2: Register items in context
-        for (String key : this.itemAlias.getKeys()) {
+        NAlias sourceAlias = fetchAlias != null ? fetchAlias : itemAlias;
+        for (String key : sourceAlias.getKeys()) {
             context.addInItem(key, null);
         }
 
@@ -181,13 +202,29 @@ public class DepositItemsToSpecArea implements Action {
             gui.msg("DepositItems: Trip #" + tripNumber + " - fetching up to " + totalStillNeeded + " items from source...");
 
             // Fetch items from source
-            for (String key : this.itemAlias.getKeys()) {
-                int currentInInventory = gui.getInventory().getItems(itemAlias).size();
+            Float silkThreshold = null;
+            for (String key : sourceAlias.getKeys()) {
+                if ("Silkworm Cocoon".equals(key)) {
+                    FindQualityThreshold selected = new FindQualityThreshold(context, key,
+                            totalStillNeeded, originSpec);
+                    Results scanned = selected.run(gui);
+                    if (scanned == null || !scanned.IsSuccess())
+                        return scanned != null ? scanned : Results.FAIL();
+                    silkThreshold = selected.getThreshold();
+                    int carried = selected.eligibleCarried(gui);
+                    if (carried < 0) return Results.FAIL();
+                    int stillNeeded = Math.max(0, totalStillNeeded - carried);
+                    int room = StackSupporter.getOptimalItemCapacity(gui.getInventory(), key,
+                            new Coord(1, 1), stillNeeded);
+                    Results fetched = selected.fetchUpTo(gui, Math.min(stillNeeded, room));
+                    if (fetched == null || !fetched.IsSuccess())
+                        return fetched != null ? fetched : Results.FAIL();
+                    continue;
+                }
+                int currentInInventory = gui.getInventory().getItems(sourceAlias).size();
                 int stillNeeded = totalStillNeeded - currentInInventory;
                 if (stillNeeded <= 0) break;
-
                 gui.msg("DepositItems: Taking " + stillNeeded + " of '" + key + "'");
-
                 if (this.originSpec != null) {
                     new TakeItems2(context, key, stillNeeded, originSpec, NInventory.QualityType.High).run(gui);
                 } else {
@@ -195,11 +232,14 @@ public class DepositItemsToSpecArea implements Action {
                 }
             }
 
-            int itemsFetched = gui.getInventory().getItems(itemAlias).size();
+            final Float cutoff = silkThreshold;
+            int itemsFetched = gui.getInventory().getItems(sourceAlias).size();
             gui.msg("DepositItems: Trip #" + tripNumber + " - fetched " + itemsFetched + " items");
 
             if (itemsFetched == 0) {
                 gui.msg("DepositItems: No items available from source, stopping");
+                if (fetchAlias != null)
+                    return Results.ERROR("Breeding cupboards still need cocoons, but none are available");
                 break;
             }
 
@@ -210,7 +250,10 @@ public class DepositItemsToSpecArea implements Action {
 
             for (Container container : containersNeedingItems) {
                 fillIndex++;
-                ArrayList<WItem> itemsInInventory = gui.getInventory().getItems(itemAlias);
+                ArrayList<WItem> itemsInInventory = gui.getInventory().getItems(sourceAlias);
+                if (cutoff != null)
+                    itemsInInventory.removeIf(copy -> !FindQualityThreshold.eligible(
+                            ((NGItem) copy.item).quality, cutoff));
 
                 if (itemsInInventory.isEmpty()) {
                     // No more items in inventory, but this container still needs - add to next trip
@@ -226,7 +269,14 @@ public class DepositItemsToSpecArea implements Action {
 
                 // Transfer items to this container
                 // TransferToContainer will open container, call ItemCount.update(), and limit transfer to getNeeded()
-                new TransferToContainer(container, itemAlias).run(gui);
+                TransferToContainer transfer = new TransferToContainer(container, sourceAlias);
+                if (cutoff != null) {
+                    transfer.filter = candidate -> FindQualityThreshold.eligible(candidate.quality, cutoff);
+                    transfer.qualityFirst = true;
+                }
+                Results moved = transfer.run(gui);
+                if (moved == null || !moved.IsSuccess())
+                    return moved != null ? moved : Results.FAIL();
 
                 // Update container info after transfer (container should still be open from TransferToContainer)
                 Container.ItemCount itemCount = container.getattr(Container.ItemCount.class);
@@ -257,6 +307,10 @@ public class DepositItemsToSpecArea implements Action {
 
             // Update list for next iteration
             containersNeedingItems = stillNeedingItems;
+
+            if (!containersNeedingItems.isEmpty()
+                    && gui.getInventory().getItems(sourceAlias).size() >= itemsFetched)
+                return Results.ERROR("No progress filling destination containers");
 
             gui.msg("DepositItems: Trip #" + tripNumber + " complete. Containers still needing items: " + containersNeedingItems.size());
         }

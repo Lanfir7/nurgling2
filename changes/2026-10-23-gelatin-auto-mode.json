@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-gelatin-auto-mode",
+  "priority": 5,
+  "summary": {
+    "ru": "При приготовлении желатина автоматический режим корректно отображается в окне рецепта.",
+    "en": "Gelatin crafting now shows the correct automatic mode in the recipe window."
+  },
+  "detail": {
+    "ru": "Запуская крафт желатина, бот включает автоматический режим через переключатель рецепта, поэтому связанные элементы управления остаются синхронизированы.",
+    "en": "When the gelatin bot starts crafting, it enables Auto through the recipe control so the related controls stay in sync."
+  }
+}

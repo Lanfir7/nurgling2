@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-24-vulkan-animation-packing",
+  "priority": 2,
+  "summary": {
+    "ru": "Режим Vulkan создаёт меньше временных копий при подготовке графических данных.",
+    "en": "Vulkan mode makes fewer temporary copies while preparing graphics data."
+  },
+  "detail": {
+    "ru": "Во время игры в режиме Vulkan плоские массивы графических данных передаются без промежуточного копирования их частей. Это сокращает число временных объектов при подготовке кадра; изображение остаётся прежним.",
+    "en": "While playing in Vulkan mode, flat graphics data arrays are passed through without copying their parts first. This creates fewer temporary objects during frame preparation while keeping the image unchanged."
+  }
+}

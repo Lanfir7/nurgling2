@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-quality-seeding",
+  "priority": 7,
+  "summary": {
+    "ru": "Посев на качество лучше выбирает участок и семена.",
+    "en": "Quality seeding chooses better plots and seeds."
+  },
+  "detail": {
+    "ru": "В режиме посева на качество бот размещает ровные непересекающиеся участки, выбирает подходящую ориентацию и начинает с ближайшего участка. Он берёт из контейнера только нужные лучшие семена для одного участка и не трогает контейнер, если свободного участка нет.",
+    "en": "In quality seeding, the bot uses aligned, non-overlapping plots, chooses the orientation that fits best, and starts with the nearest plot. It takes only the best seeds needed for one plot and leaves the container untouched when no plot is free."
+  }
+}

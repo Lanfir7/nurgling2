@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-storage-navigation",
+  "priority": 6,
+  "summary": {
+    "ru": "Поиск вещей в хранилище надёжнее ведёт к удалённым сундукам.",
+    "en": "Storage item fetching reaches distant chests more reliably."
+  },
+  "detail": {
+    "ru": "При получении вещей из списка хранилища или для автокрафта путь к учтённому сундуку теперь может пройти через переходы между слоями, если обычный путь не найден. Перед открытием проверяется, что найден именно выбранный сундук.",
+    "en": "When fetching from the storage list or for autocraft, travel to an indexed chest can use passages between layers if a direct route fails. The selected chest is verified before opening."
+  }
+}

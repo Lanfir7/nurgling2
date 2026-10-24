@@ -9,6 +9,7 @@ import nurgling.NUtils;
 import nurgling.areas.NContext;
 import nurgling.tools.Container;
 import nurgling.tools.Finder;
+import nurgling.tools.ItemVariants;
 import nurgling.tools.NAlias;
 import nurgling.tools.VSpec;
 
@@ -19,6 +20,8 @@ import java.util.stream.Collectors;
 
 public class TransferItems2 implements Action
 {
+    /** Optional extra selection for a single craft's inventory cleanup. */
+    public java.util.function.Predicate<NGItem> filter = null;
     final NContext cnt;
     HashSet<String> items;
 
@@ -281,12 +284,19 @@ public class TransferItems2 implements Action
                 inventoryQualities.put(itemName, new ArrayList<>());
             }
         }
-        for (WItem item : gui.getInventory().getItems()) {
-            String itemName = ((NGItem)item.item).name();
+        ArrayList<WItem> heldItems = gui.getInventory().getItems();
+        boolean splitButter = needsButterKinds(items, cnt);
+        if (splitButter && !ItemVariants.awaitKnown(heldItems))
+            return Results.ERROR("Butter kind is still loading; items were kept.");
+        for (WItem item : heldItems) {
+            NGItem gi = (NGItem) item.item;
+            if (filter != null && !filter.test(gi))
+                continue;
+            double q = gi.quality != null ? gi.quality : 1.0;
+            String itemName = splitButter ? cnt.outKey(gi, q) : gi.name();
             List<Double> qualities = inventoryQualities.get(itemName);
             if (qualities != null) {
-                Float quality = ((NGItem)item.item).quality;
-                qualities.add(quality != null ? (double)quality : 1.0);
+                qualities.add(q);
             }
         }
 
@@ -303,37 +313,47 @@ public class TransferItems2 implements Action
      */
     private Results processAreaTransfers(String areaId, List<ItemTransfer> itemsForArea, NGameUI gui) throws InterruptedException {
         for (ItemTransfer itemTransfer : itemsForArea) {
+            String gameName = ItemVariants.base(itemTransfer.itemName);
+            java.util.function.Predicate<NGItem> kindFilter = filterForRoute(itemTransfer.itemName,
+                    itemTransfer.quality, itemTransfer.maxQualityExclusive);
             ArrayList<NContext.ObjectStorage> storages = cnt.getOutStorages(itemTransfer.itemName, itemTransfer.quality);
             storages = new ArrayList<>(selectContainerOutputs(storages,
                     output -> output instanceof Container,
                     output -> isContainerVisuallyFull((Container) output)));
             for (NContext.ObjectStorage output : storages) {
                 if (output instanceof NContext.FloorDump) {
+                    if (kindFilter != null)
+                        return Results.ERROR("Butter kind cannot be safely selected for floor dumping.");
                     Results result = new DropItemsOnFloor(cnt.getRCArea(areaId), itemTransfer.itemName,
                             itemTransfer.quality, itemTransfer.maxQualityExclusive).run(gui);
                     if (!result.IsSuccess())
                         return result;
                 }
                 if (output instanceof NContext.Pile) {
-                    boolean categoryBulkSafe = allLiveGroupItemsRouteToArea(
+                    boolean categoryBulkSafe = kindFilter == null && allLiveGroupItemsRouteToArea(
                             itemTransfer.itemName, areaId, gui);
-                    Results result = new TransferToPiles(cnt.getRCArea(areaId), itemTransfer.itemName,
+                    TransferToPiles toPiles = new TransferToPiles(cnt.getRCArea(areaId), gameName,
                             (int)itemTransfer.quality, itemTransfer.maxQualityExclusive,
-                            categoryBulkSafe).run(gui);
+                            categoryBulkSafe);
+                    toPiles.filter = kindFilter;
+                    Results result = toPiles.run(gui);
                     if (!result.IsSuccess())
                         return result;
                 }
                 if (output instanceof Container) {
                     TreeMap<Double,String> areas = cnt.getOutAreas(itemTransfer.itemName);
-                    TransferToContainer ttc = new TransferToContainer((Container) output, itemTransfer.itemName,
+                    TransferToContainer ttc = new TransferToContainer((Container) output, gameName,
                             itemTransfer.quality, itemTransfer.maxQualityExclusive);
                     ttc.needsSorting = areas != null && areas.size() > 1;
+                    ttc.filter = kindFilter;
                     Results result = ttc.run(gui);
                     if (!result.IsSuccess())
                         return result;
                 }
                 if (output instanceof NContext.Barrel) {
-                    if (getItemsExactMatch(itemTransfer.itemName, itemTransfer.quality,
+                    if (kindFilter != null)
+                        return Results.ERROR("Butter kind cannot be safely selected for a barrel.");
+                    if (getRoutedItems(itemTransfer.itemName, itemTransfer.quality,
                             itemTransfer.maxQualityExclusive).isEmpty())
                         break;
                     Results result = new TransferToBarrel(Finder.findGob(((NContext.Barrel) output).barrel),
@@ -343,6 +363,8 @@ public class TransferItems2 implements Action
                         return result;
                 }
                 if (output instanceof NContext.Barter) {
+                    if (kindFilter != null)
+                        return Results.ERROR("Butter kind cannot be safely selected for a barter stand.");
                     Results result = new TransferToBarter((NContext.Barter) output,
                             itemTransfer.itemName, itemTransfer.quality,
                             itemTransfer.maxQualityExclusive).run(gui);
@@ -352,7 +374,7 @@ public class TransferItems2 implements Action
             }
             // A shape mismatch may make every chest unavailable while leaving cells free.
             // Continue through the alternatives above, then report the remaining load.
-            if (!getItemsExactMatch(itemTransfer.itemName, itemTransfer.quality,
+            if (!getRoutedItems(itemTransfer.itemName, itemTransfer.quality,
                     itemTransfer.maxQualityExclusive).isEmpty())
                 return Results.FAIL();
         }
@@ -481,7 +503,7 @@ public class TransferItems2 implements Action
         for (List<ItemTransfer> list : remaining.values()) {
             for (ItemTransfer t : list) {
                 if (!counts.containsKey(t.itemName)) {
-                    counts.put(t.itemName, getItemsExactMatch(t.itemName, t.quality).size());
+                    counts.put(t.itemName, getRoutedItems(t.itemName, t.quality, t.maxQualityExclusive).size());
                 }
             }
         }
@@ -517,6 +539,48 @@ public class TransferItems2 implements Action
             }
         }
         return exactMatches;
+    }
+
+    private ArrayList<WItem> getRoutedItems(String route, double minQuality,
+                                            Double maxQualityExclusive) throws InterruptedException {
+        String name = ItemVariants.base(route);
+        java.util.function.Predicate<NGItem> routeFilter = filterForRoute(route, minQuality, maxQualityExclusive);
+        ArrayList<WItem> matches = new ArrayList<>();
+        for (WItem wrapper : NUtils.getGameUI().getInventory().getItems(new NAlias(name))) {
+            NGItem item = (NGItem) wrapper.item;
+            double quality = item.quality != null ? item.quality : 1.0;
+            if (name.equals(item.name()) && matchesQuality(quality, minQuality, maxQualityExclusive)
+                    && (routeFilter == null || routeFilter.test(item)))
+                matches.add(wrapper);
+        }
+        return matches;
+    }
+
+    static java.util.function.Predicate<NGItem> kindFilter(NContext context, String route,
+            double minQuality, Double maxQualityExclusive) {
+        if (!ItemVariants.has(ItemVariants.base(route)))
+            return null;
+        if (!ItemVariants.isKey(route)
+                && !context.hasVariantOutputInBand(route, minQuality, maxQualityExclusive))
+            return null;
+        return item -> {
+            double quality = item.quality != null ? item.quality : 1.0;
+            return route.equals(context.outKey(item, quality));
+        };
+    }
+
+    static boolean needsButterKinds(Collection<String> requested, NContext context) {
+        return requested.stream().anyMatch(ItemVariants::isKey)
+                || (requested.contains(ItemVariants.BUTTER)
+                    && context.hasVariantOutputInBand(ItemVariants.BUTTER, 0, null));
+    }
+
+    private java.util.function.Predicate<NGItem> filterForRoute(String route,
+            double minQuality, Double maxQualityExclusive) {
+        java.util.function.Predicate<NGItem> byRoute = kindFilter(cnt, route, minQuality, maxQualityExclusive);
+        if (filter == null)
+            return byRoute;
+        return byRoute == null ? filter : byRoute.and(filter);
     }
 
     private static ArrayList<WItem> getItemsExactMatch(String exactName, double quality)

@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-untried-food-variations",
+  "priority": 7,
+  "summary": {
+    "ru": "В кулинарной книге можно приготовить неопробованные варианты блюда по одному.",
+    "en": "The cookbook can craft untried food variations one at a time."
+  },
+  "detail": {
+    "ru": "Откройте варианты блюда в кулинарной книге и нажмите «Перебрать» у нужного ингредиента. Выберите остальные ингредиенты, затем бот приготовит по одному блюду с каждым доступным вариантом. При неясном источнике или результате он остановится; ваши остальные вещи и готовые блюда останутся в инвентаре.",
+    "en": "Open a dish's variations in the cookbook and choose Vary this for an ingredient. Pick the other ingredients, then craft one dish for each supported untried option. The bot stops when a source or result cannot be confirmed, and keeps your other items and crafted food in the inventory."
+  }
+}

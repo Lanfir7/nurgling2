@@ -1,6 +1,7 @@
 package nurgling.pf;
 
 import haven.*;
+import nurgling.NHitBox;
 
 public class NHitBoxD implements Comparable<NHitBoxD>, java.io.Serializable {
 // ul  0
@@ -54,6 +55,33 @@ public class NHitBoxD implements Comparable<NHitBoxD>, java.io.Serializable {
 
     public NHitBoxD(Gob gob) {
         this(gob.ngob.hitBox.begin, gob.ngob.hitBox.end, gob.rc, gob.a, gob.ngob.hitBox.mirrorAsymmetric);
+    }
+
+    /** Actual pathfinding solids; other consumers still see the gob's original hitBox. */
+    public static NHitBoxD[] solid(Gob gob) {
+        NHitBox[] localParts = gob.ngob.hitBoxParts();
+        NHitBoxD[] separated = parts(localParts, gob.rc, gob.a);
+        return separated != null ? separated : new NHitBoxD[]{new NHitBoxD(gob)};
+    }
+
+    /** Centre each post before turning it; use the full obstacle's asymmetry once. */
+    public static NHitBoxD[] parts(NHitBox[] localParts, Coord2d rc, double facing) {
+        if (localParts == null || localParts.length == 0 || rc == null) return null;
+        double minX = Double.POSITIVE_INFINITY, maxX = Double.NEGATIVE_INFINITY;
+        for (NHitBox part : localParts) {
+            if (part == null || part.begin == null || part.end == null) return null;
+            minX = Math.min(minX, part.begin.x);
+            maxX = Math.max(maxX, part.end.x);
+        }
+        double angle = (minX != -maxX) ? facing + Math.PI : facing;
+        NHitBoxD[] solids = new NHitBoxD[localParts.length];
+        for (int i = 0; i < localParts.length; i++) {
+            NHitBox part = localParts[i];
+            Coord2d half = part.end.sub(part.begin).div(2);
+            Coord2d centre = part.begin.add(part.end).div(2);
+            solids[i] = new NHitBoxD(half.inv(), half, rc.add(centre.rot(angle)), angle, false);
+        }
+        return solids;
     }
 
     public NHitBoxD(Coord2d ul, Coord2d br, Coord2d r, double angle) {

@@ -125,13 +125,14 @@ public class NConfig
         autoDrink,
         autoSaveTableware,
         chipperprop,
+        drinkerprop,
         animalrad,
         smokeprop,
         worldexplorerprop,
         questNotified, lootNotices, lootNoticeBelowCompass, lootNoticeX, lootNoticeY,
         lootNoticeBackgroundOpacity, lpassistent, fishingsettings,
         serverNode, serverUser, serverPass, postgresMaxConnections, ndbenable, shareHearthSecret, autoHearthSecret, sharePosition, showPeerPositions, todoNotify, dbGrantRole, dbStatsOverlay, mapShareMarkers, harvestautorefill, cleanupQContainers, autoEquipTravellersSacks, qualityGrindSeedingPatter, postgres, sqlite, dbFilePath, dbHost, dbPort, dbName, dbSsl, dbVillage, simplecrops,
-        temsmarktime, exploredAreaEnable, exploredAreaRecord, chunkNavOverlay, player_box, player_fov, temsmarkdist, tempmark, tempmarkIgnoreDist, gridbox, gridWallColor, useGlobalPf, useHFinGlobalPF, boxFillColor, boxEdgeColor, boxLineWidth, ropeAfterFeeding, ropeAfterTaiming, eatingConf, deersprop,dropConf, printpfmap, fonts,
+        temsmarktime, exploredAreaEnable, exploredAreaRecord, chunkNavOverlay, player_box, player_fov, temsmarkdist, tempmark, tempmarkIgnoreDist, gridbox, gridWallColor, gridDiagonals, gridDiagonalColor, useGlobalPf, useHFinGlobalPF, boxFillColor, boxEdgeColor, boxLineWidth, ropeAfterFeeding, ropeAfterTaiming, eatingConf, deersprop,dropConf, printpfmap, fonts,
         areaRankPresets,  // Map of areaId -> Map of animalType -> presetName
         shortCupboards,
         shortPalisades,
@@ -171,7 +172,10 @@ public class NConfig
         showStudyReportGhosts,
         curioFinishedSound,
         milestones,          // MilestoneRegistry's persisted gobHash -> {location, destinations[]} map
+        roadTags,            // Private per-post road labels in milestone windows
         milestoneTracking,   // Whether MilestoneTracker passively records signpost/milestone travel
+        tunnelingOreStop,    // Tunneler's optional ore stop and selected ore keys
+        tunnelingRoad,       // Optional road construction in the tunneler
         waypointRetryOnStuck,
         holdToMove,
         verboseCal,
@@ -359,6 +363,7 @@ public class NConfig
         storageTrailMax,
         // Storage Items window: only show containers in the village (ChunkNavGraph.pieceWithMostAreas)
         storageOnlyVillage,
+        craftUseStorageIndex,
         recipeSearchAsItemSearch,
         // Map tools panel
         showTreeIcons,
@@ -509,6 +514,7 @@ public class NConfig
         conf.put(Key.simplecrops, true);
         conf.put(Key.simpleInspect, false);
         conf.put(Key.ndbenable, false);
+        conf.put(Key.craftUseStorageIndex, false);
         conf.put(Key.shareHearthSecret, true);
         /* Live position markers are on out of the box: everyone sharing a database has already
          * been let in, and the feature is worthless unless most of them are publishing. Both halves
@@ -550,6 +556,7 @@ public class NConfig
         conf.put(Key.player_box, false);
         conf.put(Key.player_fov, false);
         conf.put(Key.gridbox, false);
+        conf.put(Key.gridDiagonals, false);
         conf.put(Key.tempmark, false);
         conf.put(Key.tempmarkIgnoreDist, false);
         conf.put(Key.temsmarkdist, 4);
@@ -599,7 +606,10 @@ public class NConfig
         conf.put(Key.studyDeskHideLp, false);
         conf.put(Key.studyDeskStockHours, 168);
         conf.put(Key.milestones, "");
+        conf.put(Key.roadTags, "");
         conf.put(Key.milestoneTracking, true);
+        conf.put(Key.tunnelingOreStop, "");
+        conf.put(Key.tunnelingRoad, "");
         conf.put(Key.waypointRetryOnStuck, true);
         conf.put(Key.holdToMove, false);
         conf.put(Key.verboseCal, false);
@@ -653,6 +663,7 @@ public class NConfig
         conf.put(Key.filltreepotsprop, false);
         conf.put(Key.tunnelingprop, new ArrayList<NTunnelingProp>());
         conf.put(Key.masterminerprop, new ArrayList<NMasterMinerProp>());
+        conf.put(Key.drinkerprop, new ArrayList<NDrinkerProp>());
         conf.put(Key.masterminermarkingconfig, false);
         conf.put(Key.miningoverlaymemory, new ArrayList<NMiningOverlayMemory>());
 
@@ -1580,6 +1591,9 @@ public class NConfig
                                 break;
                             case "NTunnelingProp":
                                 res.add(new NTunnelingProp(obj));
+                                break;
+                            case "NDrinkerProp":
+                                res.add(new NDrinkerProp(obj));
                                 break;
                             case "NPrepBProp":
                                 res.add(new NPrepBlocksProp(obj));

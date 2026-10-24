@@ -19,7 +19,7 @@ public class ScenarioRunner implements Action {
             boolean restart = false;
             for (BotStep step : scenario.getSteps()) {
                 BotDescriptor desc = BotRegistry.byId(step.getId());
-                Action bot = (desc != null) ? desc.instantiate(step.getSettings()) : null;
+                Action bot = (desc != null) ? desc.instantiateForScenario(step.getSettings()) : null;
                 if (bot == null) {
                     gui.msg("ScenarioRunner: Unknown bot key: " + step.getId());
                     return Results.FAIL();
@@ -44,7 +44,7 @@ public class ScenarioRunner implements Action {
     public static Results runSteps(NGameUI gui, java.util.List<BotStep> steps) throws InterruptedException {
         for (BotStep step : steps) {
             BotDescriptor desc = BotRegistry.byId(step.getId());
-            Action bot = (desc != null) ? desc.instantiate(step.getSettings()) : null;
+            Action bot = (desc != null) ? desc.instantiateForScenario(step.getSettings()) : null;
             if (bot == null) {
                 gui.msg("ScenarioRunner: Unknown bot key: " + step.getId());
                 return Results.FAIL();

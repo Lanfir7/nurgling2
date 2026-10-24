@@ -13,10 +13,14 @@ public class NPFMap
 {
     public boolean waterMode = false;
     public boolean gatesAlwaysClosed = false;
+    /** -1 disables cliff blocking; nonnegative buffers are clamped to 32 tiles. */
+    public int cliffBuffer = -1;
     public Cell[][] cells;
 
     // Upper bound (world units) on the constructor's fallback-grid growth - see its use below.
     private static final double MAX_FALLBACK_RADIUS = 3000.0;
+    private static final int MAX_CLIFF_BUFFER = 32;
+    private static final long MAX_CLIFF_SCAN_TILES = 2_000_000;
 
     public boolean lastMul = false;
     // 1 hitbox
@@ -350,6 +354,68 @@ public class NPFMap
                         if (anyResolved && !anyWater) {
                             cells[i][j].val = 2;
                         }
+                    }
+                }
+            }
+        }
+        blockCliffs(tc -> haven.resutil.Ridges.brokenp(NUtils.getGameUI().ui.sess.glob.map, tc));
+    }
+
+    @FunctionalInterface
+    interface CliffProbe {
+        boolean broken(Coord tile);
+    }
+
+    /** Applies the opt-in cliff mask after normal terrain/obstacle blocking. Unknown tiles stay unknown. */
+    void blockCliffs(CliffProbe probe) {
+        if(cliffBuffer < 0 || waterMode || size <= 0 || cells == null)
+            return;
+        int radius = Math.min(cliffBuffer, MAX_CLIFF_BUFFER);
+        int pad = radius + 1;
+        Coord first = Utils.pfGridToWorld(cells[0][0].pos).floor(MCache.tilesz);
+        Coord last = Utils.pfGridToWorld(cells[size - 1][size - 1].pos).floor(MCache.tilesz);
+        long minX = (long) first.x - pad, minY = (long) first.y - pad;
+        long maxX = (long) last.x + pad, maxY = (long) last.y + pad;
+        if(minX < Integer.MIN_VALUE || minY < Integer.MIN_VALUE
+                || maxX > Integer.MAX_VALUE || maxY > Integer.MAX_VALUE)
+            throw new IllegalArgumentException("Cliff scan coordinates exceed tile range");
+        long width = maxX - minX + 1, height = maxY - minY + 1;
+        // The opt-in cliff restriction must fail clearly when it cannot be applied.
+        // A huge request never allocates an unbounded scan or dilates each cliff quadratically.
+        if(width <= 0 || height <= 0 || width > MAX_CLIFF_SCAN_TILES
+                || height > MAX_CLIFF_SCAN_TILES / width)
+            throw new IllegalArgumentException("Cliff scan exceeds " + MAX_CLIFF_SCAN_TILES + " tiles");
+        int w = (int) width, h = (int) height;
+        int stride = h + 1;
+        int[] sum = new int[(w + 1) * stride];
+        for(int x = 0; x < w; x++) {
+            for(int y = 0; y < h; y++) {
+                boolean cliff;
+                try {
+                    cliff = probe.broken(new Coord((int) (minX + x), (int) (minY + y)));
+                } catch(Loading l) {
+                    cliff = false;
+                }
+                sum[(x + 1) * stride + y + 1] = sum[x * stride + y + 1]
+                        + sum[(x + 1) * stride + y] - sum[x * stride + y]
+                        + (cliff ? 1 : 0);
+            }
+        }
+        for(int i = 0; i < size; i++) {
+            for(int j = 0; j < size; j++) {
+                if(cells[i][j].val != 0) continue;
+                Coord2d center = Utils.pfGridToWorld(cells[i][j].pos);
+                for(int k = 0; k < 4; k++) {
+                    Coord tile = center.add((k & 1) == 0 ? -MCache.tileqsz.x : MCache.tileqsz.x,
+                            (k & 2) == 0 ? -MCache.tileqsz.y : MCache.tileqsz.y).floor(MCache.tilesz);
+                    long tx = (long) tile.x - minX, ty = (long) tile.y - minY;
+                    if(tx < 0 || tx >= w || ty < 0 || ty >= h) continue;
+                    int x0 = (int) Math.max(0, tx - radius), y0 = (int) Math.max(0, ty - radius);
+                    int x1 = (int) Math.min(w - 1, tx + radius), y1 = (int) Math.min(h - 1, ty + radius);
+                    if(sum[(x1 + 1) * stride + y1 + 1] - sum[x0 * stride + y1 + 1]
+                            - sum[(x1 + 1) * stride + y0] + sum[x0 * stride + y0] > 0) {
+                        cells[i][j].val = 2;
+                        break;
                     }
                 }
             }

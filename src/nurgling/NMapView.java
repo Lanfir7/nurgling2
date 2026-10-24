@@ -104,8 +104,10 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     private RenderTree.Slot gridWallSlot = null;
     private Set<Coord> gridWallLastCoords = null;
     private Color gridWallLastColor = null;
+    private Color gridDiagonalLastColor = null;
     private boolean gridWallLastFlat = false;
     private static final Color GRID_WALL_DEFAULT_COLOR = new Color(255, 140, 0, 217);
+    private static final Color GRID_DIAGONAL_DEFAULT_COLOR = new Color(0, 190, 255, 217);
 
     public NMapView(Coord sz, Glob glob, Coord2d cc, long plgob)
     {
@@ -234,7 +236,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
     public AtomicBoolean isAreaSelectionMode = new AtomicBoolean(false);
     public volatile boolean pendingHeldFullStockpile = false;
     /** An area preset being placed, which takes the map's clicks and keys until it is done. */
-    public nurgling.areas.AreaPresetPlacer presetPlacer = null;
+    public PresetPlacer presetPlacer = null;
 
     public boolean canStartPresetPlacement() {
         return presetPlacer == null && !hasModalMouseCapture() && !isAreaSelectionMode.get();
@@ -1760,15 +1762,15 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
 
     /**
      * Reconciles the combined grid-wall overlay against currently loaded grids
-     * and the configured wall color. Builds one combined mesh, one draw call,
-     * dedupes shared edges between adjacent grids; rebuilds only when the grid
-     * set or color changes.
+     * and the configured wall and diagonal colors. Builds one combined mesh,
+     * dedupes shared edges; rebuilds when grids, colors, layers, or terrain flattening change.
      */
     private void updateGridWalls()
     {
-        boolean enabled = (Boolean) NConfig.get(NConfig.Key.gridbox);
-        if (!enabled) {
-            if (gridWallSlot != null) {
+        boolean walls = (Boolean) NConfig.get(NConfig.Key.gridbox);
+        boolean diagonals = (Boolean) NConfig.get(NConfig.Key.gridDiagonals);
+        if (!walls && !diagonals) {
+            if (gridWallSlot != null || gridWallOverlay != null) {
                 clearGridWalls();
             }
             return;
@@ -1778,7 +1780,8 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         synchronized (glob.map.grids) {
             currentGridCoords = new HashSet<>(glob.map.grids.keySet());
         }
-        Color currentColor = NConfig.getColor(NConfig.Key.gridWallColor, GRID_WALL_DEFAULT_COLOR);
+        Color currentColor = walls ? NConfig.getColor(NConfig.Key.gridWallColor, GRID_WALL_DEFAULT_COLOR) : null;
+        Color currentDiagonalColor = diagonals ? NConfig.getColor(NConfig.Key.gridDiagonalColor, GRID_DIAGONAL_DEFAULT_COLOR) : null;
         boolean currentFlat = FlatWorld.isEnabled();
 
         // Only include grids whose corners have loaded terrain; the rest are
@@ -1793,7 +1796,8 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         boolean needRebuild = (gridWallOverlay == null)
                 || gridWallLastCoords == null
                 || !readyCoords.equals(gridWallLastCoords)
-                || !currentColor.equals(gridWallLastColor)
+                || !Objects.equals(currentColor, gridWallLastColor)
+                || !Objects.equals(currentDiagonalColor, gridDiagonalLastColor)
                 || currentFlat != gridWallLastFlat;
 
         if (!needRebuild) return;
@@ -1801,9 +1805,10 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         if (gridWallOverlay == null) {
             gridWallOverlay = new NGridWallOverlay();
         }
-        gridWallOverlay.rebuild(glob.map, readyCoords, currentColor);
+        gridWallOverlay.rebuild(glob.map, readyCoords, currentColor, currentDiagonalColor);
         gridWallLastCoords = readyCoords;
         gridWallLastColor = currentColor;
+        gridDiagonalLastColor = currentDiagonalColor;
         gridWallLastFlat = currentFlat;
 
         if (gridWallSlot == null) {
@@ -1826,6 +1831,7 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         gridWallOverlay = null;
         gridWallLastCoords = null;
         gridWallLastColor = null;
+        gridDiagonalLastColor = null;
         gridWallLastFlat = false;
     }
 
@@ -1912,6 +1918,18 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                 if (selection == null) {
                     selection = new PlanningDeleteSelector();
                 }
+                return super.mousedown(ev);
+            }
+            if (ev.b == 1 && planner.isSavePresetRegionArmed()) {
+                if (selection == null) selection = new PlanningActionSelector(PlanningActionMode.PRESET);
+                return super.mousedown(ev);
+            }
+            if (ev.b == 1 && planner.isSaveWorldRegionArmed()) {
+                if (selection == null) selection = new PlanningActionSelector(PlanningActionMode.WORLD);
+                return super.mousedown(ev);
+            }
+            if (ev.b == 1 && planner.isBuildRegionArmed()) {
+                if (selection == null) selection = new PlanningActionSelector(PlanningActionMode.BUILD);
                 return super.mousedown(ev);
             }
             // LMB during placement: capture as ghost instead of committing to server.
@@ -2225,6 +2243,10 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
         if (nurgling.render.Photo.active(this) && nurgling.hotkeys.InputNavigation.cancel(ev.code)) {
             if (ui.gui instanceof NGameUI)
                 ((NGameUI) ui.gui).photomode(false);
+            return true;
+        }
+        if (selection instanceof PlanningActionSelector && nurgling.hotkeys.InputNavigation.cancel(ev.code)) {
+            ((PlanningActionSelector) selection).finish();
             return true;
         }
         if(nurgling.hotkeys.InputNavigation.tooltipModifier(ev.code)) {
@@ -2663,6 +2685,85 @@ public class NMapView extends MapView implements Widget.CursorQuery.Handler
                     selection = null;
                 }
                 return true;
+            }
+        }
+    }
+
+    /** One-shot planner rectangle, sharing the existing map selection and its cleanup. */
+    private enum PlanningActionMode { PRESET, WORLD, BUILD }
+
+    public class PlanningActionSelector extends Selector {
+        private final PlanningActionMode mode;
+        private boolean done;
+
+        public PlanningActionSelector(PlanningActionMode mode) {
+            super(null);
+            this.mode = mode;
+        }
+
+        @Override public void mmousemove(Coord mc) {
+            super.mmousemove(mc);
+            if (sc != null) {
+                Coord tc = getec(mc);
+                currentSelectionCoords = new Pair<>(
+                        new Coord(Math.min(tc.x, sc.x), Math.min(tc.y, sc.y)),
+                        new Coord(Math.max(tc.x, sc.x), Math.max(tc.y, sc.y)).add(1, 1));
+            }
+        }
+
+        @Override public boolean mmousedown(Coord mc, int button) {
+            if (button == 3) {
+                finish();
+                return true;
+            }
+            return super.mmousedown(mc, button);
+        }
+
+        @Override public boolean mmouseup(Coord mc, int button) {
+            synchronized (NMapView.this) {
+                if (done) return true;
+                try {
+                    if (button == 1 && sc != null) {
+                        Coord ec = mc.div(MCache.tilesz2);
+                        Coord t1 = new Coord(Math.min(ec.x, sc.x), Math.min(ec.y, sc.y));
+                        Coord t2 = new Coord(Math.max(ec.x, sc.x), Math.max(ec.y, sc.y)).add(1, 1);
+                        Coord2d min = t1.mul(MCache.tilesz), max = t2.mul(MCache.tilesz);
+                        nurgling.widgets.NBasePlannerWidget planner = NUtils.getGameUI().basePlanner;
+                        if (planner != null) {
+                            switch (mode) {
+                                case PRESET: planner.savePresetRegion(min, max); break;
+                                case WORLD: planner.saveWorldRegion(min, max); break;
+                                case BUILD: planner.buildRegion(min, max); break;
+                            }
+                        }
+                    }
+                } finally {
+                    finish();
+                }
+                return true;
+            }
+        }
+
+        private void finish() {
+            synchronized (NMapView.this) {
+                if (done) return;
+                done = true;
+                nurgling.widgets.NBasePlannerWidget planner = NUtils.getGameUI() == null ? null : NUtils.getGameUI().basePlanner;
+                if (planner != null) {
+                    switch (mode) {
+                        case PRESET: planner.disarmSavePresetRegion(); break;
+                        case WORLD: planner.disarmSaveWorldRegion(); break;
+                        case BUILD: planner.disarmBuildRegion(); break;
+                    }
+                }
+                xl.mv = false;
+                tt = null;
+                currentSelectionCoords = null;
+                if (ol != null) glob.map.remove(ol);
+                if (mgrab != null) mgrab.remove();
+                sc = null;
+                destroy();
+                if (selection == this) selection = null;
             }
         }
     }

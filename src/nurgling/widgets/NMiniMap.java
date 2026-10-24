@@ -30,6 +30,8 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.lang.reflect.Field;
+import java.util.Objects;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static haven.MCache.cmaps;
 import static haven.MCache.tilesz;
@@ -618,8 +620,74 @@ NMiniMap extends MiniMap {
         drawQueuedWaypoints(g);  // Draw waypoint visualization
         drawForagerRecordingPath(g);  // Draw forager path being recorded
         drawBotDetourTrail(g);   // Draw Forager's live off-path gob-collection detour trail
+        drawLayers(g);           // Plugin layers, below the selected-marker line and pings
         drawMarkerLine(g);       // Draw line to selected marker
         drawPings(g);            // Draw chat map pings on top of everything else
+    }
+
+    /** A plugin overlay for the minimap and the full map. Unregister on plugin unload. */
+    public interface Layer {
+        void draw(NMiniMap map, GOut g);
+    }
+
+    private static final CopyOnWriteArrayList<LayerRegistration> layers = new CopyOnWriteArrayList<>();
+
+    private static final class LayerRegistration {
+        final Layer layer;
+        volatile boolean active = true;
+        boolean broken;
+
+        LayerRegistration(Layer layer) {
+            this.layer = layer;
+        }
+    }
+
+    /** Duplicate registration of the same layer instance is ignored atomically. */
+    public static void addLayer(Layer layer) {
+        Objects.requireNonNull(layer, "layer");
+        synchronized(layers) {
+            for(LayerRegistration registration : layers)
+                if(registration.layer == layer)
+                    return;
+            layers.add(new LayerRegistration(layer));
+        }
+    }
+
+    /** Removes an active registration; adding the same layer again creates a fresh one. */
+    public static void removeLayer(Layer layer) {
+        synchronized(layers) {
+            for(LayerRegistration registration : layers) {
+                if(registration.layer == layer) {
+                    registration.active = false;
+                    layers.remove(registration);
+                    break;
+                }
+            }
+        }
+    }
+
+    /** Dispatches against this widget's map and UI; each callback gets its own clipped render state. */
+    void drawLayers(GOut g) {
+        for(LayerRegistration registration : layers) {
+            synchronized(registration) {
+                if(!registration.active || registration.broken)
+                    continue;
+                GOut child = g.reclip(Coord.z, sz);
+                child.state().copy(g.state());
+                if(g.tfbase != null)
+                    child.tfbase = g.tfbase.copy();
+                child.tforigin = new Coord(g.tforigin);
+                try {
+                    registration.layer.draw(this, child);
+                } catch(RuntimeException | Error e) {
+                    if(e instanceof VirtualMachineError || e instanceof ThreadDeath)
+                        throw e;
+                    registration.broken = true;
+                    System.err.println("[NMiniMap] layer " + registration.layer.getClass().getName()
+                            + " failed and is disabled: " + e);
+                }
+            }
+        }
     }
 
     /**

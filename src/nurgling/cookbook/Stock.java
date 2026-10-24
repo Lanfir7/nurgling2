@@ -35,6 +35,11 @@ public final class Stock {
         return ret;
     }
 
+    /** Countable stored items only; bulk liquid rows cannot be fetched as inventory items. */
+    public Set<String> countableKeys() {
+        return Collections.unmodifiableSet(new HashSet<>(counts.keySet()));
+    }
+
     /**
      * How much is stored under any of the names, for display ("534", "12.5 l", "3 + 12.5 l"); null
      * when nothing is.

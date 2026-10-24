@@ -12,11 +12,10 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Renders short colored walls along the boundaries of all currently loaded
- * 100x100 map grids. The mesh combines every visible grid into a single
- * Model with one draw call, deduplicating shared edges between adjacent grids,
- * so cost stays roughly constant in the number of distinct boundaries rather
- * than scaling with the number of grids.
+ * Renders short colored walls along boundaries and, optionally, both diagonals
+ * of currently loaded 100x100 map grids. The mesh combines them into a single
+ * Model with one draw call, deduplicating shared edges between adjacent grids.
+ * The diagonal count scales with the number of loaded grids.
  *
  * Walls fade vertically from the selected color (saturated at the base) to
  * fully transparent at the top via per-vertex alpha.
@@ -38,6 +37,7 @@ public class NGridWallOverlay implements RenderTree.Node, Rendered {
     private static final float Z_OFFSET = 0.3f;
     private static final float WALL_HEIGHT = 6f;
     private static final int SAMPLES_PER_EDGE = 30;
+    private static final int SAMPLES_PER_DIAGONAL = 42;
     // Shift sample lookups by this many world units inside the owner grid to
     // avoid getcz reading tiles from the +x or +y neighbor grid at edges.
     private static final float INSET = 0.01f;
@@ -72,22 +72,33 @@ public class NGridWallOverlay implements RenderTree.Node, Rendered {
     }
 
     /**
-     * Builds the combined wall mesh for the supplied grid coords with the
-     * supplied wall color. Caller should pre-filter to grids passing
+     * Builds the combined wall mesh. A null color omits that layer. Caller
+     * should pre-filter to grids passing
      * {@link #isReady}.
      */
-    public void rebuild(MCache map, Set<Coord> gridCoords, Color color) {
-        if (gridCoords.isEmpty()) {
+    public void rebuild(MCache map, Set<Coord> gridCoords, Color edgeColor) {
+        rebuild(map, gridCoords, edgeColor, null);
+    }
+
+    public void rebuild(MCache map, Set<Coord> gridCoords, Color edgeColor, Color diagonalColor) {
+        float[] data = buildVertices(map, gridCoords, edgeColor, diagonalColor);
+        if (data.length == 0) {
             this.model = null;
+            notifySlots();
             return;
         }
 
-        float r = color.getRed()   / 255f;
-        float g = color.getGreen() / 255f;
-        float b = color.getBlue()  / 255f;
-        float baseA = color.getAlpha() / 255f;
-        float[] bottomCol = {r, g, b, baseA};
-        float[] topCol    = {r, g, b, 0f};
+        VertexArray.Buffer vbo = new VertexArray.Buffer(data.length * 4,
+                DataBuffer.Usage.STATIC, DataBuffer.Filler.of(data));
+        VertexArray va = new VertexArray(LAYOUT, vbo);
+        this.model = new Model(Model.Mode.TRIANGLES, va, null);
+        notifySlots();
+    }
+
+    /** The exact vertex stream consumed by rebuild; exposed to package tests. */
+    float[] buildVertices(MCache map, Set<Coord> gridCoords, Color edgeColor, Color diagonalColor) {
+        if (gridCoords.isEmpty() || (edgeColor == null && diagonalColor == null))
+            return new float[0];
 
         // Collect unique edges. Each edge stores [edgeX, edgeY, ownerX, ownerY]
         // where edgeX/edgeY are the edge's grid-axis coords and ownerX/ownerY
@@ -96,41 +107,64 @@ public class NGridWallOverlay implements RenderTree.Node, Rendered {
         Set<Long> seenV = new HashSet<>();
         List<int[]> hEdges = new ArrayList<>(gridCoords.size() * 2);
         List<int[]> vEdges = new ArrayList<>(gridCoords.size() * 2);
-        for (Coord gc : gridCoords) {
-            if (seenH.add(packEdge(gc.x, gc.y)))         hEdges.add(new int[]{gc.x, gc.y,     gc.x, gc.y});
-            if (seenH.add(packEdge(gc.x, gc.y + 1)))     hEdges.add(new int[]{gc.x, gc.y + 1, gc.x, gc.y});
-            if (seenV.add(packEdge(gc.x, gc.y)))         vEdges.add(new int[]{gc.x,     gc.y, gc.x, gc.y});
-            if (seenV.add(packEdge(gc.x + 1, gc.y)))     vEdges.add(new int[]{gc.x + 1, gc.y, gc.x, gc.y});
+        if (edgeColor != null) {
+            for (Coord gc : gridCoords) {
+                if (seenH.add(packEdge(gc.x, gc.y)))         hEdges.add(new int[]{gc.x, gc.y,     gc.x, gc.y});
+                if (seenH.add(packEdge(gc.x, gc.y + 1)))     hEdges.add(new int[]{gc.x, gc.y + 1, gc.x, gc.y});
+                if (seenV.add(packEdge(gc.x, gc.y)))         vEdges.add(new int[]{gc.x,     gc.y, gc.x, gc.y});
+                if (seenV.add(packEdge(gc.x + 1, gc.y)))     vEdges.add(new int[]{gc.x + 1, gc.y, gc.x, gc.y});
+            }
         }
 
         int totalEdges = hEdges.size() + vEdges.size();
-        int floatsPerEdge = SAMPLES_PER_EDGE * VERTS_PER_SEGMENT * FLOATS_PER_VERT;
-        float[] data = new float[totalEdges * floatsPerEdge];
+        int totalDiagonals = diagonalColor == null ? 0 : gridCoords.size() * 2;
+        int floatsPerSegment = VERTS_PER_SEGMENT * FLOATS_PER_VERT;
+        float[] data = new float[(totalEdges * SAMPLES_PER_EDGE + totalDiagonals * SAMPLES_PER_DIAGONAL) * floatsPerSegment];
 
         float gridSizeX = (float) (MCache.cmaps.x * MCache.tilesz.x);
         float gridSizeY = (float) (MCache.cmaps.y * MCache.tilesz.y);
 
         int[] idx = {0};
+        float[] edgeBottom = edgeColor == null ? null : bottomColor(edgeColor);
+        float[] edgeTop = edgeColor == null ? null : topColor(edgeColor);
         for (int[] e : hEdges) {
             float ax = e[0] * gridSizeX;
             float ay = e[1] * gridSizeY;
             float bx = ax + gridSizeX;
             float by = ay;
-            addEdgeWall(data, idx, map, ax, ay, bx, by, e[2], e[3], gridSizeX, gridSizeY, bottomCol, topCol);
+            addWall(data, idx, map, ax, ay, bx, by, e[2], e[3], gridSizeX, gridSizeY, SAMPLES_PER_EDGE, edgeBottom, edgeTop);
         }
         for (int[] e : vEdges) {
             float ax = e[0] * gridSizeX;
             float ay = e[1] * gridSizeY;
             float bx = ax;
             float by = ay + gridSizeY;
-            addEdgeWall(data, idx, map, ax, ay, bx, by, e[2], e[3], gridSizeX, gridSizeY, bottomCol, topCol);
+            addWall(data, idx, map, ax, ay, bx, by, e[2], e[3], gridSizeX, gridSizeY, SAMPLES_PER_EDGE, edgeBottom, edgeTop);
         }
 
-        VertexArray.Buffer vbo = new VertexArray.Buffer(data.length * 4,
-                DataBuffer.Usage.STATIC, DataBuffer.Filler.of(data));
-        VertexArray va = new VertexArray(LAYOUT, vbo);
-        this.model = new Model(Model.Mode.TRIANGLES, va, null);
-        notifySlots();
+        if (diagonalColor != null) {
+            float[] diagonalBottom = bottomColor(diagonalColor);
+            float[] diagonalTop = topColor(diagonalColor);
+            for (Coord gc : gridCoords) {
+                float x0 = gc.x * gridSizeX;
+                float y0 = gc.y * gridSizeY;
+                float x1 = x0 + gridSizeX;
+                float y1 = y0 + gridSizeY;
+                addWall(data, idx, map, x0, y0, x1, y1, gc.x, gc.y, gridSizeX, gridSizeY,
+                        SAMPLES_PER_DIAGONAL, diagonalBottom, diagonalTop);
+                addWall(data, idx, map, x1, y0, x0, y1, gc.x, gc.y, gridSizeX, gridSizeY,
+                        SAMPLES_PER_DIAGONAL, diagonalBottom, diagonalTop);
+            }
+        }
+        return data;
+    }
+
+    private static float[] bottomColor(Color c) {
+        return new float[]{c.getRed() / 255f, c.getGreen() / 255f, c.getBlue() / 255f, c.getAlpha() / 255f};
+    }
+
+    private static float[] topColor(Color c) {
+        return new float[]{c.getRed() / 255f, c.getGreen() / 255f, c.getBlue() / 255f, 0f};
     }
 
     private void notifySlots() {
@@ -150,10 +184,10 @@ public class NGridWallOverlay implements RenderTree.Node, Rendered {
         return (((long) x) << 32) | (((long) y) & 0xFFFFFFFFL);
     }
 
-    private void addEdgeWall(float[] data, int[] idx, MCache map,
+    private void addWall(float[] data, int[] idx, MCache map,
                              float ax, float ay, float bx, float by,
                              int ownerX, int ownerY,
-                             float gridSizeX, float gridSizeY,
+                             float gridSizeX, float gridSizeY, int samples,
                              float[] bottomCol, float[] topCol) {
         // Clamp the Z sample point to stay strictly inside the owner grid, so
         // getcz never reads neighbor tiles. Vertex positions still sit on the
@@ -166,8 +200,8 @@ public class NGridWallOverlay implements RenderTree.Node, Rendered {
         float prevX = ax;
         float prevY = ay;
         float prevZ = terrainZ(map, clamp(ax, sxMin, sxMax), clamp(ay, syMin, syMax));
-        for (int i = 1; i <= SAMPLES_PER_EDGE; i++) {
-            float t = (float) i / SAMPLES_PER_EDGE;
+        for (int i = 1; i <= samples; i++) {
+            float t = (float) i / samples;
             float px = ax + (bx - ax) * t;
             float py = ay + (by - ay) * t;
             float pz = terrainZ(map, clamp(px, sxMin, sxMax), clamp(py, syMin, syMax));

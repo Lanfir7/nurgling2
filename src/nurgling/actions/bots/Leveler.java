@@ -4,6 +4,7 @@ import haven.Button;
 import haven.ChatUI;
 import haven.Coord;
 import haven.Coord2d;
+import haven.GItem;
 import haven.Gob;
 import haven.Label;
 import haven.MCache;
@@ -26,9 +27,6 @@ import nurgling.areas.NArea;
 import nurgling.areas.NContext;
 import nurgling.areas.NGlobalCoord;
 import nurgling.tasks.NTask;
-import nurgling.tasks.WaitFreeHand;
-import nurgling.tasks.WaitItems;
-import nurgling.tasks.WaitWindow;
 import nurgling.tasks.WindowIsClosed;
 import nurgling.tools.Finder;
 import nurgling.tools.NAlias;
@@ -55,6 +53,12 @@ public class Leveler implements Action
     private static final NAlias ODD_TUBER = new NAlias("Odd Tuber");
     private static final String CANNOT_LEVEL_MSG = "cannot be further leveled";
     private static final String NEED_SOIL_MSG = "need soil";
+    private static final long SURVEY_OPEN_NS = 8_000_000_000L;
+    private static final long DIG_IDLE_NS = 6_000_000_000L;
+    /* Filling used to stop after 20 idle ticks; keep that short retry while using real time. */
+    private static final long FILL_IDLE_NS = 350_000_000L;
+    private static final long INVENTORY_ACTION_NS = 2_000_000_000L;
+    private static final String HELD_ITEM_ERROR = "Leveler: put away the held item before continuing";
 
     private final HashSet<Coord> done = new HashSet<>();
     private final HashSet<Coord> skipped = new HashSet<>();
@@ -180,9 +184,9 @@ public class Leveler implements Action
                 markSkipped(tile);
                 return Results.SUCCESS();
             }
-            clearCursor(gui);
+            if (!clearCursor(gui)) return Results.ERROR(HELD_ITEM_ERROR);
             NUtils.rclickGob(surveyGob);
-            NUtils.addTask(new WaitWindow("Land survey"));
+            waitForSurveyWindow(gui);
         }
         Window wnd = NUtils.getGameUI().getWindow("Land survey");
         if (!(wnd instanceof LandSurvey)) {
@@ -225,6 +229,7 @@ public class Leveler implements Action
                  * have, the requirement shrinks, and the next pass restocks. */
                 survey = reopenSurvey(gui, tile);
                 if (survey == null) {
+                    if (gui.vhand != null) return Results.ERROR(HELD_ITEM_ERROR);
                     if (findSurveyByTile(tile) == null) {
                         markDone(tile);
                     } else {
@@ -293,15 +298,12 @@ public class Leveler implements Action
 
             NUtils.addTask(new NTask()
             {
-                int idleCount = 0;
+                final IdleTimeout idle = new IdleTimeout(filling ? FILL_IDLE_NS : DIG_IDLE_NS);
 
                 @Override
                 public boolean check()
                 {
-                    if (player.pose().contains("idle")) idleCount++;
-                    else idleCount = 0;
-                    if (filling && idleCount >= 20) return true;
-                    if (idleCount >= 360) return true;
+                    if (idle.expired(player.pose().contains("idle"), System.nanoTime())) return true;
                     if (NUtils.getStamina() < 0.25 || NUtils.getEnergy() < 0.3) return true;
                     /* Running out of room is a stop condition for digging only - that is the
                      * phase that loads the inventory up. A fill empties it, and it starts out
@@ -359,6 +361,7 @@ public class Leveler implements Action
                 }
                 LandSurvey nw = reopenSurvey(gui, tile);
                 if (nw == null) {
+                    if (gui.vhand != null) return Results.ERROR(HELD_ITEM_ERROR);
                     if (findSurveyByTile(tile) == null) {
                         markDone(tile);
                     }
@@ -522,7 +525,7 @@ public class Leveler implements Action
 
     private static int soilCount(NGameUI gui) throws InterruptedException
     {
-        return gui.getInventory().getItems(SOIL_ONLY).size();
+        return count(gui, SOIL_ONLY);
     }
 
     /** Walk back to the survey marker on {@code tile} and reopen its window. */
@@ -534,11 +537,44 @@ public class Leveler implements Action
         }
         if (nurgling.actions.PathFinder.isAvailable(sg.rc))
             new PathFinder(sg.rc).run(gui);
-        clearCursor(gui);
+        if (!clearCursor(gui)) return null;
         NUtils.rclickGob(sg);
-        NUtils.addTask(new WaitWindow("Land survey"));
+        waitForSurveyWindow(gui);
         Window nw = NUtils.getGameUI().getWindow("Land survey");
         return (nw instanceof LandSurvey) ? (LandSurvey) nw : null;
+    }
+
+    static boolean surveyOpenOrTimedOut(boolean open, long started, long now) {
+        return open || now - started >= SURVEY_OPEN_NS;
+    }
+
+    private static void waitForSurveyWindow(NGameUI gui) throws InterruptedException {
+        final long started = System.nanoTime();
+        NUtils.addTask(new NTask() {
+            @Override
+            public boolean check() {
+                return surveyOpenOrTimedOut(gui.getWindow("Land survey") != null,
+                        started, System.nanoTime());
+            }
+        });
+    }
+
+    static final class IdleTimeout {
+        private final long limit;
+        private long idleSince = Long.MIN_VALUE;
+
+        IdleTimeout(long limit) {
+            this.limit = limit;
+        }
+
+        boolean expired(boolean idle, long now) {
+            if (!idle) {
+                idleSince = Long.MIN_VALUE;
+                return false;
+            }
+            if (idleSince == Long.MIN_VALUE) idleSince = now;
+            return now - idleSince >= limit;
+        }
     }
 
     private Results disposeIfNeeded(NGameUI gui, boolean bestEffort) throws InterruptedException
@@ -547,22 +583,22 @@ public class Leveler implements Action
             return Results.SUCCESS();
 
         for (String itemName : excavationDumpOrder()) {
-            transferToPut(gui, itemName);
+            if (!transferToPut(gui, itemName)) return Results.ERROR(HELD_ITEM_ERROR);
         }
 
         if (soilDisposalComplete(count(gui, SOIL), count(gui, EARTHWORM), count(gui, ODD_TUBER)))
             return Results.SUCCESS();
 
-        if (count(gui, SOIL) > 0 || hasTopLevelStacks(gui)) {
+        if (count(gui, SOIL) > 0) {
             NArea dump = context.goToArea(Specialisation.SpecName.soilDump);
             if (dump != null && NUtils.navigateToArea(dump, true)) {
                 Pair<Coord2d, Coord2d> rca = dump.getRCArea();
                 if (rca != null) {
                     Coord2d center = rca.b.sub(rca.a).div(2).add(rca.a);
                     new PathFinder(center).run(gui);
-                    clearCursor(gui);
-                    dropItems(gui, SOIL);
-                    dropTopLevelStacks(gui);
+                    if (!clearCursor(gui)) return Results.ERROR(HELD_ITEM_ERROR);
+                    if (!dropVerifiedSoil(gui))
+                        return Results.ERROR("Leveler: soil dump did not finish or contains a mixed stack");
                 }
             }
         }
@@ -592,58 +628,103 @@ public class Leveler implements Action
 
     private static int count(NGameUI gui, NAlias alias) throws InterruptedException
     {
-        return gui.getInventory().getItems(alias).size();
+        int found = 0;
+        for (WItem item : gui.getInventory().getItems(alias)) {
+            if (item.item instanceof NGItem && alias.matchesExact(((NGItem) item.item).name())) found++;
+        }
+        // GetItems traverses a WItem's contents, but not a standalone top-level ItemStack.
+        for (Widget w = gui.getInventory().child; w != null; w = w.next) {
+            if (w instanceof ItemStack) {
+                for (GItem item : ((ItemStack) w).order) {
+                    if (item instanceof NGItem && alias.matchesExact(((NGItem) item).name())) found++;
+                }
+            }
+        }
+        return found;
     }
 
     static boolean readyToUseRemoteArea(boolean navigated, boolean hasRcArea) {
         return navigated && hasRcArea;
     }
 
-    private void transferToPut(NGameUI gui, String itemName) throws InterruptedException
+    private boolean transferToPut(NGameUI gui, String itemName) throws InterruptedException
     {
         if (count(gui, new NAlias(itemName)) <= 0)
-            return;
+            return true;
         NArea put = NContext.findOut(itemName, 1);
         if (put == null) put = NContext.findOutGlobal(itemName, 1, gui);
         if (put == null)
-            return;
+            return true;
         if (!NUtils.navigateToArea(put, true))
-            return;
+            return true;
         Pair<Coord2d, Coord2d> rc = put.getRCArea();
         if (!readyToUseRemoteArea(true, rc != null))
-            return;
-        clearCursor(gui);
+            return true;
+        if (!clearCursor(gui)) return false;
         new TransferToPiles(rc, itemName, 1).run(gui);
+        return true;
     }
 
-    private static void dropItems(NGameUI gui, NAlias alias) throws InterruptedException
-    {
-        ArrayList<WItem> items = gui.getInventory().getItems(alias);
-        for (WItem item : items) {
-            NUtils.drop(item);
+    static ArrayList<Widget> soilDropTargets(Widget inventory, Iterable<WItem> beltItems) {
+        ArrayList<Widget> targets = new ArrayList<>();
+        for (Widget w = inventory.child; w != null; w = w.next) {
+            if (w instanceof WItem) {
+                if (verifiedSoilItem((WItem) w)) targets.add(w);
+            } else if (w instanceof ItemStack && allSoil((ItemStack) w)) {
+                ItemStack stack = (ItemStack) w;
+                for (GItem item : stack.order) targets.add(stack.wmap.get(item));
+            }
         }
-        if (!items.isEmpty()) {
-            NUtils.addTask(new WaitItems(gui.getInventory(), alias, 0));
+        for (WItem item : beltItems) {
+            if (verifiedSoilItem(item) && !targets.contains(item)) targets.add(item);
         }
+        return targets;
     }
 
-    private static boolean hasTopLevelStacks(NGameUI gui)
-    {
-        for (Widget w = gui.getInventory().child; w != null; w = w.next) {
-            if (w instanceof ItemStack) return true;
-        }
-        return false;
+    private static boolean verifiedSoilItem(WItem w) {
+        GItem item = w.item;
+        return exactSoil(item) && (item.contents == null
+                || (item.contents instanceof ItemStack && allSoil((ItemStack) item.contents)));
     }
 
-    private static void dropTopLevelStacks(NGameUI gui) throws InterruptedException
-    {
-        ArrayList<Widget> toDrop = new ArrayList<>();
-        for (Widget w = gui.getInventory().child; w != null; w = w.next) {
-            if (w instanceof ItemStack) toDrop.add(w);
+    private static boolean exactSoil(GItem item) {
+        return item instanceof NGItem && SOIL_ITEM.equals(((NGItem) item).name());
+    }
+
+    private static boolean allSoil(ItemStack stack) {
+        if (stack.order.isEmpty() || stack.order.size() != stack.wmap.size()) return false;
+        for (GItem item : stack.order) {
+            if (!exactSoil(item) || stack.wmap.get(item) == null) return false;
         }
-        for (Widget w : toDrop) {
-            w.wdgmsg("drop");
+        return true;
+    }
+
+    private static boolean dropVerifiedSoil(NGameUI gui) throws InterruptedException {
+        ArrayList<WItem> eligibleBelt = new ArrayList<>(gui.getInventory().beltPouchContents());
+        eligibleBelt.retainAll(gui.getInventory().getItems(SOIL));
+        ArrayList<Widget> targets = soilDropTargets(gui.getInventory(), eligibleBelt);
+        if (targets.isEmpty()) return false;
+        ArrayList<Widget> parents = new ArrayList<>();
+        for (Widget target : targets) {
+            parents.add(target.parent);
+            NUtils.drop((WItem) target);
         }
+        final long started = System.nanoTime();
+        NUtils.addTask(new NTask() {
+            @Override
+            public boolean check() {
+                return targetsRemoved(targets, parents)
+                        || System.nanoTime() - started >= INVENTORY_ACTION_NS;
+            }
+        });
+        return targetsRemoved(targets, parents);
+    }
+
+    private static boolean targetsRemoved(ArrayList<Widget> targets, ArrayList<Widget> parents) {
+        for (int i = 0; i < targets.size(); i++) {
+            if (targets.get(i).parent == parents.get(i)) return false;
+        }
+        return true;
     }
 
     private static Coord tileOf(Gob g)
@@ -683,12 +764,21 @@ public class Leveler implements Action
         return null;
     }
 
-    private static void clearCursor(NGameUI gui) throws InterruptedException
+    private static boolean clearCursor(NGameUI gui) throws InterruptedException
     {
-        if (gui.vhand != null) {
-            NUtils.drop(gui.vhand);
-            NUtils.addTask(new WaitFreeHand());
-        }
+        if (gui.vhand == null) return true;
+        if (gui.vhand.item.spr == null) return false;
+        Coord free = gui.getInventory().findFreeCoord(gui.vhand);
+        if (free == null) return false;
+        gui.getInventory().wdgmsg("drop", free);
+        final long started = System.nanoTime();
+        NUtils.addTask(new NTask() {
+            @Override
+            public boolean check() {
+                return gui.vhand == null || System.nanoTime() - started >= INVENTORY_ACTION_NS;
+            }
+        });
+        return gui.vhand == null;
     }
 
     private static void stopDig(NGameUI gui) throws InterruptedException

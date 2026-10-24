@@ -1,14 +1,23 @@
 package nurgling.widgets;
 
 import haven.*;
+import nurgling.NConfig;
 import nurgling.NUtils;
+import nurgling.actions.bots.OreWatch;
 import nurgling.conf.NTunnelingProp;
+import nurgling.i18n.L10n;
 import nurgling.overlays.NMiningSupport;
+import org.json.JSONObject;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class TunnelingDialog extends Window {
     public enum Direction {
@@ -113,6 +122,10 @@ public class TunnelingDialog extends Window {
         public boolean isFrame() {
             return frameSpec() != null;
         }
+
+        public boolean supportsRoad() {
+            return this != NONE;
+        }
     }
 
     // Session-persistent selections (static to survive dialog close/reopen)
@@ -125,7 +138,6 @@ public class TunnelingDialog extends Window {
     private static boolean savedWingSouth = false;
     private static boolean savedWingEast = false;
     private static boolean savedWingWest = false;
-    private static boolean savedCentreLine = false;
 
     // Current selections (initialized from saved values)
     private Direction selectedDirection = savedDirection;
@@ -137,7 +149,11 @@ public class TunnelingDialog extends Window {
     private boolean wingEast = savedWingEast;
     private boolean wingWest = savedWingWest;
     private boolean doubleTunnel = false;
-    private boolean centreLine = savedCentreLine;
+    private boolean centreLine = false;
+    private boolean stopAtOre = false;
+    private boolean buildRoad = false;
+    private int roadSpacing = 30;
+    private final Set<String> stopOres = new HashSet<>(OreWatch.ores().keySet());
 
     private int maxLateral = savedMaxLateral;
 
@@ -152,6 +168,10 @@ public class TunnelingDialog extends Window {
     private boolean[] cancelRef = null;
     private boolean[] doubleTunnelRef = null;
     private boolean[] centreLineRef = null;
+    private boolean[] stopAtOreRef = null;
+    private Set<String> stopOresOut = null;
+    private boolean[] buildRoadRef = null;
+    private int[] roadSpacingRef = null;
 
     // UI Elements
     private IButton btnDirN, btnDirS, btnDirE, btnDirW;
@@ -181,7 +201,14 @@ public class TunnelingDialog extends Window {
     // Wing controls, hidden for tunnel frames (a frame props nothing beside its own width)
     private final List<Widget> wingWidgets = new ArrayList<>();
     private Button confirmButton, cancelButton;
+    private CheckBox stopAtOreBox;
+    private Button oresButton;
+    private CheckBox buildRoadBox;
+    private OrePicker orePicker;
     private int tunnelerButtonY, minesweeperButtonY;
+    private int minesweeperOreY;
+    private Coord oreColumn;
+    private static final int ORE_ROW_STEP = 38;
 
     private static final Color COLOR_SELECTION = new Color(255, 200, 50);
 
@@ -237,7 +264,90 @@ public class TunnelingDialog extends Window {
     public TunnelingDialog() {
         super(new Coord(560, 645), "Tunneling Bot");
         loadFromProp();
+        applyOreSettings(OreSettings.from(NConfig.get(NConfig.Key.tunnelingOreStop)));
+        RoadSettings road = RoadSettings.from(NConfig.get(NConfig.Key.tunnelingRoad));
+        buildRoad = road.enabled;
+        roadSpacing = road.spacing;
         initializeWidgets();
+    }
+
+    /** Only the new ore setting is persisted here; older tunneling choices stay in NTunnelingProp. */
+    static final class OreSettings {
+        final boolean enabled;
+        final Set<String> ores;
+
+        OreSettings(boolean enabled, Set<String> ores) {
+            this.enabled = enabled;
+            this.ores = Collections.unmodifiableSet(OreWatch.validKeys(ores));
+        }
+
+        static OreSettings from(Object raw) {
+            Map<?, ?> saved = null;
+            if (raw instanceof Map<?, ?>)
+                saved = (Map<?, ?>) raw;
+            else if (raw instanceof String && !((String) raw).isEmpty()) {
+                try { saved = new JSONObject((String) raw).toMap(); }
+                catch (RuntimeException ignored) { /* Keep the disabled default. */ }
+            }
+            if (saved == null)
+                return new OreSettings(false, OreWatch.ores().keySet());
+            boolean enabled = Boolean.TRUE.equals(saved.get("enabled"));
+            Set<String> ores = new HashSet<>(OreWatch.ores().keySet());
+            Object listed = saved.get("ores");
+            if (listed instanceof List<?>) {
+                ores.clear();
+                for (Object key : (List<?>) listed)
+                    if (key instanceof String && OreWatch.ores().containsKey(key))
+                        ores.add((String) key);
+            }
+            return new OreSettings(enabled, ores);
+        }
+
+        Map<String, Object> saved() {
+            List<String> keys = new ArrayList<>(ores);
+            Collections.sort(keys);
+            Map<String, Object> out = new HashMap<>();
+            out.put("enabled", enabled);
+            out.put("ores", keys);
+            return out;
+        }
+    }
+
+    private void applyOreSettings(OreSettings settings) {
+        stopAtOre = settings.enabled;
+        stopOres.clear();
+        stopOres.addAll(settings.ores);
+    }
+
+    /** Road choices live outside the older NTunnelingProp and stay disabled in old profiles. */
+    static final class RoadSettings {
+        final boolean enabled;
+        final int spacing;
+
+        RoadSettings(boolean enabled, int spacing) {
+            this.enabled = enabled;
+            this.spacing = Math.max(5, Math.min(30, spacing));
+        }
+
+        static RoadSettings from(Object raw) {
+            Map<?, ?> saved = null;
+            if (raw instanceof Map<?, ?>) saved = (Map<?, ?>) raw;
+            else if (raw instanceof String && !((String) raw).isEmpty()) {
+                try { saved = new JSONObject((String) raw).toMap(); }
+                catch (RuntimeException ignored) { /* Old or malformed profile: road stays off. */ }
+            }
+            if (saved == null) return new RoadSettings(false, 30);
+            Object distance = saved.get("spacing");
+            int spacing = distance instanceof Number ? ((Number) distance).intValue() : 30;
+            return new RoadSettings(Boolean.TRUE.equals(saved.get("enabled")), spacing);
+        }
+
+        Map<String, Object> saved() {
+            Map<String, Object> out = new HashMap<>();
+            out.put("enabled", enabled);
+            out.put("spacing", spacing);
+            return out;
+        }
     }
 
     private void initializeWidgets() {
@@ -593,6 +703,7 @@ public class TunnelingDialog extends Window {
 
         // Legend aligned to bottom of preview
         int legendX = leftMargin + previewGrid.sz.x + 25;
+        oreColumn = new Coord(legendX, y);
         int previewBottom = y + previewGrid.sz.y;
         int legendItemHeight = 22;
         addColoredLegend(legendX, previewBottom - 3 * legendItemHeight, COLOR_SUPPORT, "Support", tunnelerWidgets);
@@ -606,6 +717,28 @@ public class TunnelingDialog extends Window {
         tunnelerWidgets.add(previewGrid);
 
         y += previewGrid.sz.y + 25;
+
+        buildRoadBox = new CheckBox(L10n.get("tunneler.road")) {
+            @Override public void changed(boolean val) {
+                super.changed(val);
+                buildRoad = val;
+            }
+        };
+        buildRoadBox.a = buildRoad;
+        buildRoadBox.settip(L10n.get("tunneler.road_tip"));
+        add(buildRoadBox, new Coord(leftMargin, y));
+        Label spacingLabel = add(new Label(L10n.get("tunneler.road_spacing")), new Coord(leftMargin + 245, y + 3));
+        TextEntry spacingEntry = add(new TextEntry(UI.scale(42), String.valueOf(roadSpacing)) {
+            @Override protected void changed() {
+                super.changed();
+                try { roadSpacing = Integer.parseInt(text()); }
+                catch (NumberFormatException ignored) { /* Confirm clamps the last valid value. */ }
+            }
+        }, new Coord(leftMargin + 435, y));
+        tunnelerWidgets.add(buildRoadBox);
+        tunnelerWidgets.add(spacingLabel);
+        tunnelerWidgets.add(spacingEntry);
+        y += 34;
 
         // === 4b. MINESWEEPER-specific UI (hidden by default) ===
         Label lateralLabel = new Label("Max lateral deviation:");
@@ -632,8 +765,9 @@ public class TunnelingDialog extends Window {
         // === 5. BUTTONS (left aligned) ===
         int btnWidth = 140;
         tunnelerButtonY = y;
-        // Minesweeper mode: buttons go right after the lateral deviation row
-        minesweeperButtonY = compassCenterY + windroseSize.y / 2 + btnDirS.sz.y + btnGap + 65;
+        // Minesweeper has its own ore row; the preview mode uses space beside the preview.
+        minesweeperOreY = compassCenterY + windroseSize.y / 2 + btnDirS.sz.y + btnGap + 65;
+        minesweeperButtonY = minesweeperOreY + ORE_ROW_STEP;
 
         confirmButton = new Button(btnWidth, "Start") {
             @Override
@@ -646,6 +780,23 @@ public class TunnelingDialog extends Window {
             public void click() { cancel(); }
         };
         add(cancelButton, new Coord(leftMargin + btnWidth + 15, y));
+
+        stopAtOreBox = new CheckBox(L10n.get("tunneler.ore_stop")) {
+            @Override public void changed(boolean val) {
+                super.changed(val);
+                stopAtOre = val;
+            }
+        };
+        stopAtOreBox.a = stopAtOre;
+        stopAtOreBox.settip(L10n.get("tunneler.ore_stop_tip"));
+        add(stopAtOreBox);
+        oresButton = new Button(UI.scale(110), "") {
+            @Override public void click() { toggleOrePicker(); }
+        };
+        oresButton.settip(L10n.get("tunneler.ore_choose_tip"));
+        updateOresButton();
+        add(oresButton);
+        placeOreControls(false);
 
         // Initialize state from saved values
         restoreSavedState();
@@ -927,6 +1078,7 @@ public class TunnelingDialog extends Window {
         int btnWidth = 140;
         confirmButton.move(new Coord(leftMargin, btnY));
         cancelButton.move(new Coord(leftMargin + btnWidth + 15, btnY));
+        placeOreControls(isMinesweeper);
         resize(new Coord(560, btnY + confirmButton.sz.y + 20));
         if (!isMinesweeper) {
             applyDirection(selectedDirection, false);
@@ -1314,6 +1466,91 @@ public class TunnelingDialog extends Window {
         this.centreLineRef = centreLineRef;
     }
 
+    public void setOreReferences(boolean[] enabledRef, Set<String> selectedRef) {
+        this.stopAtOreRef = enabledRef;
+        this.stopOresOut = selectedRef;
+    }
+
+    public void setRoadReferences(boolean[] enabledRef, int[] spacingRef) {
+        this.buildRoadRef = enabledRef;
+        this.roadSpacingRef = spacingRef;
+    }
+
+    private void placeOreControls(boolean minesweeper) {
+        Coord at = minesweeper ? new Coord(20, minesweeperOreY) : oreColumn;
+        stopAtOreBox.move(at);
+        oresButton.move(minesweeper
+                ? new Coord(at.x + stopAtOreBox.sz.x + 10, at.y - 4)
+                : new Coord(at.x, at.y + stopAtOreBox.sz.y + 6));
+    }
+
+    private void updateOresButton() {
+        oresButton.change(L10n.get("tunneler.ore_choose", stopOres.size()));
+    }
+
+    static Coord pickerPosition(Coord dialog, Coord dialogSize, Coord pickerSize, Coord parentSize) {
+        int x = dialog.x + dialogSize.x;
+        if (x + pickerSize.x > parentSize.x) x = dialog.x - pickerSize.x;
+        return new Coord(Math.max(0, Math.min(x, parentSize.x - pickerSize.x)),
+                Math.max(0, Math.min(dialog.y, parentSize.y - pickerSize.y)));
+    }
+
+    private void toggleOrePicker() {
+        if (orePicker != null) {
+            closeOrePicker();
+            return;
+        }
+        if (parent == null) return;
+        OrePicker picker = new OrePicker();
+        orePicker = picker;
+        parent.add(picker, pickerPosition(c, sz, picker.sz, parent.sz));
+    }
+
+    private void closeOrePicker() {
+        OrePicker picker = orePicker;
+        orePicker = null;
+        if (picker != null) picker.reqdestroy();
+    }
+
+    private class OrePicker extends Window {
+        OrePicker() {
+            super(new Coord(310, 360), L10n.get("tunneler.ore_picker"));
+            int row = 10;
+            for (Map.Entry<String, String> ore : OreWatch.ores().entrySet()) {
+                String key = ore.getKey();
+                CheckBox box = add(new CheckBox(ore.getValue()) {
+                    @Override public void changed(boolean val) {
+                        super.changed(val);
+                        if (val) stopOres.add(key); else stopOres.remove(key);
+                        updateOresButton();
+                    }
+                }, new Coord(10, row));
+                box.a = stopOres.contains(key);
+                row += box.sz.y + 3;
+            }
+            add(new Button(90, L10n.get("tunneler.ore_all")) {
+                @Override public void click() {
+                    stopOres.addAll(OreWatch.ores().keySet());
+                    updateOresButton();
+                    closeOrePicker();
+                }
+            }, new Coord(10, row + 5));
+            add(new Button(90, L10n.get("tunneler.ore_none")) {
+                @Override public void click() {
+                    stopOres.clear();
+                    updateOresButton();
+                    closeOrePicker();
+                }
+            }, new Coord(110, row + 5));
+            resize(new Coord(310, row + 45));
+        }
+
+        @Override public void wdgmsg(String msg, Object... args) {
+            if (msg.equals("close")) closeOrePicker();
+            else super.wdgmsg(msg, args);
+        }
+    }
+
     private void confirm() {
         // Save selections for session persistence
         savedDirection = selectedDirection;
@@ -1326,7 +1563,16 @@ public class TunnelingDialog extends Window {
         savedWingEast = wingEast;
         savedWingWest = wingWest;
         saveToProp();
-        savedCentreLine = centreLine;
+        NConfig.set(NConfig.Key.tunnelingOreStop, new OreSettings(stopAtOre, stopOres).saved());
+        RoadSettings road = new RoadSettings(buildRoad && selectedSupportType.supportsRoad(), roadSpacing);
+        NConfig.set(NConfig.Key.tunnelingRoad, road.saved());
+        if (buildRoadRef != null) buildRoadRef[0] = road.enabled;
+        if (roadSpacingRef != null) roadSpacingRef[0] = road.spacing;
+        if (stopAtOreRef != null) stopAtOreRef[0] = stopAtOre;
+        if (stopOresOut != null) {
+            stopOresOut.clear();
+            stopOresOut.addAll(stopOres);
+        }
 
         if (directionRef != null) {
             directionRef[0] = selectedDirection.ordinal();
@@ -1367,6 +1613,7 @@ public class TunnelingDialog extends Window {
         if (doubleTunnelRef != null) {
             doubleTunnelRef[0] = doubleTunnel;
         }
+        closeOrePicker();
         hide();
     }
 
@@ -1386,6 +1633,7 @@ public class TunnelingDialog extends Window {
         wingWest = prop.wingWest;
         doubleTunnel = prop.doubleTunnel;
         maxLateral = prop.maxLateral;
+        centreLine = prop.centreLine;
     }
 
     private void saveToProp() {
@@ -1405,6 +1653,7 @@ public class TunnelingDialog extends Window {
         prop.wingWest = wingWest;
         prop.doubleTunnel = doubleTunnel;
         prop.maxLateral = maxLateral;
+        prop.centreLine = centreLine;
         NTunnelingProp.set(prop);
     }
 
@@ -1434,7 +1683,13 @@ public class TunnelingDialog extends Window {
         if (cancelRef != null) {
             cancelRef[0] = true;
         }
+        closeOrePicker();
         hide();
+    }
+
+    @Override public void destroy() {
+        closeOrePicker();
+        super.destroy();
     }
 
     @Override

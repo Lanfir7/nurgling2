@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-lp-gatherer",
+  "priority": 7,
+  "summary": {
+    "ru": "Новый сборщик LP помогает находить ещё не открытые материалы и сохраняет добычу.",
+    "en": "The new LP Gatherer finds undiscovered materials and keeps the harvest."
+  },
+  "detail": {
+    "ru": "В разделе ботов ресурсов запустите «Сборщик LP»: он ищет ближайшие доступные источники, собирает по одному новому материалу и оставляет предметы в инвентаре. Если нет места или подходящего инструмента, этот материал пропускается.",
+    "en": "Run LP Gatherer from the resource bots. It searches nearby reachable sources for undiscovered products, collects one at a time, and leaves the items in your inventory. Products needing unavailable tools or inventory space are skipped."
+  }
+}

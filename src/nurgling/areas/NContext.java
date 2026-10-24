@@ -3,11 +3,13 @@ package nurgling.areas;
 import haven.*;
 import nurgling.*;
 import nurgling.actions.bots.SelectArea;
+import nurgling.actions.PathFinder;
 import nurgling.navigation.AreaNavigationHelper;
 import nurgling.navigation.ChunkNavManager;
 import nurgling.navigation.ChunkPath;
 import nurgling.tools.*;
 import nurgling.tools.Container;
+import nurgling.tasks.NTask;
 import nurgling.widgets.Specialisation;
 import nurgling.conf.ConstructionMaterialsRegistry;
 import org.json.*;
@@ -16,6 +18,7 @@ import java.awt.image.BufferedImage;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 
 public class NContext {
 
@@ -269,11 +272,19 @@ public class NContext {
         }
         String areaid = barrels.get(item);
         navigateToAreaIfNeeded(areaid);
+        String liquid = ItemVariants.liquidOf(item);
         Gob any = null;
         for(Gob gob: Finder.findGobs(areas.get(areaid), new NAlias("barrel")))
         {
             if(!NUtils.barrelHasContent(gob))
                 continue;
+            if (liquid != null) {
+                if (barrelHolds(gob, item)) {
+                    barrelstorage.put(item, new BarrelStorage(new NGlobalCoord(gob.rc), NUtils.getContentsOfBarrel(gob)));
+                    return gob;
+                }
+                continue;
+            }
             String contents = NUtils.getContentsOfBarrel(gob);
             if(contents != null && (NParser.checkName(contents, item)
                     || ("Water".equalsIgnoreCase(item) && NParser.checkName(contents, "water"))))
@@ -284,13 +295,59 @@ public class NContext {
             if(any == null)
                 any = gob;
         }
-        if(any != null && !"Water".equalsIgnoreCase(item))
+        if(any != null && liquid == null && !"Water".equalsIgnoreCase(item))
         {
             barrelstorage.put(item,new BarrelStorage(new NGlobalCoord(any.rc), NUtils.getContentsOfBarrel(any)));
             return any;
         }
         return null;
 
+    }
+
+    @FunctionalInterface
+    interface TaskRunner {
+        void run(NTask task) throws InterruptedException;
+    }
+
+    private static boolean waitFor(BooleanSupplier condition, int ticks) throws InterruptedException {
+        return waitFor(condition, ticks, NUtils::addTask);
+    }
+
+    static boolean waitFor(BooleanSupplier condition, int ticks, TaskRunner tasks) throws InterruptedException {
+        if (condition.getAsBoolean())
+            return true;
+        tasks.run(new NTask() {
+            { infinite = false; maxCounter = ticks; criticalOnTimeout = false; }
+            @Override public boolean check() { return condition.getAsBoolean(); }
+        });
+        return condition.getAsBoolean();
+    }
+
+    /** A milk overlay has no kind; read the opened barrel and leave unknown content untouched. */
+    private boolean barrelHolds(Gob barrel, String requested) throws InterruptedException {
+        if (!PathFinder.isAvailable(barrel) || !new PathFinder(barrel).run(gui).IsSuccess())
+            return false;
+        Window previous = gui.getWindow("Barrel");
+        if (previous != null) {
+            previous.wdgmsg("close");
+            if (!waitFor(() -> gui.getWindow("Barrel") == null, 480))
+                return false;
+        }
+        gui.ui.core.setLastAction(barrel);
+        gui.map.wdgmsg("click", Coord.z, barrel.rc.floor(OCache.posres), 3, 0, 0,
+                (int) barrel.id, barrel.rc.floor(OCache.posres), 0, -1);
+        if (!waitFor(() -> gui.getWindow("Barrel") != null, 480))
+            return false;
+        Window window = gui.getWindow("Barrel");
+        try {
+            if (!waitFor(() -> LiquidContent.read(window) != null, 480))
+                return false;
+            LiquidContent content = LiquidContent.read(window);
+            return ItemVariants.liquidMatches(content, requested);
+        } finally {
+            window.wdgmsg("close");
+            waitFor(() -> gui.getWindow("Barrel") == null, 480);
+        }
     }
 
 
@@ -727,6 +784,8 @@ public class NContext {
             NArea area = areas.get(id);
             if(area != null) {
                 NArea.Ingredient ingredient = area.getInput(item);
+                if (ingredient == null && ItemVariants.isKey(item))
+                    ingredient = area.getInput(ItemVariants.base(item));
                 if(ingredient != null) {
                     switch (ingredient.type) {
                     case BARTER:
@@ -1068,7 +1127,8 @@ public class NContext {
         }
         if(area!=null)
         {
-            return area.getInput(item).type == NArea.Ingredient.Type.BARREL;
+            NArea.Ingredient ingredient = area.getInput(item);
+            return ingredient != null && ingredient.type == NArea.Ingredient.Type.BARREL;
         }
         return false;
     }
@@ -1077,6 +1137,11 @@ public class NContext {
         NArea area = findIn(name);
         if (area == null) {
             area = findInGlobal(name);
+        }
+        if (area == null && ItemVariants.isKey(name)) {
+            area = findIn(ItemVariants.base(name));
+            if (area == null)
+                area = findInGlobal(ItemVariants.base(name));
         }
         if(area!=null)
         {
@@ -1120,6 +1185,43 @@ public class NContext {
         if (loadsimg!=null) {
             thmap.put(Math.abs(th), createArea("Please select area for:" + name, Resource.loadsimg("baubles/custom"), loadsimg));
             return true;
+        }
+        return false;
+    }
+
+    /** Prefer a kind-specific PUT area at this quality, then the legacy plain item area. */
+    public String outKey(NGItem item, double quality) {
+        if (ItemVariants.unread(item))
+            return null;
+        String key = ItemVariants.keyOf(item);
+        if (key != null) {
+            TreeMap<Double, String> thresholds = outAreas.get(key);
+            if (thresholds == null) {
+                thresholds = new TreeMap<>();
+                outAreas.put(key, thresholds);
+            }
+            if (thresholds.floorEntry(quality) == null)
+                resolveOutAreas(key, thresholds);
+            if (thresholds.floorEntry(quality) != null)
+                return key;
+        }
+        return item.name();
+    }
+
+    /** Whether a kind-specific PUT destination can accept any quality in this transfer band. */
+    public boolean hasVariantOutputInBand(String gameName, double minQuality, Double maxQualityExclusive) {
+        for (String key : ItemVariants.keys(gameName)) {
+            TreeMap<Double, String> thresholds = outAreas.get(key);
+            if (thresholds == null) {
+                thresholds = new TreeMap<>();
+                outAreas.put(key, thresholds);
+            }
+            resolveOutAreas(key, thresholds);
+            if (thresholds.floorEntry(minQuality) != null)
+                return true;
+            Map.Entry<Double, String> next = thresholds.ceilingEntry(minQuality);
+            if (next != null && (maxQualityExclusive == null || next.getKey() < maxQualityExclusive))
+                return true;
         }
         return false;
     }

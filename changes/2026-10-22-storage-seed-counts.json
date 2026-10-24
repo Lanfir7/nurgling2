@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-storage-seed-counts",
+  "priority": 8,
+  "summary": {
+    "ru": "Во вкладках хранилища семена из бочек и отдельные предметы видны вместе.",
+    "en": "Storage tabs now show barreled seeds alongside individual seed items."
+  },
+  "detail": {
+    "ru": "В хранилище откройте садовую вкладку: она предлагает больше видов семян. Для одного вида показаны запасы в бочках и количество отдельных предметов; фильтр качества применяется к обоим. Старое название слота ячменя исправляется при загрузке сохранённых вкладок.",
+    "en": "Open the garden tab in storage for more seed types. Each type shows its barrel stock and separate item count, both respecting the quality filter. Saved tabs with the old barley slot name are corrected when loaded."
+  }
+}

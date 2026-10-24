@@ -393,18 +393,15 @@ public class SeedCrop implements Action {
 
         Area.Tile[][] tiles = field.getArea().getTiles(field.getArea(), new NAlias("gfx/terobjs/moundbed"));
 
-        // Try both orientations
-        int patchesXY = countPossiblePatches(field.getArea(), tiles, patX, patY);
-        int patchesYX = countPossiblePatches(field.getArea(), tiles, patY, patX);
-
-        boolean useRotated = patchesYX > patchesXY;
+        ArrayList<ArrayList<Coord>> patchesXY = tilePatches(field.getArea(), tiles, patX, patY);
+        ArrayList<ArrayList<Coord>> patchesYX = tilePatches(field.getArea(), tiles, patY, patX);
+        boolean useRotated = patchesYX.size() > patchesXY.size();
+        ArrayList<ArrayList<Coord>> patches = useRotated ? patchesYX : patchesXY;
 
         int useX = useRotated ? patY : patX;
         int useY = useRotated ? patX : patY;
 
-        ArrayList<Coord> toSeed = findFirstFreePatch(field.getArea(), tiles, useX, useY);
-
-        if (toSeed == null) {
+        if (patches.isEmpty()) {
             gui.msg("No empty patch of " + useX + "x" + useY + " found for quality seeding!");
             return;
         }
@@ -425,20 +422,35 @@ public class SeedCrop implements Action {
         // 3. Get all seeds in the container
         new OpenTargetContainer(container).run(gui);
         ArrayList<WItem> seeds = gui.getInventory(container.cap).getItems(iseed);
+        ArrayList<Coord> toSeed = nearestPatch(patches, gui.map.player().rc);
+        List<WItem> carried = gui.getInventory().getItems(iseed);
 
-        int canSeedCells = getSeedingCapacity(seeds);
-
-        if (canSeedCells < toSeed.size()) {
+        if (getSeedingCapacity(seeds) + getSeedingCapacity(carried) < toSeed.size()) {
             gui.error("Not enough seeds in container for quality seeding!");
             throw new InterruptedException();
         }
 
-        int fetchCount = Math.min(seeds.size(), gui.getInventory().getFreeSpace());
+        int fetchCount = itemsToCoverCells(seeds, toSeed.size());
+        if (fetchCount > 0) {
+            for (WItem item : seeds) {
+                if (!(item.item instanceof NGItem) || ((NGItem) item.item).quality == null) {
+                    gui.error("Seed quality is not available yet!");
+                    throw new InterruptedException();
+                }
+            }
+            Coord itemSize = seeds.get(0).sz.div(Inventory.sqsz);
+            fetchCount = Math.min(fetchCount, gui.getInventory().getNumberFreeCoord(itemSize));
+        }
 
         // 4. Fetch top seeds to inventory
-        new TakeAvailableItemsFromContainer(container, iseed, fetchCount, NInventory.QualityType.High).run(gui);
+        if (fetchCount > 0)
+            new TakeAvailableItemsFromContainer(container, iseed, fetchCount, NInventory.QualityType.High).run(gui);
 
-        List<WItem> plantingOrder = getPlantingOrder(NUtils.getGameUI().getInventory().getItems(iseed), toSeed.size());
+        List<WItem> plantingOrder = getPlantingOrder(gui.getInventory().getItems(iseed), toSeed.size());
+        if (plantingOrder.size() < toSeed.size()) {
+            gui.error("Not enough usable seeds or inventory space for quality seeding!");
+            throw new InterruptedException();
+        }
 
         // 5. Seed just those x*y tiles, individually
         for (int i = 0; i < toSeed.size(); i++) {
@@ -512,23 +524,26 @@ public class SeedCrop implements Action {
         }
     }
 
-    // Counts how many non-overlapping patches of size patX x patY fit in the area
-    private int countPossiblePatches(Area area, Area.Tile[][] tiles, int patX, int patY) {
-        int patches = 0;
+    // Greedily pack free field patches from the upper-left without overlaps.
+    static ArrayList<ArrayList<Coord>> tilePatches(Area area, Area.Tile[][] tiles, int patX, int patY) {
+        ArrayList<ArrayList<Coord>> patches = new ArrayList<>();
+        if (tiles.length == 0 || tiles[0].length == 0 || patX <= 0 || patY <= 0) return patches;
         boolean[][] used = new boolean[tiles.length][tiles[0].length];
         for (int i = 0; i <= tiles.length - patX; i++) {
             for (int j = 0; j <= tiles[0].length - patY; j++) {
                 boolean ok = true;
+                ArrayList<Coord> patch = new ArrayList<>();
                 for (int dx = 0; dx < patX; dx++) {
                     for (int dy = 0; dy < patY; dy++) {
                         if (used[i + dx][j + dy]) ok = false;
                         Area.Tile tile = tiles[i + dx][j + dy];
                         if (!nurgling.tools.NParser.checkName(tile.name, "field") || !tile.isFree)
                             ok = false;
+                        patch.add(new Coord(area.ul.x + i + dx, area.ul.y + j + dy));
                     }
                 }
                 if (ok) {
-                    patches++;
+                    patches.add(patch);
                     for (int dx = 0; dx < patX; dx++)
                         for (int dy = 0; dy < patY; dy++)
                             used[i + dx][j + dy] = true;
@@ -538,77 +553,65 @@ public class SeedCrop implements Action {
         return patches;
     }
 
-    private ArrayList<Coord> findFirstFreePatch(Area area, Area.Tile[][] tiles, int patX, int patY) {
-        for (int i = 0; i <= tiles.length - patX; i++) {
-            for (int j = 0; j <= tiles[0].length - patY; j++) {
-                boolean ok = true;
-                ArrayList<Coord> patch = new ArrayList<>();
-                for (int dx = 0; dx < patX; dx++) {
-                    for (int dy = 0; dy < patY; dy++) {
-                        Area.Tile tile = tiles[i + dx][j + dy];
-                        if (!nurgling.tools.NParser.checkName(tile.name, "field") || !tile.isFree)
-                            ok = false;
-                        patch.add(new Coord(area.ul.x + i + dx, area.ul.y + j + dy));
-                    }
-                }
-                if (ok) return patch;
+    static ArrayList<Coord> nearestPatch(ArrayList<ArrayList<Coord>> patches, Coord2d player) {
+        ArrayList<Coord> best = null;
+        double bestDist = Double.MAX_VALUE;
+        for (ArrayList<Coord> patch : patches) {
+            double distance = Double.MAX_VALUE;
+            for (Coord tile : patch) {
+                distance = Math.min(distance, player.dist(tile.mul(MCache.tilesz).add(MCache.tilehsz)));
+            }
+            if (distance < bestDist) {
+                bestDist = distance;
+                best = patch;
             }
         }
-        return null;
+        return best;
     }
 
-    private int getSeedingCapacity(List<WItem> seeds) {
+    static int getSeedingCapacity(List<WItem> seeds) {
         int totalCells = 0;
-        for (WItem item : seeds) {
-            int itemCount = 1; // Default: crops count as 1
-
-            for (ItemInfo info : item.item.info()) {
-                if (info instanceof GItem.Amount) {
-                    int qty = ((GItem.Amount) info).itemnum();
-                    itemCount = qty / 5; // Each 5 seeds = 1 cell
-
-                    break;
-                }
-            }
-            // If it's a crop, itemCount remains 1
-            totalCells += itemCount;
-        }
+        for (WItem item : seeds) totalCells += seedCells(item);
         return totalCells;
     }
 
-    private List<WItem> getPlantingOrder(List<WItem> seeds, int tilesToPlant) {
-        List<WItem> order = new ArrayList<>();
-        int planted = 0;
-
-        List<Integer> amounts = new ArrayList<>();
-        for (WItem item : seeds) {
-            int amt = -1;
-            List<ItemInfo> infoList = item.item.info;
-            if (infoList != null) {
-                for (ItemInfo info : infoList) {
-                    if (info instanceof GItem.Amount) {
-                        amt = ((GItem.Amount) info).itemnum();
-                        break;
-                    }
-                }
-            }
-            amounts.add(amt);
+    private static int seedCells(WItem item) {
+        if (item == null || !(item.item instanceof NGItem)) return 0;
+        for (ItemInfo info : item.item.info()) {
+            if (info instanceof GItem.Amount)
+                return Math.max(0, ((GItem.Amount) info).itemnum()) / 5;
         }
+        return 1;
+    }
 
-        for (int i = 0; i < seeds.size() && planted < tilesToPlant; i++) {
-            WItem item = seeds.get(i);
-            int amt = amounts.get(i);
+    static int itemsToCoverCells(List<WItem> seeds, int cellsNeeded) {
+        ArrayList<WItem> sorted = new ArrayList<>(seeds);
+        sorted.sort(SeedCrop::compareSeedQuality);
+        int count = 0;
+        int cover = 0;
+        for (WItem item : sorted) {
+            if (cover >= cellsNeeded) break;
+            cover += seedCells(item);
+            count++;
+        }
+        return count;
+    }
 
-            if (amt == -1) {
+    private static int compareSeedQuality(WItem a, WItem b) {
+        Float aq = a.item instanceof NGItem ? ((NGItem) a.item).quality : null;
+        Float bq = b.item instanceof NGItem ? ((NGItem) b.item).quality : null;
+        return Float.compare(bq == null ? Float.NEGATIVE_INFINITY : bq,
+                aq == null ? Float.NEGATIVE_INFINITY : aq);
+    }
+
+    static List<WItem> getPlantingOrder(List<WItem> seeds, int tilesToPlant) {
+        List<WItem> order = new ArrayList<>();
+        ArrayList<WItem> sorted = new ArrayList<>(seeds);
+        sorted.sort(SeedCrop::compareSeedQuality);
+        for (WItem item : sorted) {
+            for (int cells = seedCells(item); cells > 0 && order.size() < tilesToPlant; cells--)
                 order.add(item);
-                planted++;
-            } else {
-                while (amt >= 5 && planted < tilesToPlant) {
-                    order.add(item);
-                    amt -= 5;
-                    planted++;
-                }
-            }
+            if (order.size() >= tilesToPlant) break;
         }
         return order;
     }

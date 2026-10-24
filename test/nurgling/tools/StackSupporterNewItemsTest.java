@@ -84,4 +84,18 @@ class StackSupporterNewItemsTest {
         assertEquals(5, StackSupporter.getFullStackSize("Branch"));
         assertEquals(4, StackSupporter.getFullStackSize("Standing Grass"));
     }
+
+    @Test
+    void newlyRecognizedItemsUseTheirServerStackSizesWithoutChangingCategoryRules() {
+        assertTrue(VSpec.getCategory("Adder Skeleton").contains("Bone Material"));
+        assertEquals(3, StackSupporter.getFullStackSize("Adder Skeleton"));
+        assertEquals(4, StackSupporter.getFullStackSize("Indigo Cap"));
+        assertEquals(4, StackSupporter.getFullStackSize("Cave Louse Leg"));
+        assertEquals(3, StackSupporter.getFullStackSize("Cruel Bee Stinger"));
+        assertEquals(4, StackSupporter.getFullStackSize("Tinder Conk"));
+        assertEquals(4, StackSupporter.getFullStackSize("Pearl Oyster"));
+        assertEquals(4, StackSupporter.getFullStackSize("Ice Bear Tooth"));
+        assertEquals(5, StackSupporter.getFullStackSize("Raw Narwhal"));
+        assertTrue(VSpec.getCategory("Edelwei\u00df").contains("Flower"));
+    }
 }

@@ -26,6 +26,7 @@ public class NTunnelingProp implements JConf {
     public boolean wingSouth = false;
     public boolean wingEast = false;
     public boolean wingWest = false;
+    public boolean centreLine = false;
 
     public NTunnelingProp(String username, String chrid) {
         this.username = username;
@@ -57,6 +58,8 @@ public class NTunnelingProp implements JConf {
             wingEast = (Boolean) values.get("wingEast");
         if (values.get("wingWest") != null)
             wingWest = (Boolean) values.get("wingWest");
+        if (values.get("centreLine") instanceof Boolean)
+            centreLine = (Boolean) values.get("centreLine");
     }
 
     public static void set(NTunnelingProp prop) {
@@ -107,6 +110,7 @@ public class NTunnelingProp implements JConf {
         j.put("wingSouth", wingSouth);
         j.put("wingEast", wingEast);
         j.put("wingWest", wingWest);
+        j.put("centreLine", centreLine);
         return j;
     }
 

@@ -393,6 +393,32 @@ public class NMiniMapWnd extends Widget{
         pack();
     }
 
+    /**
+     * Adds one icon checkbox to this window's dock. Call on this window's UI thread;
+     * plugins should destroy their button when unloading. The same instance is added once.
+     */
+    public void addToggle(Widget btn) {
+        if(btn == null || !(btn instanceof ICheckBox))
+            throw new IllegalArgumentException("A minimap toggle must be an ICheckBox");
+        if(toggle_panel == null || miniMap == null || miniMap.sz == null)
+            throw new IllegalStateException("Minimap toggle panel is not ready");
+        for(Widget existing : toggle_panel.children())
+            if(existing == btn)
+                return;
+        if(btn.parent != null)
+            throw new IllegalArgumentException("Toggle already belongs to another widget");
+        if(btn.ui != null && btn.ui != ui)
+            throw new IllegalArgumentException("Toggle belongs to another UI");
+        if(btn.sz == null || btn.sz.x <= 0 || btn.sz.y <= 0
+                || btn.sz.x > miniMap.sz.x || btn.sz.y > miniMap.sz.y)
+            throw new IllegalArgumentException("Toggle icon does not fit the minimap");
+
+        toggle_panel.add(btn);
+        layoutButtons(new java.util.ArrayList<>(toggle_panel.children()));
+        toggle_panel.pack();
+        toggle_panel.move(new Coord(0, miniMap.sz.y - toggle_panel.sz.y));
+    }
+
     public void switchStatus(String val, Boolean a) {
         switch (val){
             case "cplot": {
@@ -541,20 +567,29 @@ public class NMiniMapWnd extends Widget{
     @Override
     public boolean mousedown(MouseDownEvent ev) {
         Widget hit = dockHit(ev.c);
-        if(hit != null)
-            return(hit.mousedown(ev.derive(hit.sz.div(2))));
-        return(super.mousedown(ev));
+        if(hit != null && hit.mousedown(ev.derive(hit.sz.div(2)))) {
+            ev.stop();
+            return(true);
+        }
+        return(dispatchOutsideDock(ev));
     }
 
     @Override
     public void mousemove(MouseMoveEvent ev) {
         super.mousemove(ev);
         Widget hit = dockHit(ev.c);
-        if(hit == null)
-            return;
         for(Widget wdg : dockIcons()) {
             if(wdg instanceof ICheckBox)
                 ((ICheckBox)wdg).h = (wdg == hit);
+        }
+        /* MouseMoveEvent normally visits every child, including icons outside their
+         * nominal rectangles. That would undo hover on a visually grown icon. */
+        ev.stop();
+        for(Widget child = lchild; child != null; child = child.prev) {
+            if(child == toggle_panel || child == map_box || !child.visible())
+                continue;
+            Coord cc = xlate(child.c, true);
+            ev.derive(ev.c.sub(cc)).dispatch(child);
         }
     }
 
@@ -566,7 +601,30 @@ public class NMiniMapWnd extends Widget{
             if(tip != null)
                 return(ev.set(tip, hit));
         }
-        return(super.tooltip(ev));
+        if(dispatchOutsideDock(ev))
+            return(true);
+        if(!checkhit(ev.c))
+            return(false);
+        Object tip;
+        try {
+            tip = tooltip(ev.c, ev.last);
+        } catch(Loading l) {
+            tip = "...";
+        }
+        return((tip != null) && ev.set(tip, this));
+    }
+
+    /** Route pointer events through non-dock children without replaying hidden or missed icons. */
+    private boolean dispatchOutsideDock(PointerEvent ev) {
+        ev.stop();
+        for(Widget child = lchild; child != null; child = child.prev) {
+            if(child == toggle_panel || child == map_box || !child.visible())
+                continue;
+            Coord cc = xlate(child.c, true);
+            if(ev.c.isect(cc, child.sz) && ev.derive(ev.c.sub(cc)).dispatch(child))
+                return(true);
+        }
+        return(false);
     }
 
     void drawWidget(GOut g, boolean strict, Widget wdg)
@@ -716,8 +774,11 @@ public class NMiniMapWnd extends Widget{
                 rowHeight = 0;
             }
             
-            // Add button to toggle_panel
-            toggle_panel.add(btn, currentX, currentY);
+            // Existing buttons keep their widget/UI lifecycle and bindings on reflow.
+            if(btn.parent == toggle_panel)
+                btn.move(new Coord(currentX, currentY));
+            else
+                toggle_panel.add(btn, currentX, currentY);
             
             // Update position and row height
             currentX += btnWidth + btnSpacing;
@@ -738,12 +799,7 @@ public class NMiniMapWnd extends Widget{
                 buttons.add(w);
             }
             
-            // Remove all buttons from panel
-            for(Widget w : buttons) {
-                w.unlink();
-            }
-            
-            // Re-layout
+            // Re-layout in place, preserving child order and callbacks.
             layoutButtons(buttons);
             toggle_panel.pack();
         }

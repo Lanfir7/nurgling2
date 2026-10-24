@@ -67,9 +67,12 @@ public class NMakewindow extends Widget implements DTarget {
     private static Tex softTex = null;
     private static Tex softTexLabel = null;
     public CheckBox noTransfer = null;
+    private CheckBox storageIndexBox;
+    private final StorageCraftAvailability storageAvailability = new StorageCraftAvailability();
+    private double storageScanAge;
     public boolean autoMode = false;
     public boolean searchMode = false;
-    private ICheckBox autoChk = null;
+    private ACheckBox autoChk = null;
     private IButton atlasBtn = null;
     private Button searchBtn = null;
     private CraftIngredientSearchPanel searchPanel = null;
@@ -149,12 +152,7 @@ public class NMakewindow extends Widget implements DTarget {
                 }
                 else
                 {
-                    Tex icon = ing.iconTex();
-                    if (icon != null) {
-                        g.image(icon, Coord.z, invsq.sz());
-                    } else {
-                        g.image(new TexI(ing.img), Coord.z, invsq.sz());
-                    }
+                    ItemIcons.draw(g, ing.iconTex(), Coord.z, invsq.sz().x);
                 }
             } catch(Loading e) {}
             if(num != null)
@@ -251,12 +249,12 @@ public class NMakewindow extends Widget implements DTarget {
                     logisticin = (NContext.findIn(name) != null);
                     if(!logisticin)
                     {
-                        categories = (VSpec.categories.get(name)!=null);
+                        categories = VariantCraftOptions.has(name);
                     }
                     logisticout = (NContext.findOut(name,1) != null);
                     if(!logisticout)
                     {
-                        categories = (VSpec.categories.get(name)!=null);
+                        categories = VariantCraftOptions.has(name);
                     }
                     for(Spec s : inputs) {
                         if(s.categories && s.ing!=null)
@@ -273,8 +271,14 @@ public class NMakewindow extends Widget implements DTarget {
                 }
                 else
                 {
-                    categories = (VSpec.categories.get(name)!=null);
+                    categories = VariantCraftOptions.has(name);
                 }
+                if ((ItemVariants.BUTTER.equals(name) || ItemVariants.MILK.equals(name))
+                        && inputs.contains(this))
+                    categories = true;
+                // Butter outputs are produced under their game name; only inputs choose a kind.
+                if (categories && ItemVariants.has(name) && outputs.contains(this))
+                    categories = false;
             }
         }
 
@@ -316,6 +320,33 @@ public class NMakewindow extends Widget implements DTarget {
 
         if (savePresetBtn != null) {
             savePresetBtn.visible = autoMode && allInputsConfigured();
+        }
+        storageScanAge += dt;
+        if(storageScanAge >= 1.0) {
+            storageScanAge = 0;
+            if(storageActive() && ui != null && ui.sess != null) {
+                Set<String> names = new LinkedHashSet<>();
+                for(Spec spec : inputs) {
+                    if(spec.ing != null) {
+                        if(!spec.ing.isIgnored && Craft.storageIndexEligible(spec, spec.ing.name))
+                            names.add(spec.ing.name);
+                    } else if(spec.categories && !spec.useCategory) {
+                        for(JSONObject option : VariantCraftOptions.options(spec.name)) {
+                            String name = option.optString("name", null);
+                            if(Craft.storageIndexEligible(spec, name)) names.add(name);
+                        }
+                    } else if(!spec.categories && Craft.storageIndexEligible(spec, spec.name)) {
+                        names.add(spec.name);
+                    }
+                }
+                Gob player = NUtils.player();
+                Coord origin = player == null ? null : player.rc.floor(MCache.tilesz).div(MCache.cmaps);
+                storageAvailability.refresh(names,
+                        nurgling.widgets.storage.VillageStorage.snapshot(getparent(NGameUI.class)),
+                        ui.sess, origin, NCore.databaseManager);
+            } else {
+                storageAvailability.updateContext(Set.of(), null, null, null, false);
+            }
         }
         persistRecipeMappings();
         maybeObserveWikiCraftAtlas(dt);
@@ -501,10 +532,15 @@ public class NMakewindow extends Widget implements DTarget {
         recipesPersisted = true;
     }
 
+    /** Set autocrafting through the visible control so checkbox and mode UI stay in sync. */
+    public void setAutoMode(boolean enabled) {
+        if(autoChk != null)
+            autoChk.set(enabled);
+    }
+
     /** Turns autocrafting on as clicking its checkbox does, so the checkbox shows it. */
     public void enableAutoMode() {
-        if(autoChk != null)
-            autoChk.set(true);
+        setAutoMode(true);
     }
 
     /** Recalculate controls after a cookbook selection changes ingredient slots. */
@@ -619,7 +655,7 @@ public class NMakewindow extends Widget implements DTarget {
             if (s.categories) {
                 if (c.isect(sc, Inventory.sqsz)) {
                     boolean isOpt = s.opt();
-                    ArrayList<JSONObject> categoryItems = VSpec.categories.get(s.name);
+                    ArrayList<JSONObject> categoryItems = VariantCraftOptions.options(s.name);
                     if (cat == null) {
                         // If category has only one item and it's not optional, auto-select it
                         if (categoryItems != null && categoryItems.size() == 1 && !isOpt) {
@@ -658,15 +694,27 @@ public class NMakewindow extends Widget implements DTarget {
             }
         }, UI.scale(new Coord(335, 5)));
         atlasBtn.settip(L10n.get("craft_atlas.open_current"));
-        autoChk = add(new ICheckBox(NStyle.auto[0],NStyle.auto[1],NStyle.auto[2],NStyle.auto[3]){
+        autoChk = add(new CraftModeSwitch(){
+            @Override public boolean state() {
+                return autoMode;
+            }
+
+            @Override public void set(boolean val) {
+                if (a != val || autoMode != val) {
+                    a = val;
+                    changed(val);
+                }
+            }
+
             @Override
             public void changed(boolean val)
             {
                 super.changed(val);
                 autoMode = val;
                 applyModeUi();
+                storageScanAge = 1.0;
             }
-        }, UI.scale(new Coord(365, 5)));
+        }, UI.scale(new Coord(0, 142 + CraftSlotQuality.LINE)));
 
         add(noTransfer = new CheckBox(L10n.get("craft.no_transfer"))
         {
@@ -676,6 +724,17 @@ public class NMakewindow extends Widget implements DTarget {
             }
         }, UI.scale(new Coord(325, 38 + CraftSlotQuality.LINE)));
         noTransfer.visible = false;
+        storageIndexBox = add(new CheckBox(L10n.get("craft.use_storage_index")) {
+            @Override public void changed(boolean val) {
+                super.changed(val);
+                NConfig.set(NConfig.Key.craftUseStorageIndex, val);
+                storageAvailability.updateContext(Set.of(), null, null, null, false);
+                storageScanAge = 1.0;
+            }
+        }, UI.scale(new Coord(0, 112 + CraftSlotQuality.LINE)));
+        storageIndexBox.a = Boolean.TRUE.equals(NConfig.get(NConfig.Key.craftUseStorageIndex));
+        storageIndexBox.settip(L10n.get("craft.use_storage_index_tip"));
+        storageIndexBox.visible = false;
         searchBtn = add(new Button(UI.scale(85), L10n.get("craft.search")) {
             @Override
             public void click() {
@@ -718,6 +777,8 @@ public class NMakewindow extends Widget implements DTarget {
         if (noTransfer != null) {
             noTransfer.visible = autoMode;
         }
+        if (storageIndexBox != null)
+            storageIndexBox.visible = autoMode && Boolean.TRUE.equals(NConfig.get(NConfig.Key.ndbenable));
         if (searchBtn != null) {
             searchBtn.visible = searchMode;
         }
@@ -736,6 +797,25 @@ public class NMakewindow extends Widget implements DTarget {
             searchFoundNames.clear();
         }
         packCraftWindow();
+    }
+
+    /** Only a craft started from this visible checkbox may use the indexed source. */
+    public boolean storageActive() {
+        return autoMode && storageIndexBox != null && storageIndexBox.a
+                && Boolean.TRUE.equals(NConfig.get(NConfig.Key.ndbenable))
+                && NCore.databaseManager != null;
+    }
+
+    private boolean indexedHint(Spec spec, String name) {
+        return storageActive() && Craft.storageIndexEligible(spec, name)
+                && storageAvailability.count(name) > 0;
+    }
+
+    private static void drawIndexedBadge(GOut g) {
+        g.chcolor(new Color(82, 164, 231, 230));
+        g.frect(Coord.of(0, Inventory.invsq.sz().y - UI.scale(6)),
+                Coord.of(UI.scale(11), UI.scale(6)));
+        g.chcolor();
     }
 
     private void packCraftWindow() {
@@ -969,11 +1049,21 @@ public class NMakewindow extends Widget implements DTarget {
                             {
                                 sg.image(aready, Coord.z);
                             }
+                            else if(indexedHint(s, s.ing.name))
+                            {
+                                sg.image(aready, Coord.z);
+                                drawIndexedBadge(sg);
+                            }
                             else
                             {
                                 sg.image(anotfound, Coord.z);
                             }
                         }
+                    }
+                    else if(indexedHint(s, s.name))
+                    {
+                        sg.image(aready, Coord.z);
+                        drawIndexedBadge(sg);
                     }
                     else
                     {
@@ -1381,8 +1471,82 @@ public class NMakewindow extends Widget implements DTarget {
 
     private int qmx, toolx;
     private long hoverstart;
-    private Spec lasttip;
-    private Indir<Object> stip, ltip;
+    private final CraftSourceHint.TooltipCache<Spec, Indir<Object>> tipCache =
+            new CraftSourceHint.TooltipCache<>();
+
+    private static final class SourceTip {
+        final CraftSourceHint.Hint hint;
+        final List<Object> state;
+        SourceTip(CraftSourceHint.Hint hint, List<Object> state) {
+            this.hint = hint;
+            this.state = state;
+        }
+    }
+
+    private SourceTip sourceTip(Spec spec) {
+        if(!autoMode || spec == null || !inputs.contains(spec))
+            return new SourceTip(null, Arrays.asList(autoMode));
+        Ingredient picked = spec.ing;
+        CraftSourceHint.Selection selection = new CraftSourceHint.Selection(
+                spec.name, picked == null ? null : picked.name,
+                spec.selectedZone == null ? null : spec.selectedZone.name,
+                picked != null && picked.isIgnored, spec.categories, spec.useCategory,
+                spec.selectedZone != null, spec.isLocalZone, spec.isInventory, spec.isSubCraft);
+        String name = selection.effectiveName();
+        boolean water = MeasuredCraft.isWater(spec.name)
+                || picked != null && MeasuredCraft.isWater(picked.name)
+                || MeasuredCraft.isWater(name);
+        boolean unresolvedCategory = spec.categories && (spec.useCategory || picked == null);
+        NArea area = null;
+        if(!selection.ignored && water) {
+            String waterName = name == null || name.isEmpty() ? "Water" : name;
+            area = CraftSourceHint.waterArea(waterName, NContext::findIn, NContext::findInGlobal,
+                    candidate -> {
+                        NArea.Ingredient input = candidate.getInput(waterName);
+                        return input != null && input.type == NArea.Ingredient.Type.BARREL;
+                    }, NContext::findSpec, NContext::findSpecGlobal);
+        } else if(!selection.ignored && !selection.selectedZone && !selection.localZone
+                && !selection.inventory && !selection.subCraft && !unresolvedCategory && name != null) {
+            area = CraftSourceHint.inputArea(name, NContext::findIn, NContext::findInGlobal);
+        }
+        boolean indexed = storageActive();
+        boolean eligible = !water && area == null && indexed && !unresolvedCategory && name != null
+                && Craft.storageIndexEligible(spec, name);
+        StorageCraftAvailability.Status status = eligible ? storageAvailability.status(name) : null;
+        CraftSourceHint.Hint hint = CraftSourceHint.resolve(selection,
+                area == null ? null : area.name, water, indexed, eligible, status);
+        List<Object> state = Arrays.asList(autoMode, spec.name, picked == null ? null : picked.name,
+                selection.ignored, selection.category, selection.useCategory, spec.selectedZone,
+                spec.isLocalZone, spec.isInventory, spec.isSubCraft, water, area, indexed, status,
+                eligible ? storageAvailability.generation() : null,
+                eligible ? storageAvailability.count(name) : null, hint);
+        return new SourceTip(hint, state);
+    }
+
+    private static BufferedImage withSource(CraftSourceHint.Hint hint, BufferedImage tip) {
+        if(hint == null || hint.kind == CraftSourceHint.Kind.IGNORED) return tip;
+        String line;
+        switch(hint.kind) {
+        case AREA:
+            line = hint.detail == null ? L10n.get("craft.src_selected_zone")
+                    : L10n.get("craft.src_area", hint.detail);
+            break;
+        case LOCAL_ZONE: line = L10n.get("craft.src_local_zone"); break;
+        case INVENTORY: line = L10n.get("craft.src_inventory"); break;
+        case SUBCRAFT: line = L10n.get("craft.src_subcraft"); break;
+        case CATEGORY: line = L10n.get("craft.src_category"); break;
+        case STORAGE: line = L10n.get("craft.src_storage"); break;
+        case STORAGE_EMPTY: line = L10n.get("craft.src_storage_empty"); break;
+        case CHECKING: line = L10n.get("craft.src_checking"); break;
+        case UNAVAILABLE: line = L10n.get("craft.src_unavailable"); break;
+        case WATER_AREA: line = L10n.get("craft.src_water_area", hint.detail); break;
+        case WATER_CHECKED_AT_CRAFT: line = L10n.get("craft.src_water_checked"); break;
+        default: line = L10n.get("craft.src_no_source"); break;
+        }
+        BufferedImage label = Text.render(line).img;
+        return tip == null ? label : ItemInfo.catimgs(UI.scale(2), tip, label);
+    }
+
     public Object tooltip(Coord mc, Widget prev) {
         String name = null;
         Spec tspec = null;
@@ -1421,7 +1585,7 @@ public class NMakewindow extends Widget implements DTarget {
                     c = c.add(UI.scale(10), 0);
                 if(mc.isect(c, Inventory.invsq.sz())) {
                     name = getDynamicName(s.spr);
-                    if(name == null || name.contains("Raw")){
+                    if(autoMode || name == null || name.contains("Raw")){
                         tspec = s;
                     }
                     break find;
@@ -1438,10 +1602,8 @@ public class NMakewindow extends Widget implements DTarget {
                 c = c.add(Inventory.sqsz.x, 0);
             }
         }
-        if(lasttip != tspec) {
-            lasttip = tspec;
-            stip = ltip = null;
-        }
+        SourceTip source = sourceTip(tspec);
+        tipCache.context(tspec, source.state);
         if(tspec == null)
             return(super.tooltip(mc, prev));
         long now = System.currentTimeMillis();
@@ -1451,25 +1613,29 @@ public class NMakewindow extends Widget implements DTarget {
         else if(now - hoverstart > 1000)
             sh = false;
         if(sh) {
+            Indir<Object> stip = tipCache.shortTip();
             if(stip == null) {
-                BufferedImage tip = tspec.shorttip();
+                BufferedImage tip = withSource(source.hint, tspec.shorttip());
                 if(tip == null) {
                     stip = () -> null;
                 } else {
                     Tex tt = new TexI(tip);
                     stip = () -> tt;
                 }
+                tipCache.shortTip(stip);
             }
             return(stip);
         } else {
+            Indir<Object> ltip = tipCache.longTip();
             if(ltip == null) {
-                BufferedImage tip = tspec.longtip();
+                BufferedImage tip = withSource(source.hint, tspec.longtip());
                 if(tip == null) {
                     ltip = () -> null;
                 } else {
                     Tex tt = new TexI(tip);
                     ltip = () -> tt;
                 }
+                tipCache.longTip(ltip);
             }
             return(ltip);
         }
@@ -1551,7 +1717,9 @@ public class NMakewindow extends Widget implements DTarget {
         else
         {
             if (gui == null) return;
-            BotExecutor.runAsync("Auto craft(BOT)", new Craft(NMakewindow.this, num));
+            Craft bot = new Craft(NMakewindow.this, num);
+            if(storageActive()) bot.withStorageIndex(nurgling.widgets.storage.VillageStorage.snapshot(gui));
+            BotExecutor.runAsync("Auto craft(BOT)", bot);
         }
     }
 
@@ -1563,7 +1731,10 @@ public class NMakewindow extends Widget implements DTarget {
         }
         else
         {
-            BotExecutor.runAsync("Auto craft(BOT)", new Craft(NMakewindow.this, CraftTarget.ALL));
+            NGameUI gui = NUtils.getGameUI();
+            Craft bot = new Craft(NMakewindow.this, CraftTarget.ALL);
+            if(storageActive()) bot.withStorageIndex(nurgling.widgets.storage.VillageStorage.snapshot(gui));
+            BotExecutor.runAsync("Auto craft(BOT)", bot);
         }
     }
 
@@ -1605,10 +1776,17 @@ public class NMakewindow extends Widget implements DTarget {
         boolean logistic;
         public boolean isIgnored = false;
         private Tex scaledIcon = null;
+        private JSONObject icon;
 
         public Ingredient(JSONObject obj)
         {
-            img = ItemTex.create(obj);
+            this(obj, true);
+        }
+
+        Ingredient(JSONObject obj, boolean load)
+        {
+            icon = new JSONObject(obj.toString());
+            img = load ? ItemTex.create(icon) : null;
             name = (String) obj.get("name");
         }
 
@@ -1620,6 +1798,8 @@ public class NMakewindow extends Widget implements DTarget {
         }
 
         Tex iconTex() {
+            if (img == null)
+                return ItemIcons.get(icon);
             if (scaledIcon == null && img != null) {
                 Coord tsz = invsq.sz();
                 if (img.getWidth() != tsz.x || img.getHeight() != tsz.y) {
@@ -1629,6 +1809,10 @@ public class NMakewindow extends Widget implements DTarget {
                 }
             }
             return scaledIcon;
+        }
+
+        Ingredient loaded() {
+            return img != null || icon == null ? this : new Ingredient(icon);
         }
 
         void tick(double dt)
@@ -1681,7 +1865,7 @@ public class NMakewindow extends Widget implements DTarget {
             
             for(JSONObject obj: objs)
             {
-                data.add(new Ingredient(obj));
+                data.add(new Ingredient(obj, false));
             }
             setfocustab(true);
             autofocus =true;
@@ -1698,10 +1882,7 @@ public class NMakewindow extends Widget implements DTarget {
             for(Ingredient ing: data)
             {
                 GOut sg = g.reclip(pos, invsq.sz());
-                Tex icon = ing.iconTex();
-                if (icon != null) {
-                    sg.image(icon, Coord.z);
-                }
+                ItemIcons.draw(sg, ing.iconTex(), Coord.z, invsq.sz().x);
                 boolean inStock;
                 if (searchMode && searchRan && !ing.isIgnored) {
                     inStock = searchHasIngredient(s, ing.name);
@@ -1764,7 +1945,7 @@ public class NMakewindow extends Widget implements DTarget {
                 {
                     if(ev.c.isect(pos, invsq.sz()))
                     {
-                        s.ing = ing;
+                        s.ing = ing.loaded();
                         destroy();
                         cat = null;
                         return true;

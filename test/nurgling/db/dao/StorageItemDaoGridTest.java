@@ -12,6 +12,28 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class StorageItemDaoGridTest {
     @Test
+    void countableLookupUsesExactNamesAndLocatedContainersOnly() throws Exception {
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("CREATE TABLE containers(hash TEXT PRIMARY KEY, grid_id BIGINT, coord TEXT)");
+                statement.execute("CREATE TABLE storageitems(item_hash TEXT PRIMARY KEY, name TEXT, quality DOUBLE, coordinates TEXT, container TEXT)");
+                statement.execute("INSERT INTO containers VALUES ('chest', 42, '(100, -50)')");
+                statement.execute("INSERT INTO storageitems VALUES ('one', 'Barley Seed', 20, '(0, 0)', 'chest')");
+                statement.execute("INSERT INTO storageitems VALUES ('two', 'Barley Seed', 20, '#bulk:500 seeds', 'chest')");
+                statement.execute("INSERT INTO storageitems VALUES ('three', 'Barley Seedling', 20, '(1, 0)', 'chest')");
+                statement.execute("INSERT INTO storageitems VALUES ('four', 'Barley Seed', 20, '(2, 0)', 'missing')");
+            }
+            List<StorageItemDao.LocatedItem> rows = new StorageItemDao()
+                    .loadLocatedCountableByExactNames(new SqliteAdapter(connection), List.of("Barley Seed"));
+            assertEquals(1, rows.size());
+            assertEquals("Barley Seed", rows.get(0).name);
+            assertEquals("chest", rows.get(0).container);
+            assertEquals(42, rows.get(0).gridId);
+            assertEquals("(100, -50)", rows.get(0).coord);
+        }
+    }
+
+    @Test
     void loadsGridWithoutLosingBulkOrOrphanRows() throws Exception {
         try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
             try (Statement statement = connection.createStatement()) {

@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-cookbook-variation-close",
+  "priority": 5,
+  "summary": {
+    "ru": "В панели вариантов блюда появилась видимая кнопка закрытия.",
+    "en": "The dish variations panel now has a visible close button."
+  },
+  "detail": {
+    "ru": "Откройте варианты блюда в кулинарной книге: панель можно закрыть видимой кнопкой в правом верхнем углу. Кнопка отображается независимо от наличия символа крестика в выбранном шрифте.",
+    "en": "Open a dish's variations in the cookbook and close the panel with the visible button at its top right. The button remains visible even when the selected font has no cross symbol."
+  }
+}

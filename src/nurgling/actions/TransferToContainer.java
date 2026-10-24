@@ -25,6 +25,10 @@ public class TransferToContainer implements Action
     String exactName = null;
 
     boolean needsSorting = false;
+    /** Optional selection of individual copies in mixed stacks. */
+    public java.util.function.Predicate<NGItem> filter = null;
+    /** Opt in when every selected copy must be delivered in global quality order. */
+    public boolean qualityFirst = false;
 
     public TransferToContainer(Container container, NAlias items)
     {
@@ -113,7 +117,7 @@ public class TransferToContainer implements Action
                                 int before = BoundedDestinationWait.count(destination, receiptName);
                                 if (before < 0) return Results.FAIL();
                                 PouchContainerTransfer.Outcome attempt = transferAttempt(cand, destination,
-                                        target_size - delivered, needsSorting);
+                                        target_size - delivered, needsSorting || filter != null || qualityFirst);
                                 if (attempt.moved <= 0) {
                                     if (gui.vhand != null || failOnNoProgress(attempt)) return Results.FAIL();
                                     break;
@@ -161,10 +165,10 @@ public class TransferToContainer implements Action
 
                     if (hasTargetsToFill)
                     {
-                        availableItems = sortItemsByPriority(availableItems, itemName, false); // Р­С‚Р°Рї Р·Р°РїРѕР»РЅРµРЅРёСЏ
+                        availableItems = sortItemsByPriority(availableItems, itemName, false, qualityFirst); // Р­С‚Р°Рї Р·Р°РїРѕР»РЅРµРЅРёСЏ
                     } else
                     {
-                        availableItems = sortItemsByPriority(availableItems, itemName, true); // Р­С‚Р°Рї РїРµСЂРµРЅРѕСЃР°
+                        availableItems = sortItemsByPriority(availableItems, itemName, true, qualityFirst); // Р­С‚Р°Рї РїРµСЂРµРЅРѕСЃР°
                     }
 
                     transfer_size = availableItems.size();
@@ -206,7 +210,8 @@ public class TransferToContainer implements Action
                         // Calculate remaining items we can transfer
                         int remainingToTransfer = transfer_size - transferred;
                         PouchContainerTransfer.Outcome attempt = transferAttempt(currentItem,
-                                gui.getInventory(container.cap), remainingToTransfer, needsSorting);
+                                gui.getInventory(container.cap), remainingToTransfer,
+                                needsSorting || filter != null || qualityFirst);
                         int itemsTransferred = attempt.moved;
 
                         if (itemsTransferred > 0)
@@ -239,10 +244,10 @@ public class TransferToContainer implements Action
 
                             if (hasTargetsToFillRefresh)
                             {
-                                availableItems = sortItemsByPriority(availableItems, itemName, false);
+                                availableItems = sortItemsByPriority(availableItems, itemName, false, qualityFirst);
                             } else
                             {
-                                availableItems = sortItemsByPriority(availableItems, itemName, true);
+                                availableItems = sortItemsByPriority(availableItems, itemName, true, qualityFirst);
                             }
 
                         }
@@ -283,7 +288,8 @@ public class TransferToContainer implements Action
         }
     };
 
-    private static ArrayList<WItem> sortItemsByPriority(ArrayList<WItem> items, String itemName, boolean transferStage)
+    static ArrayList<WItem> sortItemsByPriority(ArrayList<WItem> items, String itemName,
+                                                 boolean transferStage, boolean qualityFirst)
     {
         ArrayList<WItem> notFullStacks = new ArrayList<>();
         ArrayList<WItem> singleItems = new ArrayList<>();
@@ -327,6 +333,9 @@ public class TransferToContainer implements Action
             result.addAll(singleItems);
             result.addAll(fullStacks);
         }
+
+        if (qualityFirst)
+            result.sort(QUALITY_DESC);
 
         return result;
     }
@@ -406,6 +415,10 @@ public class TransferToContainer implements Action
     }
 
     /** Keep the public int transfer contract for existing callers; the action needs the receipt status. */
+    static boolean useSelectedStackTransfer(WItem item, boolean sorting) {
+        return sorting && item != null && item.parent instanceof ItemStack;
+    }
+
     private static PouchContainerTransfer.Outcome transferAttempt(WItem item, NInventory target,
                                                                   int limit, boolean sorting) throws InterruptedException {
         if (!NGItem.validateItem(item)) return PouchContainerTransfer.Outcome.moved(0);
@@ -416,6 +429,9 @@ public class TransferToContainer implements Action
             return PouchContainerTransfer.moveOne(
                     PouchContainerTransfer.live(item, target, ((NGItem) item.item).name()), limit);
         String name = ((NGItem) item.item).name();
+        if (useSelectedStackTransfer(item, sorting))
+            return PouchContainerTransfer.moveOne(PouchContainerTransfer.liveSelected(
+                    item, target, name, ItemVariants.keyOf((NGItem) item.item)), limit);
         boolean merge = StackSupporter.isStackable(target, name)
                 && (target.findNotFullStack(name) != null || target.findNotStack(name) != null);
         if (!merge) {
@@ -454,6 +470,9 @@ public class TransferToContainer implements Action
         if (PouchContainerTransfer.isNestedInventory(sourceInv))
             return PouchContainerTransfer.moveOne(
                     PouchContainerTransfer.live(item, targetInv, itemName), transfer_size).moved;
+        if (useSelectedStackTransfer(item, needsSorting))
+            return PouchContainerTransfer.moveOne(PouchContainerTransfer.liveSelected(
+                    item, targetInv, itemName, ItemVariants.keyOf((NGItem) item.item)), transfer_size).moved;
 
         if (!StackSupporter.isStackable(targetInv, itemName))
         {
@@ -625,10 +644,16 @@ public class TransferToContainer implements Action
             boolean nameMatches = exactName == null || item.name().equals(exactName);
             boolean qualityMatches = th == -1
                     || TransferItems2.matchesQuality(quality, th, maxQualityExclusive);
-            if (nameMatches && qualityMatches) {
+            if (nameMatches && qualityMatches && (filter == null || filter.test(item))) {
                 exactMatches.add(witem);
             }
         }
-        return exactMatches;
+        return orderMatches(exactMatches, qualityFirst);
+    }
+
+    /** The Tetris path consumes this same list directly, before stack-category sorting. */
+    static ArrayList<WItem> orderMatches(ArrayList<WItem> matches, boolean qualityFirst) {
+        if (qualityFirst) matches.sort(QUALITY_DESC);
+        return matches;
     }
 }

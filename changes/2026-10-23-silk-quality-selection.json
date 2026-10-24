@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-silk-quality-selection",
+  "priority": 5,
+  "summary": {
+    "ru": "Шелководство выбирает лучшие коконы и яйца из всех доступных шкафов.",
+    "en": "Silk production chooses the best cocoons and eggs across all source cupboards."
+  },
+  "detail": {
+    "ru": "При запуске шелководства бот сравнивает качество коконов во всех кормовых шкафах перед заполнением шкафов для разведения, а затем так же выбирает яйца для столов травника. Уже вылупившиеся бабочки учитываются при заполнении шкафов разведения.",
+    "en": "When you run silk production, the bot compares cocoons across the feeding cupboards before filling breeding cupboards, then chooses the best eggs for herbalist tables. Hatched moths still count toward the breeding cupboard limit."
+  }
+}

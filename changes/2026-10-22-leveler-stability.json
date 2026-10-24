@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-leveler-stability",
+  "priority": 7,
+  "summary": {
+    "ru": "Бот выравнивания земли надёжнее ждёт съёмку и бережёт вещи в инвентаре.",
+    "en": "The land leveling bot waits more reliably for surveys and protects inventory items."
+  },
+  "detail": {
+    "ru": "При работе бота выравнивания земли ожидание окна съёмки ограничено, а простой при копке измеряется по времени. На площадке сброса бот выбрасывает только проверенную землю и сохраняет еду, инструменты и смешанные стопки; предмет в руке он сначала возвращает в инвентарь или останавливается с ошибкой.",
+    "en": "While the land leveling bot runs, survey opening has a timeout and digging idle time is measured consistently. At the soil dump it drops only verified soil, keeping food, tools, and mixed stacks. It returns held items to inventory first or stops with an error."
+  }
+}

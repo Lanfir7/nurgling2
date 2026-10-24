@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-grid-diagonals",
+  "priority": 7,
+  "summary": {
+    "ru": "На карте мира можно показать диагонали гридов.",
+    "en": "World grid diagonals can now be shown."
+  },
+  "detail": {
+    "ru": "В настройках «Мир» включите диагонали гридов и выберите их цвет. Границы и диагонали настраиваются отдельно.",
+    "en": "In World settings, turn on grid diagonals and choose their color. Grid boundaries and diagonals can be configured separately."
+  }
+}

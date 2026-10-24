@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-23-drug-weather-effects",
+  "priority": 5,
+  "summary": {
+    "ru": "Выключение эффектов опьянения теперь действительно скрывает их на экране.",
+    "en": "The drug-effects toggle now hides those visual effects on screen."
+  },
+  "detail": {
+    "ru": "В разделе «Удобства» флажок «Отключить эффекты наркотиков/алкоголя» теперь убирает экранные искажения и при уже активном эффекте. Погода и плоский мир сохраняют свои настройки. Эффекты можно вернуть, сняв флажок, без перезахода.",
+    "en": "The drug-effects checkbox in Quality of Life now hides visual distortions even when an effect is already active. Weather and flat-world settings are preserved. Clear the checkbox to restore the effects without reconnecting."
+  }
+}

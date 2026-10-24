@@ -6,6 +6,9 @@ import nurgling.areas.NArea;
 import nurgling.actions.bots.SetSpeedBot;
 import nurgling.actions.bots.WaitBot;
 import nurgling.actions.bots.areamover.AreaMoverBot;
+import nurgling.actions.bots.drinker.DrinkerBot;
+import nurgling.actions.bots.drinker.Vessels;
+import nurgling.actions.bots.blueprint.BlueprintBuilder;
 import nurgling.actions.bots.registry.BotDescriptor;
 import nurgling.actions.bots.registry.BotRegistry;
 import nurgling.conf.NForagerProp;
@@ -14,6 +17,8 @@ import nurgling.i18n.L10n;
 import nurgling.scenarios.BotStep;
 import nurgling.scenarios.CraftPreset;
 import nurgling.scenarios.CraftPresetManager;
+import nurgling.planning.PlanningFolder;
+import nurgling.planning.PlanningNode;
 import java.util.*;
 
 public class StepSettingsPanel extends Widget {
@@ -97,6 +102,39 @@ public class StepSettingsPanel extends Widget {
 
             add(areaDropdown, new Coord(UI.scale(8), y));
             y += UI.scale(40);
+        }
+        if (desc.id.equals("blueprint_builder")) {
+            hasAnySetting = true;
+            add(new Label(L10n.get("bbuilder.step.node")), new Coord(UI.scale(8), y));
+            y += UI.scale(24);
+            List<PlanningNode> nodes = new ArrayList<>();
+            if (NUtils.getUI() != null && NUtils.getUI().core != null) {
+                for (PlanningNode node : NUtils.getUI().core.planningLayer.getRoots()) {
+                    nodes.add(node);
+                    if (node instanceof PlanningFolder) nodes.addAll(((PlanningFolder) node).layers);
+                }
+            }
+            Object saved = step.getSetting(BlueprintBuilder.SETTING_NODE);
+            PlanningNode chosen = null;
+            for (PlanningNode node : nodes)
+                if (node.id.equals(saved)) { chosen = node; break; }
+            if (chosen == null)
+                add(new Label(L10n.get("bbuilder.planner.select")), new Coord(UI.scale(8), y));
+            NDropbox<PlanningNode> dropdown = new NDropbox<PlanningNode>(controlWidth(),
+                    Math.max(1, Math.min(nodes.size(), 10)), UI.scale(22)) {
+                @Override protected PlanningNode listitem(int i) { return nodes.get(i); }
+                @Override protected int listitems() { return nodes.size(); }
+                @Override protected void drawitem(GOut g, PlanningNode node, int i) {
+                    g.text((node.parentId == null ? "" : "  ") + node.name, Coord.z);
+                }
+                @Override public void change(PlanningNode node) {
+                    super.change(node);
+                    if (node != null) step.setSetting(BlueprintBuilder.SETTING_NODE, node.id);
+                }
+            };
+            if (chosen != null) dropdown.change(chosen);
+            add(dropdown, new Coord(UI.scale(8), y + (chosen == null ? UI.scale(18) : 0)));
+            y += UI.scale(58);
         }
         if (desc.id.equals("forager")) {
             hasAnySetting = true;
@@ -593,6 +631,36 @@ public class StepSettingsPanel extends Widget {
 
             add(targetEntry, new Coord(UI.scale(8), y));
             y += UI.scale(30);
+        }
+        if (desc.id.equals("drinker")) {
+            hasAnySetting = true;
+            add(new Label(L10n.get("bot.drinker.settings")), new Coord(UI.scale(8), y));
+            y += UI.scale(24);
+            List<String> cupNames = new ArrayList<>();
+            for (Vessels.Cup c : Vessels.CUPS) cupNames.add(c.name);
+            for (Vessels.Drink d : Vessels.DRINKS) {
+                String countKey = DrinkerBot.SETTING_PREFIX + d.name;
+                String cupKey = DrinkerBot.CUP_PREFIX + d.name;
+                Object old = step.getSetting(countKey);
+                int sips = old instanceof Number ? ((Number) old).intValue() : 0;
+                Object oldCup = step.getSetting(cupKey);
+                String selected = oldCup instanceof String && Vessels.isCup((String) oldCup) ? (String) oldCup : d.cup;
+                add(new Label(d.name), new Coord(UI.scale(8), y + UI.scale(3)));
+                Dropbox<String> box = add(new Dropbox<String>(UI.scale(150), cupNames.size(), UI.scale(16)) {
+                    @Override protected String listitem(int i) { return cupNames.get(i); }
+                    @Override protected int listitems() { return cupNames.size(); }
+                    @Override protected void drawitem(GOut g, String item, int i) { g.text(item, Coord.z); }
+                    @Override public void change(String item) { super.change(item); if (item != null) step.setSetting(cupKey, item); }
+                }, new Coord(UI.scale(90), y));
+                box.sel = selected;
+                add(new TextEntry(UI.scale(50), String.valueOf(sips)) {
+                    @Override protected void changed() {
+                        try { step.setSetting(countKey, Integer.parseInt(text().trim())); }
+                        catch (NumberFormatException ignored) { step.setSetting(countKey, -1); }
+                    }
+                }, new Coord(UI.scale(250), y));
+                y += UI.scale(24);
+            }
         }
         if (desc.id.equals("area_mover")) {
             hasAnySetting = true;

@@ -24,6 +24,8 @@ import java.util.*;
 public final class StashLayout {
     private static final String PRESETS = "/nurgling/widgets/storage/storage-tabs-default.json";
     private static final String EXPORT_PREFIX = "nstash1:";
+    /** Former preset slot name; migrate saved layouts and imported tabs while keeping targets. */
+    private static final Map<String, String> RENAMED = Map.of("barley seed", "Barley Seeds");
 
     public static final class Slot {
         public final String name;
@@ -42,7 +44,9 @@ public final class StashLayout {
         }
 
         static Slot of(JSONObject o) {
-            return new Slot(o.getString("name"), Math.max(0, o.optInt("target", 0)));
+            String name = o.getString("name");
+            return new Slot(RENAMED.getOrDefault(StorageClassifier.normalize(name), name),
+                    Math.max(0, o.optInt("target", 0)));
         }
     }
 
@@ -159,7 +163,11 @@ public final class StashLayout {
     /** The user's layout, or the shipped presets plus one auto tab per remaining category. */
     public static StashLayout load() {
         NConfig cfg = NConfig.getGlobalInstance();
-        StashLayout layout = new StashLayout(cfg == null ? null : cfg.getStorageTabsPath());
+        return load(cfg == null ? null : cfg.getStorageTabsPath());
+    }
+
+    static StashLayout load(String path) {
+        StashLayout layout = new StashLayout(path);
         String content = layout.path == null ? null : NFileUtils.readWithBackupFallback(layout.path);
         if (content != null && !content.isEmpty()) {
             try {

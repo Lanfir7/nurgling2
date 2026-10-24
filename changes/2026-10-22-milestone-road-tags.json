@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-milestone-road-tags",
+  "priority": 8,
+  "summary": {
+    "ru": "Дорогам на вехах можно дать личные метки.",
+    "en": "Roads on milestones can have private tags."
+  },
+  "detail": {
+    "ru": "Откройте веху и нажмите «добавить метку» рядом с дорогой. Метки видны только вам и помогают различать дороги с похожими названиями.",
+    "en": "Open a milestone and click “add tag” beside a road. Only you can see these tags, making similarly named roads easier to tell apart."
+  }
+}

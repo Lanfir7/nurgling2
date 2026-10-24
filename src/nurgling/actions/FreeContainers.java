@@ -43,6 +43,7 @@ public class FreeContainers implements Action
     {
         NContext context = new NContext(gui);
         context.excludeOutArea(excludeOutArea);
+        boolean hadKindSelection = false;
 
         for (Container container : containers)
         {
@@ -77,20 +78,50 @@ public class FreeContainers implements Action
                     return Float.compare(q2, q1);
                 }
             });
+            boolean splitButter = items.stream().anyMatch(item -> ItemVariants.has(((NGItem) item.item).name()))
+                    && context.hasVariantOutputInBand(ItemVariants.BUTTER, 0, null);
+            if (splitButter && !ItemVariants.awaitKnown(items))
+                return Results.ERROR("Butter kind is still loading; container items were kept.");
+            HashSet<String> names = new HashSet<>();
+            boolean kindSelectionNeeded = false;
             for (WItem item : items)
             {
-                if (context.addOutItem(((NGItem) item.item).name(), null, ((NGItem) item.item).quality != null ? ((NGItem) item.item).quality : 1))
-                    targets.add(((NGItem) item.item).name());
+                NGItem gi = (NGItem) item.item;
+                double q = gi.quality != null ? gi.quality : 1;
+                String route = splitButter ? context.outKey(gi, q) : gi.name();
+                if (route != null && context.addOutItem(route, null, q)) {
+                    targets.add(route);
+                    names.add(gi.name());
+                    kindSelectionNeeded |= ItemVariants.isKey(route);
+                }
             }
-            while (!new TakeItemsFromContainer(container, targets, pattern).run(gui).isSuccess)
-            {
-                new TransferItems2(context, targets).run(gui);
+            TakeItemsFromContainer take = new TakeItemsFromContainer(container, names, pattern);
+            hadKindSelection |= kindSelectionNeeded;
+            if (kindSelectionNeeded)
+                take.filter = gi -> !ItemVariants.has(gi.name()) || targets.contains(
+                        context.outKey(gi, gi.quality != null ? gi.quality : 1));
+            int stalled = 0;
+            while (true) {
+                Results fetched = take.run(gui);
+                if (fetched.IsSuccess())
+                    break;
+                if (kindSelectionNeeded && take.getMovedCount() == 0 && ++stalled >= 2)
+                    return Results.ERROR("Could not take selected Butter from the container; items were kept.");
+                if (take.getMovedCount() > 0)
+                    stalled = 0;
+                Results unloaded = new TransferItems2(context, targets).run(gui);
+                if (kindSelectionNeeded && !unloaded.IsSuccess())
+                    return unloaded;
                 navigateToTargetContainer(gui, container);
-                new OpenTargetContainer(container).run(gui);
+                Results opened = new OpenTargetContainer(container).run(gui);
+                if (kindSelectionNeeded && !opened.IsSuccess())
+                    return opened;
             }
             new CloseTargetContainer(container).run(gui);
         }
-        new TransferItems2(context, targets).run(gui);
+        Results unloaded = new TransferItems2(context, targets).run(gui);
+        if (hadKindSelection && !unloaded.IsSuccess())
+            return unloaded;
         return Results.SUCCESS();
     }
 

@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-autocraft-ingredient-categories",
+  "priority": 8,
+  "summary": {
+    "ru": "В автокрафте стало больше вариантов ингредиентов для рецептов с категориями.",
+    "en": "Autocrafting offers more ingredients for recipes with category inputs."
+  },
+  "detail": {
+    "ru": "В окне рецепта откройте выбор ингредиента: список категорий дополнен подходящими предметами, включая варианты из справочника. Автокрафт и пресеты используют выбранный предмет, если для него настроена область.",
+    "en": "Open an ingredient choice in the recipe window to see more eligible items, including catalog variants. Autocrafting and presets use your specific choice when an area is configured for it."
+  }
+}

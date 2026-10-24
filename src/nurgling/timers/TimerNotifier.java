@@ -1,5 +1,6 @@
 package nurgling.timers;
 
+import haven.UI;
 import haven.Utils;
 import haven.iosys.tk.AWTToolkit;
 import haven.iosys.tk.IndirectToolkit;
@@ -7,7 +8,6 @@ import haven.iosys.tk.Windeye;
 import nurgling.NAlarmManager;
 import nurgling.NConfig;
 import nurgling.NGameUI;
-import nurgling.sessions.SessionContext;
 import nurgling.sessions.SessionManager;
 import nurgling.todo.TodoItem;
 import nurgling.todo.TodoStore;
@@ -98,7 +98,7 @@ public class TimerNotifier {
             if(!tasks.isEmpty())
                 gui.timerBanners.postDeadlines(TimerBanners.Type.TASK_DUE, tasks, away);
         }
-        playSound(due);
+        playSound(gui.ui, due);
         if((Boolean) NConfig.get(NConfig.Key.timerFlashTaskbar))
             requestAttention();
     }
@@ -133,16 +133,17 @@ public class TimerNotifier {
         return attention;
     }
 
+    // Read from this session's UI directly: the notifier runs under its UI lock, and consulting
+    // SessionManager here would invert the sessionsLock -> UI-lock order used while switching tabs.
     private boolean inCombat() {
-        SessionContext ctx = SessionManager.getInstance().findByUI(gui.ui);
-        return ctx != null && ctx.isInCombat();
+        return gui.fv != null && gui.fv.tvisible() && gui.fv.lsrel != null && !gui.fv.lsrel.isEmpty();
     }
 
     /** One sound per banner, chosen by the kind of the first timer in it. */
-    private static void playSound(List<Timer> due) {
+    private static void playSound(UI ui, List<Timer> due) {
         String res = soundFor(due.get(0).kind);
         if(res != null)
-            NAlarmManager.play(res);
+            NAlarmManager.play(ui, res);
     }
 
     /** The configured alarm resource for a kind, or null for silence. */
